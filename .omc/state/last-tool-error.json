@@ -1,0 +1,7 @@
+{
+  "tool_name": "WebFetch",
+  "tool_input_preview": "{\"url\":\"https://raw.githubusercontent.com/ErlichLiu/Proma/main/packages/core/src/providers\",\"prompt\":\"providers 目录结构，Claude SDK 集成、流式响应处理\"}",
+  "error": "Request failed with status code 404",
+  "timestamp": "2026-04-08T13:08:37.789Z",
+  "retry_count": 3
+}

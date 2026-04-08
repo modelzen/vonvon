@@ -1,0 +1,19 @@
+{
+  "active": true,
+  "current_phase": "interview",
+  "interview_id": "vonvon-001",
+  "type": "greenfield",
+  "initial_idea": "Mac桌面应用，星之卡比风格粉红色圆形小宠物，吸附飞书窗口右侧变成侧边栏对话框，作为AI Agent获取飞书上下文（单聊/群聊/文档），通过飞书CLI获取完整上下文，支持skill/mcp等功能",
+  "rounds": "[]",
+  "current_ambiguity": "1.0",
+  "threshold": "0.2",
+  "codebase_context": "null",
+  "challenge_modes_used": "[]",
+  "ontology_snapshots": "[]",
+  "_meta": {
+    "mode": "deep-interview",
+    "sessionId": null,
+    "updatedAt": "2026-04-08T12:38:27.164Z",
+    "updatedBy": "state_write_tool"
+  }
+}
