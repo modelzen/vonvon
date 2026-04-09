@@ -21,6 +21,25 @@ export function useSession() {
       setSessions(data)
       if (data.length > 0 && !activeSession) {
         setActiveSession(data[0])
+      } else if (data.length === 0 && !activeSession) {
+        // Auto-create a default session so InputArea can send immediately.
+        // Otherwise the user has to manually click "+ 新建会话" before any
+        // message will be delivered (InputArea silently no-ops without
+        // activeSession).
+        try {
+          const created = await apiFetch('/api/sessions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: '默认会话' })
+          })
+          if (created.ok) {
+            const session = await created.json() as Session
+            setSessions([session])
+            setActiveSession(session)
+          }
+        } catch {
+          // backend may be mid-startup or disabled
+        }
       }
     } catch {
       // backend not reachable

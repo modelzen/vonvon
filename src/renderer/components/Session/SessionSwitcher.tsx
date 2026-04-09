@@ -5,6 +5,8 @@ import type { Session } from '../../hooks/useSession'
 export function SessionSwitcher(): React.ReactElement {
   const { sessions, activeSession, createSession, switchSession, deleteSession } = useSession()
   const [open, setOpen] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [newName, setNewName] = useState('')
   const ref = useRef<HTMLDivElement>(null)
 
   // Close dropdown on outside click
@@ -12,17 +14,31 @@ export function SessionSwitcher(): React.ReactElement {
     const handler = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) {
         setOpen(false)
+        setCreating(false)
+        setNewName('')
       }
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  const handleNewSession = async () => {
-    const name = prompt('新建会话名称:')
-    if (!name?.trim()) return
-    await createSession(name.trim())
+  const handleStartNew = () => {
+    setCreating(true)
+    setNewName(`会话 ${new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`)
+  }
+
+  const handleConfirmNew = async () => {
+    const name = newName.trim()
+    if (!name) return
+    await createSession(name)
+    setCreating(false)
+    setNewName('')
     setOpen(false)
+  }
+
+  const handleCancelNew = () => {
+    setCreating(false)
+    setNewName('')
   }
 
   const handleSwitch = (session: Session) => {
@@ -130,26 +146,90 @@ export function SessionSwitcher(): React.ReactElement {
             </div>
           )}
 
-          {/* New session button */}
-          <div
-            onClick={handleNewSession}
-            style={{
-              padding: '8px 12px',
-              fontSize: 13,
-              color: '#FF69B4',
-              cursor: 'pointer',
-              borderTop: '1px solid #fce4ec',
-              fontWeight: 600,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6
-            }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'rgba(252,228,236,0.3)' }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
-          >
-            <span>+</span>
-            <span>新建会话</span>
-          </div>
+          {/* New session: inline input (window.prompt is blocked in Electron renderer) */}
+          {creating ? (
+            <div
+              style={{
+                padding: '8px 10px',
+                borderTop: '1px solid #fce4ec',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                background: 'rgba(252,228,236,0.25)'
+              }}
+            >
+              <input
+                autoFocus
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') { e.preventDefault(); void handleConfirmNew() }
+                  else if (e.key === 'Escape') { handleCancelNew() }
+                }}
+                placeholder="会话名称"
+                style={{
+                  flex: 1,
+                  padding: '4px 8px',
+                  fontSize: 12,
+                  border: '1px solid #fce4ec',
+                  borderRadius: 6,
+                  outline: 'none',
+                  color: '#333',
+                  background: '#fff',
+                  minWidth: 0
+                }}
+              />
+              <button
+                onClick={() => { void handleConfirmNew() }}
+                disabled={!newName.trim()}
+                style={{
+                  padding: '4px 10px',
+                  fontSize: 12,
+                  border: 'none',
+                  borderRadius: 6,
+                  background: 'linear-gradient(135deg, #FF69B4, #FF1493)',
+                  color: '#fff',
+                  cursor: newName.trim() ? 'pointer' : 'default',
+                  fontWeight: 600,
+                  opacity: newName.trim() ? 1 : 0.5,
+                  flexShrink: 0
+                }}
+              >确定</button>
+              <button
+                onClick={handleCancelNew}
+                style={{
+                  padding: '4px 8px',
+                  fontSize: 12,
+                  border: '1px solid #fce4ec',
+                  borderRadius: 6,
+                  background: '#fff',
+                  color: '#777',
+                  cursor: 'pointer',
+                  flexShrink: 0
+                }}
+              >取消</button>
+            </div>
+          ) : (
+            <div
+              onClick={handleStartNew}
+              style={{
+                padding: '8px 12px',
+                fontSize: 13,
+                color: '#FF69B4',
+                cursor: 'pointer',
+                borderTop: '1px solid #fce4ec',
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6
+              }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'rgba(252,228,236,0.3)' }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
+            >
+              <span>+</span>
+              <span>新建会话</span>
+            </div>
+          )}
         </div>
       )}
     </div>

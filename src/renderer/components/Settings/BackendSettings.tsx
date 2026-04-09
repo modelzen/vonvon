@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useBackend } from '../../hooks/useBackend'
 
 export function BackendSettings(): React.ReactElement {
@@ -6,6 +6,11 @@ export function BackendSettings(): React.ReactElement {
   const [url, setUrl] = useState(backendUrl)
   const [enabled, setEnabled] = useState(backendEnabled)
   const [testing, setTesting] = useState(false)
+  const [saved, setSaved] = useState(false)
+
+  // Sync local state when backend hook reloads (e.g. first mount race)
+  useEffect(() => { setUrl(backendUrl) }, [backendUrl])
+  useEffect(() => { setEnabled(backendEnabled) }, [backendEnabled])
 
   const handleTest = async () => {
     setTesting(true)
@@ -15,6 +20,8 @@ export function BackendSettings(): React.ReactElement {
 
   const handleSave = async () => {
     await saveConfig(url, enabled)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2500)
   }
 
   return (
@@ -90,21 +97,28 @@ export function BackendSettings(): React.ReactElement {
         </label>
       </div>
 
-      <button
-        onClick={handleSave}
-        style={{
-          padding: '6px 18px',
-          fontSize: 12,
-          borderRadius: 6,
-          border: 'none',
-          background: 'linear-gradient(135deg, #FF69B4, #FF1493)',
-          color: '#fff',
-          cursor: 'pointer',
-          fontWeight: 600
-        }}
-      >
-        保存
-      </button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button
+          onClick={handleSave}
+          style={{
+            padding: '6px 18px',
+            fontSize: 12,
+            borderRadius: 6,
+            border: 'none',
+            background: 'linear-gradient(135deg, #FF69B4, #FF1493)',
+            color: '#fff',
+            cursor: 'pointer',
+            fontWeight: 600
+          }}
+        >
+          保存
+        </button>
+        {saved && (
+          <span style={{ fontSize: 12, color: '#4caf50' }}>
+            ✓ 已保存，关闭设置后生效
+          </span>
+        )}
+      </div>
     </div>
   )
 }

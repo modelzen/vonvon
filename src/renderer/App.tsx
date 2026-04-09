@@ -17,12 +17,18 @@ function App(): React.ReactElement {
 
   useEffect(() => { setDisplayPercent(usagePercent) }, [usagePercent])
 
-  useEffect(() => {
+  const refreshBackendConfig = () => {
     window.electron.getBackendConfig().then((cfg) => setBackendEnabled(cfg.enabled))
+  }
+
+  useEffect(() => {
+    refreshBackendConfig()
   }, [])
 
   if (showSettings) {
-    return <SettingsPanel onBack={() => setShowSettings(false)} />
+    // Re-read backend config on close so toggling "启用 Agent 模式" in
+    // Settings takes effect immediately instead of requiring an app restart.
+    return <SettingsPanel onBack={() => { refreshBackendConfig(); setShowSettings(false) }} />
   }
 
   return (

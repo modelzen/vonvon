@@ -107,11 +107,16 @@ async def send_message(req: ChatRequest):
         asyncio.create_task(run_agent())
 
         # ── Stream queue → SSE ───────────────────────────────────────────────
+        # NOTE: sse_starlette's EventSourceResponse expects dict/ServerSentEvent
+        # instances. Yielding a pre-formatted string double-wraps it (the whole
+        # string gets used as the `data` field, producing
+        # `data: event: ...\ndata: data: ...`), which breaks the frontend SSE
+        # parser and leaves the UI stuck in the loading state forever.
         while True:
             item = await queue.get()
             if item is None:
                 break
-            yield f"event: {item['event']}\ndata: {json.dumps(item['data'])}\n\n"
+            yield {"event": item["event"], "data": json.dumps(item["data"])}
 
     return EventSourceResponse(event_generator())
 

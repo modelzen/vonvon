@@ -36,13 +36,56 @@ def get_session_db() -> SessionDB:
     return _session_db
 
 
+# ── Credential resolution ─────────────────────────────────────────────────────
+
+def _peek_current_credentials() -> tuple[Optional[str], Optional[str]]:
+    """Return (base_url, access_token) for _current_provider or (None, None).
+
+    DELTA-4 removed the _api_key/_base_url global caches, but hermes AIAgent
+    does NOT auto-resolve OAuth credentials from credential_pool when
+    api_key/base_url are omitted — it falls back to env vars like
+    OPENAI_API_KEY. For openai-codex (ChatGPT OAuth) the tokens live in
+    ~/.hermes/auth.json credential_pool only, not in any env var. So we
+    MUST peek the pool explicitly per request and pass the resolved values
+    into AIAgent(), otherwise the agent hits the default OpenAI endpoint
+    with an empty key and gets 403.
+    """
+    import logging
+    log = logging.getLogger(__name__)
+    if not _current_provider:
+        log.info("peek_creds: _current_provider is empty, returning (None, None)")
+        return (None, None)
+    try:
+        from agent.credential_pool import load_pool
+        pool = load_pool(_current_provider)
+        cred = pool.peek()
+    except Exception as exc:
+        log.warning("credential_pool.peek(%s) failed: %s", _current_provider, exc)
+        return (None, None)
+    if cred is None:
+        log.info("peek_creds: pool.peek(%s) returned None", _current_provider)
+        return (None, None)
+    base_url = getattr(cred, "base_url", None) or None
+    token = getattr(cred, "access_token", None) or None
+    log.info(
+        "peek_creds: provider=%s base_url=%s token_len=%d",
+        _current_provider, base_url or "<none>", len(token) if token else 0,
+    )
+    return (base_url, token)
+
+
 # ── Agent factory ─────────────────────────────────────────────────────────────
 
 def create_agent(session_id: str, **callbacks) -> AIAgent:
-    """Create a new AIAgent per request. AIAgent resolves credentials from
-    hermes credential_pool internally when api_key/base_url are not passed."""
+    """Create a new AIAgent per request. Explicitly resolves credentials from
+    credential_pool for the current provider so OAuth tokens (e.g.
+    openai-codex) reach the hermes HTTP layer.
+    """
+    base_url, api_key = _peek_current_credentials()
     return AIAgent(
         model=_current_model,
+        base_url=base_url,
+        api_key=api_key,
         session_id=session_id,
         session_db=get_session_db(),
         platform="vonvon",
@@ -109,7 +152,17 @@ def _switch_model_sync(model: str, persist: bool,
         from hermes_cli.config_lock import config_store_lock
         with config_store_lock():
             cfg = load_config()
-            cfg.setdefault("model", {})
+            # hermes DEFAULT_CONFIG stores `model` as "" (str) on fresh
+            # installs, and _normalize_root_model_keys only migrates str→dict
+            # when a stale root-level provider/base_url also exists. So on a
+            # clean ~/.hermes cfg["model"] is the empty string and setdefault
+            # won't replace it — we must normalize explicitly before any item
+            # assignment, otherwise `cfg["model"]["provider"] = …` raises
+            # TypeError: 'str' object does not support item assignment.
+            model_cfg = cfg.get("model")
+            if not isinstance(model_cfg, dict):
+                legacy_name = model_cfg if isinstance(model_cfg, str) and model_cfg else None
+                cfg["model"] = {"name": legacy_name} if legacy_name else {}
             cfg["model"]["provider"] = result.target_provider
             cfg["model"]["name"] = result.new_model
             if base_url:
