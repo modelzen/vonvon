@@ -2705,3 +2705,107 @@ def unified_search(query: str, sources: List[SkillSource],
     deduped = list(seen.values())
 
     return deduped[:limit]
+
+
+def install_bundle_silent(
+    identifier: str,
+    *,
+    force: bool = False,
+) -> Dict[str, Any]:
+    """Headless install for one skill identifier.
+
+    Mirrors the non-prompt code path of hermes_cli.skills_hub.do_install
+    without Rich Console or input() prompts. ``force=True`` bypasses both
+    the "already installed" check and the scan verdict.
+
+    Returns installed skill metadata dict on success.
+    Raises RuntimeError with diagnostic message on any failure.
+    """
+    import shutil
+    from hermes_cli.skills_hub import _resolve_source_meta_and_bundle
+    from tools.skills_guard import scan_skill, should_allow_install
+
+    ensure_hub_dirs()
+    auth = GitHubAuth()
+    sources = create_source_router(auth)
+    meta, bundle, _matched = _resolve_source_meta_and_bundle(identifier, sources)
+    if bundle is None:
+        raise RuntimeError(f"skill '{identifier}' not found or fetch failed")
+
+    # Lock file pre-check (mirrors do_install behavior)
+    lock = HubLockFile()
+    if lock.get_installed(bundle.name) and not force:
+        raise RuntimeError(
+            f"skill '{bundle.name}' is already installed (use force=True to reinstall)"
+        )
+
+    # Category extraction from identifier (mirrors do_install)
+    category = ""
+    if bundle.source == "official":
+        parts = (bundle.identifier or "").split("/")
+        if len(parts) >= 3:
+            category = parts[1]
+
+    # Critic M-2: guard against pathological bundle sizes before quarantine
+    # writes files to disk. SkillBundle.files is dict[str, str|bytes].
+    # Use UTF-8 byte counting for str so CJK/emoji are not under-counted 3-4x.
+    MAX_BUNDLE_BYTES = 50 * 1024 * 1024  # 50 MB
+    total_bytes = 0
+    for _rel, content in bundle.files.items():
+        if isinstance(content, bytes):
+            total_bytes += len(content)
+        elif isinstance(content, str):
+            total_bytes += len(content.encode("utf-8"))
+    if total_bytes > MAX_BUNDLE_BYTES:
+        raise RuntimeError(
+            f"skill bundle too large ({total_bytes // (1024 * 1024)} MB > 50 MB); "
+            f"install blocked to prevent sandbox disk exhaustion"
+        )
+
+    quarantine_path = None
+    try:
+        quarantine_path = quarantine_bundle(bundle)  # 1 arg only
+        scan_source = bundle.identifier or identifier
+        scan_result = scan_skill(quarantine_path, source=scan_source)
+        allowed, reason = should_allow_install(scan_result, force=force)  # no assume_yes
+        if not allowed:
+            append_audit_log(
+                "BLOCKED", bundle.name, bundle.source,
+                bundle.trust_level, scan_result.verdict, reason,
+            )
+            raise RuntimeError(f"install blocked by scan policy: {reason}")
+
+        # HubLockFile is NOT a context manager — install_from_quarantine
+        # calls lock.record_install internally.
+        installed_path = install_from_quarantine(
+            quarantine_path, bundle.name, category, bundle, scan_result,
+        )
+        append_audit_log(
+            "INSTALL", bundle.name, bundle.source,
+            bundle.trust_level, scan_result.verdict,
+        )
+    except Exception:
+        if quarantine_path is not None and quarantine_path.exists():
+            shutil.rmtree(quarantine_path, ignore_errors=True)
+        raise
+
+    # CF-2: invalidate cached system prompt so the newly installed skill
+    # becomes visible to the next user turn without restarting the backend.
+    try:
+        from agent.prompt_builder import clear_skills_system_prompt_cache
+        clear_skills_system_prompt_cache(clear_snapshot=True)
+    except Exception as exc:
+        import logging as _logging
+        _logging.getLogger(__name__).warning(
+            "install_bundle_silent: clear_skills_system_prompt_cache failed: %s", exc
+        )
+
+    return {
+        "name": bundle.name,
+        "category": category,
+        "description": getattr(meta, "description", "") or "",
+        "install_path": str(installed_path),
+        "source": bundle.source,
+        "trust_level": bundle.trust_level,
+        "identifier": bundle.identifier,
+    }

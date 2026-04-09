@@ -2712,148 +2712,54 @@ def _login_openai_codex(args, pconfig: ProviderConfig) -> None:
 
 
 def _codex_device_code_login() -> Dict[str, Any]:
-    """Run the OpenAI device code login flow and return credentials dict."""
+    """Run the OpenAI device code login flow and return credentials dict.
+
+    Thin CLI shim: delegates to agent.codex_device_flow pure functions
+    while preserving all CLI print/sleep behaviour.
+    """
     import time as _time
+    from agent.codex_device_flow import start_device_flow, poll_device_flow
 
+    flow = start_device_flow()
+
+    # Show user the code (preserve original CLI output byte-for-byte)
     issuer = "https://auth.openai.com"
-    client_id = CODEX_OAUTH_CLIENT_ID
-
-    # Step 1: Request device code
-    try:
-        with httpx.Client(timeout=httpx.Timeout(15.0)) as client:
-            resp = client.post(
-                f"{issuer}/api/accounts/deviceauth/usercode",
-                json={"client_id": client_id},
-                headers={"Content-Type": "application/json"},
-            )
-    except Exception as exc:
-        raise AuthError(
-            f"Failed to request device code: {exc}",
-            provider="openai-codex", code="device_code_request_failed",
-        )
-
-    if resp.status_code != 200:
-        raise AuthError(
-            f"Device code request returned status {resp.status_code}.",
-            provider="openai-codex", code="device_code_request_error",
-        )
-
-    device_data = resp.json()
-    user_code = device_data.get("user_code", "")
-    device_auth_id = device_data.get("device_auth_id", "")
-    poll_interval = max(3, int(device_data.get("interval", "5")))
-
-    if not user_code or not device_auth_id:
-        raise AuthError(
-            "Device code response missing required fields.",
-            provider="openai-codex", code="device_code_incomplete",
-        )
-
-    # Step 2: Show user the code
     print("To continue, follow these steps:\n")
     print("  1. Open this URL in your browser:")
     print(f"     \033[94m{issuer}/codex/device\033[0m\n")
     print("  2. Enter this code:")
-    print(f"     \033[94m{user_code}\033[0m\n")
+    print(f"     \033[94m{flow['user_code']}\033[0m\n")
     print("Waiting for sign-in... (press Ctrl+C to cancel)")
 
-    # Step 3: Poll for authorization code
     max_wait = 15 * 60  # 15 minutes
     start = _time.monotonic()
-    code_resp = None
-
     try:
-        with httpx.Client(timeout=httpx.Timeout(15.0)) as client:
-            while _time.monotonic() - start < max_wait:
-                _time.sleep(poll_interval)
-                poll_resp = client.post(
-                    f"{issuer}/api/accounts/deviceauth/token",
-                    json={"device_auth_id": device_auth_id, "user_code": user_code},
-                    headers={"Content-Type": "application/json"},
+        while _time.monotonic() - start < max_wait:
+            _time.sleep(flow["interval"])
+            result = poll_device_flow(flow["device_auth_id"], flow["user_code"])
+            if result["status"] == "success":
+                return {
+                    "tokens": result["tokens"],
+                    "base_url": result["base_url"],
+                    "last_refresh": result["last_refresh"],
+                    "auth_mode": "chatgpt",
+                    "source": "device-code",
+                }
+            if result["status"] == "error":
+                raise AuthError(
+                    result["error"],
+                    provider="openai-codex",
+                    code="device_code_error",
                 )
-
-                if poll_resp.status_code == 200:
-                    code_resp = poll_resp.json()
-                    break
-                elif poll_resp.status_code in (403, 404):
-                    continue  # User hasn't completed login yet
-                else:
-                    raise AuthError(
-                        f"Device auth polling returned status {poll_resp.status_code}.",
-                        provider="openai-codex", code="device_code_poll_error",
-                    )
     except KeyboardInterrupt:
         print("\nLogin cancelled.")
         raise SystemExit(130)
 
-    if code_resp is None:
-        raise AuthError(
-            "Login timed out after 15 minutes.",
-            provider="openai-codex", code="device_code_timeout",
-        )
-
-    # Step 4: Exchange authorization code for tokens
-    authorization_code = code_resp.get("authorization_code", "")
-    code_verifier = code_resp.get("code_verifier", "")
-    redirect_uri = f"{issuer}/deviceauth/callback"
-
-    if not authorization_code or not code_verifier:
-        raise AuthError(
-            "Device auth response missing authorization_code or code_verifier.",
-            provider="openai-codex", code="device_code_incomplete_exchange",
-        )
-
-    try:
-        with httpx.Client(timeout=httpx.Timeout(15.0)) as client:
-            token_resp = client.post(
-                CODEX_OAUTH_TOKEN_URL,
-                data={
-                    "grant_type": "authorization_code",
-                    "code": authorization_code,
-                    "redirect_uri": redirect_uri,
-                    "client_id": client_id,
-                    "code_verifier": code_verifier,
-                },
-                headers={"Content-Type": "application/x-www-form-urlencoded"},
-            )
-    except Exception as exc:
-        raise AuthError(
-            f"Token exchange failed: {exc}",
-            provider="openai-codex", code="token_exchange_failed",
-        )
-
-    if token_resp.status_code != 200:
-        raise AuthError(
-            f"Token exchange returned status {token_resp.status_code}.",
-            provider="openai-codex", code="token_exchange_error",
-        )
-
-    tokens = token_resp.json()
-    access_token = tokens.get("access_token", "")
-    refresh_token = tokens.get("refresh_token", "")
-
-    if not access_token:
-        raise AuthError(
-            "Token exchange did not return an access_token.",
-            provider="openai-codex", code="token_exchange_no_access_token",
-        )
-
-    # Return tokens for the caller to persist (no longer writes to ~/.codex/)
-    base_url = (
-        os.getenv("HERMES_CODEX_BASE_URL", "").strip().rstrip("/")
-        or DEFAULT_CODEX_BASE_URL
+    raise AuthError(
+        "Login timed out after 15 minutes.",
+        provider="openai-codex",
+        code="device_code_timeout",
     )
-
-    return {
-        "tokens": {
-            "access_token": access_token,
-            "refresh_token": refresh_token,
-        },
-        "base_url": base_url,
-        "last_refresh": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        "auth_mode": "chatgpt",
-        "source": "device-code",
-    }
 
 
 def _nous_device_code_login(

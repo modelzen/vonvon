@@ -31,6 +31,7 @@ PLATFORMS = {
     "feishu": "🪽 Feishu",
     "wecom": "💬 WeCom",
     "webhook": "🔗 Webhook",
+    "vonvon":  "🪄 vonvon",
 }
 
 # ─── Config Helpers ───────────────────────────────────────────────────────────
@@ -49,13 +50,15 @@ def get_disabled_skills(config: dict, platform: Optional[str] = None) -> Set[str
 
 def save_disabled_skills(config: dict, disabled: Set[str], platform: Optional[str] = None):
     """Persist disabled skill names to config."""
-    config.setdefault("skills", {})
-    if platform is None:
-        config["skills"]["disabled"] = sorted(disabled)
-    else:
-        config["skills"].setdefault("platform_disabled", {})
-        config["skills"]["platform_disabled"][platform] = sorted(disabled)
-    save_config(config)
+    from hermes_cli.config_lock import config_store_lock  # WP1-C-fork
+    with config_store_lock():
+        config.setdefault("skills", {})
+        if platform is None:
+            config["skills"]["disabled"] = sorted(disabled)
+        else:
+            config["skills"].setdefault("platform_disabled", {})
+            config["skills"]["platform_disabled"][platform] = sorted(disabled)
+        save_config(config)
 
 
 # ─── Skill Discovery ─────────────────────────────────────────────────────────

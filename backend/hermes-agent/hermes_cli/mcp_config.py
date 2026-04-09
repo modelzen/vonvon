@@ -23,6 +23,7 @@ from hermes_cli.config import (
     save_env_value,
     get_hermes_home,  # noqa: F401 — used by test mocks
 )
+from hermes_cli.config_lock import config_store_lock  # WP1-C-fork
 from hermes_cli.colors import Colors, color
 from hermes_constants import display_hermes_home
 
@@ -86,21 +87,23 @@ def _get_mcp_servers(config: Optional[dict] = None) -> Dict[str, dict]:
 
 def _save_mcp_server(name: str, server_config: dict):
     """Add or update a server entry in config.yaml."""
-    config = load_config()
-    config.setdefault("mcp_servers", {})[name] = server_config
-    save_config(config)
+    with config_store_lock():
+        config = load_config()
+        config.setdefault("mcp_servers", {})[name] = server_config
+        save_config(config)
 
 
 def _remove_mcp_server(name: str) -> bool:
     """Remove a server from config.yaml.  Returns True if it existed."""
-    config = load_config()
-    servers = config.get("mcp_servers", {})
-    if name not in servers:
-        return False
-    del servers[name]
-    if not servers:
-        config.pop("mcp_servers", None)
-    save_config(config)
+    with config_store_lock():
+        config = load_config()
+        servers = config.get("mcp_servers", {})
+        if name not in servers:
+            return False
+        del servers[name]
+        if not servers:
+            config.pop("mcp_servers", None)
+        save_config(config)
     return True
 
 
@@ -586,20 +589,21 @@ def cmd_mcp_configure(args):
         return
 
     # Update config
-    config = load_config()
-    server_entry = config.get("mcp_servers", {}).get(name, {})
+    with config_store_lock():
+        config = load_config()
+        server_entry = config.get("mcp_servers", {}).get(name, {})
 
-    if len(chosen) == total:
-        # All selected → remove include/exclude (register all)
-        server_entry.pop("tools", None)
-    else:
-        chosen_names = [tool_names[i] for i in sorted(chosen)]
-        server_entry.setdefault("tools", {})
-        server_entry["tools"]["include"] = chosen_names
-        server_entry["tools"].pop("exclude", None)
+        if len(chosen) == total:
+            # All selected → remove include/exclude (register all)
+            server_entry.pop("tools", None)
+        else:
+            chosen_names = [tool_names[i] for i in sorted(chosen)]
+            server_entry.setdefault("tools", {})
+            server_entry["tools"]["include"] = chosen_names
+            server_entry["tools"].pop("exclude", None)
 
-    config.setdefault("mcp_servers", {})[name] = server_entry
-    save_config(config)
+        config.setdefault("mcp_servers", {})[name] = server_entry
+        save_config(config)
 
     new_count = len(chosen)
     _success(f"Updated config: {new_count}/{total} tools enabled")
