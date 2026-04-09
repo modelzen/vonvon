@@ -3,9 +3,16 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 
+class ChatAttachment(BaseModel):
+    type: str = "image"      # currently only image is supported
+    data_url: str            # e.g. "data:image/png;base64,...."
+    name: Optional[str] = None
+
+
 class ChatRequest(BaseModel):
     session_id: str
     message: str
+    attachments: List[ChatAttachment] = Field(default_factory=list)
 
 
 class CompressRequest(BaseModel):

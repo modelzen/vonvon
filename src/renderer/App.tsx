@@ -4,15 +4,17 @@ import { ChatContainer } from './components/Chat/ChatContainer'
 import { SessionSwitcher } from './components/Session/SessionSwitcher'
 import { useAgentChat } from './hooks/useAgentChat'
 import { useSession } from './hooks/useSession'
-import { UsageBar } from './components/Chat/UsageBar'
 import { CompressHint } from './components/Chat/CompressHint'
 import { InputArea } from './components/Chat/InputArea'
+import { AgentMessageList } from './components/Chat/AgentMessageList'
+import { UsageRing } from './components/Chat/UsageRing'
 
 function App(): React.ReactElement {
   const [showSettings, setShowSettings] = useState(false)
   const [backendEnabled, setBackendEnabled] = useState(false)
-  const { messages: agentMessages, isLoading, usagePercent, sendMessage } = useAgentChat()
   const { activeSession } = useSession()
+  const { messages: agentMessages, isLoading, usagePercent, sendMessage } =
+    useAgentChat(activeSession?.id)
   const [displayPercent, setDisplayPercent] = useState(0)
 
   useEffect(() => { setDisplayPercent(usagePercent) }, [usagePercent])
@@ -61,40 +63,21 @@ function App(): React.ReactElement {
       </div>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
         {backendEnabled ? (
-          <>
-            <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px', minHeight: 0 }}>
-              {agentMessages.map((msg) => (
-                <div key={msg.id} style={{
-                  marginBottom: 10, display: 'flex',
-                  justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start'
-                }}>
-                  <div style={{
-                    maxWidth: '80%', padding: '8px 12px', borderRadius: 12, fontSize: 13,
-                    background: msg.role === 'user'
-                      ? 'linear-gradient(135deg, #FF69B4, #FF1493)'
-                      : msg.role === 'tool' ? 'rgba(100,100,100,0.06)' : '#fff',
-                    color: msg.role === 'user' ? '#fff' : '#333',
-                    border: msg.role !== 'user' ? '1px solid #fce4ec' : 'none'
-                  }}>
-                    {msg.role === 'tool' && (
-                      <span style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 2 }}>
-                        🔧 {msg.toolName} {msg.toolStatus === 'running' ? '⟳' : msg.toolStatus === 'completed' ? '✓' : '✗'}
-                      </span>
-                    )}
-                    {msg.content || (msg.role === 'assistant' && isLoading ? '…' : '')}
-                  </div>
-                </div>
-              ))}
-            </div>
+          <div style={{
+            flex: 1, display: 'flex', flexDirection: 'column',
+            overflow: 'hidden', minHeight: 0, position: 'relative'
+          }}>
+            <AgentMessageList messages={agentMessages} isLoading={isLoading} />
             {activeSession && (
               <CompressHint percent={displayPercent} sessionId={activeSession.id} onCompressed={setDisplayPercent} />
             )}
-            <UsageBar percent={displayPercent} />
             <InputArea
               onSend={(msg) => { if (activeSession) sendMessage(msg, activeSession.id) }}
+              onSendWithAttachments={(msg, atts) => { if (activeSession) sendMessage(msg, activeSession.id, atts) }}
               isLoading={isLoading}
             />
-          </>
+            <UsageRing percent={displayPercent} />
+          </div>
         ) : (
           <ChatContainer />
         )}

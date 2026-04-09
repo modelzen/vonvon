@@ -37,3 +37,17 @@ async def reset_session(session_id: str):
 @router.get("/api/sessions/{session_id}/usage")
 async def get_usage(session_id: str):
     return session_service.get_usage(session_id)
+
+
+@router.get("/api/sessions/{session_id}/messages")
+async def get_session_messages(session_id: str) -> list[dict]:
+    """Return the full conversation history for a session.
+
+    Used by the frontend when switching between sessions so the chat view
+    can rehydrate without waiting for the next send. Format comes straight
+    from SessionDB.get_messages_as_conversation via session_service.
+    """
+    try:
+        return session_service.get_messages(session_id)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))

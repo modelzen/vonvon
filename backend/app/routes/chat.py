@@ -62,20 +62,52 @@ async def send_message(req: ChatRequest):
 
         history = session_service.get_messages(req.session_id)
 
+        # Build effective user_message: gracefully degrade image attachments to
+        # a text hint because the primary model (openai-codex / gpt-5.3-codex)
+        # does NOT accept image_url parts via chat.completions and hangs hermes
+        # (no delta / no run.completed), which then holds _agent_lock forever
+        # and freezes every subsequent request. Reinstate multimodal once
+        # vonvon can route to a vision-capable model.
+        effective_message = req.message or ""
+        if req.attachments:
+            img_count = sum(1 for a in req.attachments if a.type == "image")
+            if img_count:
+                note = (
+                    f"\n\n[用户附带了 {img_count} 张图片，但当前模型不支持直接看图；"
+                    f"请让用户切换到 vision 模型或文字描述图片内容。]"
+                )
+                effective_message = (effective_message + note).strip() or note.strip()
+
         async def run_agent():
+            lock_held = False
             try:
-                async with agent_service._agent_lock:
-                    agent = agent_service.create_agent(
-                        session_id=req.session_id,
-                        stream_delta_callback=on_delta,
-                        tool_progress_callback=on_tool_progress,
-                        thinking_callback=on_thinking,
+                # Acquire lock with 5s timeout so a stuck request can't freeze
+                # the entire backend for subsequent sends. Note: we do NOT put
+                # a timeout on run_conversation itself — legitimate long runs
+                # are fine; only lock *waiting* is capped.
+                try:
+                    await asyncio.wait_for(
+                        agent_service._agent_lock.acquire(), timeout=5.0
                     )
-                    result = await asyncio.to_thread(
-                        agent.run_conversation,
-                        user_message=req.message,
-                        conversation_history=history,
-                    )
+                    lock_held = True
+                except asyncio.TimeoutError:
+                    queue.put_nowait({
+                        "event": "run.failed",
+                        "data": {"error": "backend busy: previous request still running"},
+                    })
+                    return
+
+                agent = agent_service.create_agent(
+                    session_id=req.session_id,
+                    stream_delta_callback=on_delta,
+                    tool_progress_callback=on_tool_progress,
+                    thinking_callback=on_thinking,
+                )
+                result = await asyncio.to_thread(
+                    agent.run_conversation,
+                    user_message=effective_message,
+                    conversation_history=history,
+                )
 
                 # NOTE: use last_prompt_tokens (last API call's prompt size),
                 # NOT total_tokens (cumulative across all API calls in session).
@@ -102,6 +134,8 @@ async def send_message(req: ChatRequest):
                     "data": {"error": str(exc)},
                 })
             finally:
+                if lock_held:
+                    agent_service._agent_lock.release()
                 queue.put_nowait(None)  # sentinel — unblock event_generator
 
         asyncio.create_task(run_agent())
