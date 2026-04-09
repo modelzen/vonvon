@@ -1,0 +1,7 @@
+{
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"npx electron-vite build 2>&1\",\"timeout\":30000,\"description\":\"完整构建输出\"}",
+  "error": "Exit code 1\nerror during build:\nError: An entry point is required in the electron vite main config, which can be specified using \"build.lib.entry\" or \"build.rollupOptions.input\".\n    at configResolved (file:///Users/clay/devlop/src/ClayCheung/vonvon/node_modules/electron-vite/dist/chunks/lib-BmEkZIgk.mjs:335:27)\n    at file:///Users/clay/devlop/src/ClayCheung/vonvon/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:66689:67\n    at Array.map (<anonymous>)\n    at resolveConfig (file:///Users/clay...",
+  "timestamp": "2026-04-09T02:37:47.275Z",
+  "retry_count": 1
+}
