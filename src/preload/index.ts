@@ -28,6 +28,17 @@ contextBridge.exposeInMainWorld('electron', {
   setBackendConfig: (config: Partial<{ url: string; enabled: boolean }>) =>
     ipcRenderer.invoke('backend:config:set', config),
 
+  // Workspace directory picker
+  pickWorkspaceDirectory: (): Promise<string | null> =>
+    ipcRenderer.invoke('workspace:pickDirectory'),
+
+  // Shell utilities (whitelist enforced in renderer before calling)
+  openExternal: (url: string): Promise<void> =>
+    ipcRenderer.invoke('shell:openExternal', url),
+  showItemInFolder: (path: string): void => {
+    ipcRenderer.invoke('shell:showItemInFolder', path)
+  },
+
   // Kirby — Stage 2
   detachKirby: () => ipcRenderer.send('kirby:detach'),
   getKirbyState: () => ipcRenderer.invoke('kirby:getState'),
@@ -65,6 +76,9 @@ declare global {
       listProviders(): Promise<Array<{ provider: string; model: string; configured: boolean }>>
       getBackendConfig(): Promise<{ url: string; enabled: boolean }>
       setBackendConfig(config: Partial<{ url: string; enabled: boolean }>): Promise<void>
+      pickWorkspaceDirectory(): Promise<string | null>
+      openExternal(url: string): Promise<void>
+      showItemInFolder(path: string): void
       detachKirby(): void
       getKirbyState(): Promise<'floating' | 'snapping' | 'docked'>
       on(channel: string, callback: (...args: unknown[]) => void): void

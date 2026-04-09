@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { ipcMain, dialog, shell } from 'electron'
 import { chatStore } from './store'
 import { registry } from './providers/registry'
 import { registerKirbyIpcHandlers } from './native/kirby'
@@ -137,6 +137,26 @@ export function registerIpcHandlers(): void {
   // Settings: update default model
   ipcMain.handle('settings:setDefaultModel', async (_event, modelId: string) => {
     await chatStore.setDefaultModel(modelId)
+  })
+
+  // Workspace: pick directory via native file dialog
+  ipcMain.handle('workspace:pickDirectory', async () => {
+    const result = await dialog.showOpenDialog({
+      properties: ['openDirectory', 'createDirectory'],
+      title: '选择项目工作区',
+    })
+    if (result.canceled || result.filePaths.length === 0) return null
+    return result.filePaths[0]
+  })
+
+  // Shell: open URL in system browser (whitelist enforced in renderer before calling)
+  ipcMain.handle('shell:openExternal', async (_event, url: string) => {
+    await shell.openExternal(url)
+  })
+
+  // Shell: reveal path in Finder/Explorer (path comes from trusted backend state)
+  ipcMain.handle('shell:showItemInFolder', (_event, path: string) => {
+    shell.showItemInFolder(path)
   })
 
   // Kirby/native handlers — Stage 2

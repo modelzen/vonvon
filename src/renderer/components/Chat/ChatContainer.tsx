@@ -3,17 +3,24 @@ import { useChat } from '../../hooks/useChat'
 import { MessageList } from './MessageList'
 import { InputArea } from './InputArea'
 import { ModelSelector } from './ModelSelector'
+import { SandboxBanner } from './SandboxBanner'
+import type { WorkspaceState } from '../../hooks/useHermesConfig'
 
 interface ChatContainerProps {
   defaultModel?: string
+  workspace?: WorkspaceState
+  onOpenSettings?: () => void
 }
 
-export function ChatContainer({ defaultModel = 'gpt-4o' }: ChatContainerProps): React.ReactElement {
+export function ChatContainer({ defaultModel = 'gpt-4o', workspace, onOpenSettings }: ChatContainerProps): React.ReactElement {
   const { messages, isLoading, selectedModel, setSelectedModel, sendMessage, clearMessages } =
     useChat(defaultModel)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      {workspace && onOpenSettings && (
+        <SandboxBanner workspace={workspace} onOpenSettings={onOpenSettings} />
+      )}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 8,
         padding: '5px 14px', borderBottom: '1px solid #fce4ec',
