@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { useHermesConfig, SkillView, SkillSearchResult, SkillJobStatus } from '../../hooks/useHermesConfig'
+import { useHermesConfig, SkillView, SkillTemplate, SkillJobStatus } from '../../hooks/useHermesConfig'
 
 const SECTION_STYLE: React.CSSProperties = { padding: '16px 0', borderBottom: '1px solid #fce4ec' }
 const BTN_PRIMARY: React.CSSProperties = {
@@ -128,109 +128,132 @@ function InstalledTab({
 
 // ── Discover tab ─────────────────────────────────────────────────────────────
 
-function DiscoverTab({
-  onInstalled, jobs, trackJob,
-}: {
-  onInstalled: () => void
-  jobs: Record<string, SkillJobStatus>
-  trackJob: (job: SkillJobStatus) => void
-}) {
-  const { searchSkills, startInstallSkill } = useHermesConfig()
+function DiscoverTab({ onInstalled }: { onInstalled: () => void }) {
+  const { listSkillTemplates, installSkillTemplate } = useHermesConfig()
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<SkillSearchResult[]>([])
-  const [searching, setSearching] = useState(false)
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  const doSearch = useCallback((q: string) => {
-    if (!q.trim()) { setResults([]); return }
-    setSearching(true)
-    searchSkills(q, 10)
-      .then(setResults)
-      .catch(() => setResults([]))
-      .finally(() => setSearching(false))
-  }, [searchSkills])
+  const [templates, setTemplates] = useState<SkillTemplate[]>([])
+  const [loading, setLoading] = useState(true)
+  const [installing, setInstalling] = useState<Set<string>>(new Set())
+  const [errors, setErrors] = useState<Record<string, string>>({})
 
   useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => doSearch(query), 400)
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
-  }, [query, doSearch])
+    listSkillTemplates()
+      .then(setTemplates)
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
 
-  const installJobs = Object.values(jobs).filter((j) => j.kind === 'install')
-  const installingIds = new Set(
-    installJobs.filter((j) => j.status === 'pending' || j.status === 'running').map((j) => j.identifier)
-  )
+  const filtered = query.trim()
+    ? templates.filter((t) => {
+        const q = query.toLowerCase()
+        return (
+          t.name.toLowerCase().includes(q) ||
+          t.description.toLowerCase().includes(q) ||
+          t.category.toLowerCase().includes(q)
+        )
+      })
+    : templates
 
-  const handleInstall = async (identifier: string) => {
-    try {
-      const job = await startInstallSkill(identifier)
-      trackJob(job)
-    } catch {}
+  // Group by category
+  const groups: Record<string, SkillTemplate[]> = {}
+  for (const t of filtered) {
+    if (!groups[t.category]) groups[t.category] = []
+    groups[t.category].push(t)
   }
 
-  useEffect(() => {
-    const justSucceeded = installJobs.some((j) => j.status === 'success')
-    if (justSucceeded) onInstalled()
-  }, [jobs])
+  const handleInstall = async (identifier: string) => {
+    setInstalling((prev) => new Set(prev).add(identifier))
+    setErrors((prev) => { const next = { ...prev }; delete next[identifier]; return next })
+    try {
+      await installSkillTemplate(identifier)
+      setTemplates((prev) =>
+        prev.map((t) => t.identifier === identifier ? { ...t, installed: true } : t)
+      )
+      onInstalled()
+    } catch (e: any) {
+      setErrors((prev) => ({ ...prev, [identifier]: e.message ?? '安装失败' }))
+    } finally {
+      setInstalling((prev) => {
+        const next = new Set(prev)
+        next.delete(identifier)
+        return next
+      })
+    }
+  }
 
   return (
     <div>
       <input
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        placeholder="搜索 skill（如 pptx, git, web）…"
+        placeholder="过滤模板（按名称、描述、分类）…"
         style={{
           width: '100%', padding: '6px 10px', fontSize: 12,
           border: '1px solid #fce4ec', borderRadius: 6, outline: 'none',
           boxSizing: 'border-box', marginBottom: 10,
         }}
       />
-      {searching && <div style={{ fontSize: 12, color: '#aaa' }}>搜索中…</div>}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {results.map((r) => {
-          const isInstalling = installingIds.has(r.identifier)
-          const done = installJobs.find((j) => j.identifier === r.identifier && j.status === 'success')
-          const failed = installJobs.find((j) => j.identifier === r.identifier && j.status === 'error')
-          return (
-            <div key={r.identifier} style={{
-              padding: '8px 10px', borderRadius: 6, background: '#fafafa', border: '1px solid #eee',
-              display: 'flex', alignItems: 'flex-start', gap: 8,
-            }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: '#333' }}>{r.name}</span>
-                  {trustBadge(r.trust_level)}
-                </div>
-                <div style={{ fontSize: 11, color: '#777' }}>
-                  {r.description.length > 70 ? r.description.slice(0, 70) + '…' : r.description}
-                </div>
-                {failed && <div style={{ fontSize: 11, color: '#e53935', marginTop: 2 }}>{failed.error}</div>}
-              </div>
-              <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-                {done ? (
-                  <span style={{ fontSize: 11, color: '#4caf50' }}>✓ 已安装</span>
-                ) : (
-                  <button
-                    onClick={() => handleInstall(r.identifier)}
-                    disabled={isInstalling}
-                    style={{ ...BTN_PRIMARY, fontSize: 11, padding: '3px 10px', opacity: isInstalling ? 0.6 : 1 }}
-                  >
-                    {isInstalling ? '安装中…' : '安装'}
-                  </button>
-                )}
-                {failed && (
-                  <button onClick={() => handleInstall(r.identifier)} style={{ ...BTN_GHOST }}>重试</button>
-                )}
-              </div>
-            </div>
-          )
-        })}
-        {!searching && query && results.length === 0 && (
-          <div style={{ fontSize: 12, color: '#aaa' }}>
-            无匹配结果。如未配置 GitHub token，hub 搜索可能受限。
+      {loading && <div style={{ fontSize: 12, color: '#aaa' }}>加载中…</div>}
+      {!loading && filtered.length === 0 && (
+        <div style={{ fontSize: 12, color: '#aaa' }}>无匹配模板</div>
+      )}
+      {Object.entries(groups).map(([category, items], groupIdx) => (
+        <div key={category}>
+          <div style={{
+            fontSize: 11, color: '#FF69B4', fontWeight: 700,
+            textTransform: 'uppercase', letterSpacing: 0.5,
+            margin: groupIdx === 0 ? '0 0 6px' : '12px 0 6px',
+            padding: '0 2px',
+          }}>
+            {category} ({items.length})
           </div>
-        )}
-      </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {items.map((t) => {
+              const isInstalling = installing.has(t.identifier)
+              const err = errors[t.identifier]
+              return (
+                <div key={t.identifier} style={{
+                  padding: '8px 10px', borderRadius: 6, background: '#fafafa', border: '1px solid #eee',
+                  display: 'flex', alignItems: 'flex-start', gap: 8,
+                }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#333', marginBottom: 2 }}>
+                      {t.name}
+                    </div>
+                    <div style={{ fontSize: 11, color: '#888' }}>
+                      {t.description.length > 80 ? t.description.slice(0, 80) + '…' : t.description}
+                    </div>
+                    {err && (
+                      <div style={{ fontSize: 11, color: '#e53935', marginTop: 2 }}>{err}</div>
+                    )}
+                  </div>
+                  <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                    {t.installed ? (
+                      <span style={{ fontSize: 11, color: '#aaa' }}>✓ 已安装</span>
+                    ) : isInstalling ? (
+                      <button disabled style={{ ...BTN_PRIMARY, fontSize: 11, padding: '3px 10px', opacity: 0.6 }}>
+                        安装中…
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleInstall(t.identifier)}
+                        style={{ ...BTN_PRIMARY, fontSize: 11, padding: '3px 10px' }}
+                      >
+                        安装
+                      </button>
+                    )}
+                    {err && (
+                      <button onClick={() => handleInstall(t.identifier)} style={{ ...BTN_GHOST }}>
+                        重试
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      ))}
     </div>
   )
 }
@@ -325,8 +348,6 @@ export function SkillsPanel(): React.ReactElement {
       ) : (
         <DiscoverTab
           onInstalled={refresh}
-          jobs={jobs}
-          trackJob={trackJob}
         />
       )}
 

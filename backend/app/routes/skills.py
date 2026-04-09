@@ -49,6 +49,18 @@ class SkillJobStatus(BaseModel):
     updated_at: float
 
 
+class SkillTemplate(BaseModel):
+    name: str
+    category: str
+    description: str = ""
+    identifier: str
+    installed: bool = False
+
+
+class SkillTemplateInstallRequest(BaseModel):
+    identifier: str
+
+
 @router.get("/api/skills")
 async def list_skills() -> list[SkillView]:
     return skills_service.list_skills()
@@ -98,3 +110,20 @@ async def poll_job(job_id: str) -> SkillJobStatus:
 @router.get("/api/skills/updates")
 async def check_updates() -> dict:
     return skills_service.check_updates()
+
+
+@router.get("/api/skills/templates")
+async def list_templates() -> list[SkillTemplate]:
+    return skills_service.list_templates()
+
+
+@router.post("/api/skills/templates/install")
+async def install_template(req: SkillTemplateInstallRequest) -> SkillView:
+    try:
+        return skills_service.install_template(req.identifier)
+    except FileNotFoundError as e:
+        raise HTTPException(404, str(e))
+    except FileExistsError as e:
+        raise HTTPException(400, str(e))
+    except ValueError as e:
+        raise HTTPException(400, str(e))

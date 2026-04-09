@@ -107,6 +107,14 @@ export interface SkillSearchResult {
   trust_level: string
 }
 
+export interface SkillTemplate {
+  name: string
+  category: string
+  description: string
+  identifier: string
+  installed: boolean
+}
+
 export interface SkillJobStatus {
   job_id: string
   kind: string
@@ -224,6 +232,11 @@ export function useHermesConfig() {
   const checkSkillUpdates = () =>
     json<{ updates: unknown[]; error: string | null }>('/api/skills/updates')
 
+  const listSkillTemplates = () => json<SkillTemplate[]>('/api/skills/templates')
+
+  const installSkillTemplate = (identifier: string) =>
+    post<SkillView>('/api/skills/templates/install', { identifier })
+
   // ── Workspace ────────────────────────────────────────────────────────────────
 
   const getWorkspace = () => json<WorkspaceState>('/api/workspace')
@@ -253,6 +266,8 @@ export function useHermesConfig() {
     startUninstallSkill,
     pollSkillJob,
     checkSkillUpdates,
+    listSkillTemplates,
+    installSkillTemplate,
     getWorkspace,
     setWorkspace,
     resetWorkspace,

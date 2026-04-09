@@ -6,10 +6,12 @@ job API. Jobs are in-memory (same semantics as OAuth flows)."""
 
 import asyncio
 import logging
+import shutil
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from hermes_cli.config import load_config
@@ -43,6 +45,9 @@ _jobs_lock = asyncio.Lock()
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
+_VENDORED_SKILLS_DIR = Path(__file__).resolve().parents[2] / "hermes-agent" / "skills"
+
+
 def _find_installed_skills() -> List[Dict[str, Any]]:
     from tools.skills_tool import _find_all_skills
     try:
@@ -50,6 +55,105 @@ def _find_installed_skills() -> List[Dict[str, Any]]:
     except Exception as exc:
         logger.warning("find_all_skills failed: %s", exc)
         return []
+
+
+def _parse_skill_md(skill_md: Path) -> tuple:
+    """Return (name, description) from a SKILL.md file."""
+    from tools.skills_tool import _parse_frontmatter, MAX_NAME_LENGTH, MAX_DESCRIPTION_LENGTH
+    content = skill_md.read_text(encoding="utf-8")[:4000]
+    frontmatter, body = _parse_frontmatter(content)
+    name = (frontmatter.get("name") or skill_md.parent.name)[:MAX_NAME_LENGTH]
+    description = frontmatter.get("description", "")
+    if not description:
+        for line in body.strip().split("\n"):
+            line = line.strip()
+            if line and not line.startswith("#"):
+                description = line
+                break
+    if len(description) > MAX_DESCRIPTION_LENGTH:
+        description = description[:MAX_DESCRIPTION_LENGTH] + "..."
+    return name, description
+
+
+def list_templates() -> List[Dict[str, Any]]:
+    """Scan vendored skills and return template list."""
+    from tools.skills_tool import SKILLS_DIR, _EXCLUDED_SKILL_DIRS
+    if not _VENDORED_SKILLS_DIR.exists():
+        return []
+    results = []
+    seen_names: set = set()
+    for skill_md in sorted(_VENDORED_SKILLS_DIR.rglob("SKILL.md")):
+        if any(part in _EXCLUDED_SKILL_DIRS for part in skill_md.parts):
+            continue
+        skill_dir = skill_md.parent
+        try:
+            rel = skill_dir.relative_to(_VENDORED_SKILLS_DIR)
+        except ValueError:
+            continue
+        parts = rel.parts
+        if len(parts) < 2:
+            continue
+        category = parts[0]
+        dirname = parts[1]
+        try:
+            name, description = _parse_skill_md(skill_md)
+        except Exception as exc:
+            logger.warning("list_templates: parse failed for %s: %s", skill_md, exc)
+            continue
+        if name in seen_names:
+            continue
+        seen_names.add(name)
+        installed = (SKILLS_DIR / category / dirname / "SKILL.md").exists()
+        results.append({
+            "name": name,
+            "category": category,
+            "description": description,
+            "identifier": f"builtin:{category}/{dirname}",
+            "installed": installed,
+        })
+    results.sort(key=lambda x: (x["category"], x["name"]))
+    return results
+
+
+def install_template(identifier: str) -> Dict[str, Any]:
+    """Copy a vendored skill to SKILLS_DIR. Raises ValueError/FileNotFoundError/FileExistsError."""
+    from tools.skills_tool import SKILLS_DIR
+    if not identifier.startswith("builtin:"):
+        raise ValueError(f"identifier must start with 'builtin:': {identifier!r}")
+    rel = identifier[len("builtin:"):]
+    parts = rel.split("/", 1)
+    if len(parts) != 2 or not parts[0] or not parts[1]:
+        raise ValueError(f"invalid identifier format: {identifier!r}")
+    category, dirname = parts
+    src = _VENDORED_SKILLS_DIR / category / dirname
+    dst = SKILLS_DIR / category / dirname
+    if not src.exists() or not (src / "SKILL.md").exists():
+        raise FileNotFoundError(f"vendored skill not found: {identifier}")
+    if dst.exists():
+        raise FileExistsError("already installed")
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(src, dst)
+    try:
+        name, description = _parse_skill_md(dst / "SKILL.md")
+    except Exception as exc:
+        logger.warning("install_template: parse dst failed: %s", exc)
+        name = dirname
+        description = ""
+    try:
+        from agent.prompt_builder import clear_skills_system_prompt_cache
+        clear_skills_system_prompt_cache(clear_snapshot=True)
+    except Exception as exc:
+        logger.warning("install_template: clear_skills_system_prompt_cache failed: %s", exc)
+    return {
+        "name": name,
+        "category": category,
+        "description": description,
+        "install_path": str(dst),
+        "version": None,
+        "source": "builtin",
+        "enabled_global": True,
+        "enabled_vonvon": True,
+    }
 
 
 def _to_view(
