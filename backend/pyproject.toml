@@ -13,6 +13,8 @@ dependencies = [
     "sse-starlette>=1.8.2",
     "pydantic>=2.6.0",
     "pyyaml>=6.0",
+    # hermes-agent is vendored as a git subtree at backend/hermes-agent/
+    # and installed separately via: pip install -e ./hermes-agent
 ]
 
 [project.optional-dependencies]
