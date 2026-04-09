@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Kirby</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        background: transparent;
+        overflow: hidden;
+        user-select: none;
+        -webkit-user-select: none;
+        -webkit-app-region: drag;
+      }
+
+      .kirby {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        background: radial-gradient(
+          circle at 35% 35%,
+          #ffb3d9 0%,
+          #ff69b4 40%,
+          #ff1493 100%
+        );
+        box-shadow:
+          0 4px 15px rgba(255, 105, 180, 0.5),
+          inset 0 -3px 8px rgba(255, 20, 147, 0.3),
+          inset 0 3px 8px rgba(255, 255, 255, 0.4);
+        cursor: pointer;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+        position: relative;
+      }
+
+      .kirby:hover {
+        transform: scale(1.05);
+      }
+
+      .kirby:active {
+        transform: scale(0.95);
+      }
+
+      /* Eyes */
+      .kirby::before {
+        content: '';
+        position: absolute;
+        top: 28px;
+        left: 18px;
+        width: 10px;
+        height: 12px;
+        background: #1a1a2e;
+        border-radius: 50%;
+        box-shadow: 24px 0 0 #1a1a2e;
+      }
+
+      /* Blush */
+      .kirby::after {
+        content: '';
+        position: absolute;
+        top: 44px;
+        left: 12px;
+        width: 14px;
+        height: 8px;
+        background: rgba(255, 100, 150, 0.5);
+        border-radius: 50%;
+        box-shadow: 32px 0 0 rgba(255, 100, 150, 0.5);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="kirby" title="Vonvon AI"></div>
+  </body>
+</html>
