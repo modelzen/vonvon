@@ -1,0 +1,60 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json.bak
+
+# Electron build artifacts
+out/
+dist/
+build/
+*.app/
+
+# Native build
+native/build/
+native/Release/
+*.node
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+
+# Python
+backend/.venv/
+backend/__pycache__/
+backend/.pytest_cache/
+**/__pycache__/
+*.py[cod]
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Environment
+.env
+.env.local
+
+# OMC state (transient runtime data)
+.omc/state/
+.omc/sessions/
+.omc/handoffs/
+.omc/project-memory.json
+.omc/checkpoints/
+
+# Agent runtime
+.agents/
+.claude/skills/frontend-design/
+skills-lock.json

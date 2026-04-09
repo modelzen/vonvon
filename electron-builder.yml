@@ -1,0 +1,38 @@
+appId: com.clay.vonvon
+productName: Vonvon
+copyright: Copyright © 2024 Clay
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - dist/**/*
+  - node_modules/**/*
+  - "!node_modules/.cache/**/*"
+
+mac:
+  target:
+    - target: dmg
+      arch:
+        - universal
+  icon: resources/icon.icns
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.inherit.plist
+
+dmg:
+  contents:
+    - x: 410
+      y: 150
+      type: link
+      path: /Applications
+    - x: 130
+      y: 150
+      type: file
+
+afterSign: scripts/notarize.js
+
+nativeRebuilder:
+  buildFromSource: true
