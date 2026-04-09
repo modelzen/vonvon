@@ -5,16 +5,20 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import CORS_ORIGINS
-from app.routes import chat, sessions, models
-from app.services import agent_service
+from app.routes import chat, sessions, models, auth, mcp, workspace, skills
+from app.services import agent_service, workspace_service
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: load hermes config into agent_service globals
+    # Order matters (DELTA-6):
+    # 1. Load hermes model/provider state FIRST (reads ~/.hermes absolute path)
     agent_service.init_from_hermes_config()
+    # 2. Apply workspace — calls os.chdir + sets TERMINAL_CWD
+    workspace_service.init_from_hermes_config()
+    # 3. Eager SessionDB AFTER workspace is final so SQLite path is absolute
+    agent_service.get_session_db()
     yield
-    # Shutdown: nothing to clean up (SessionDB uses SQLite, no explicit close needed)
 
 
 app = FastAPI(
@@ -34,3 +38,7 @@ app.add_middleware(
 app.include_router(chat.router)
 app.include_router(sessions.router)
 app.include_router(models.router)
+app.include_router(auth.router)
+app.include_router(mcp.router)
+app.include_router(workspace.router)
+app.include_router(skills.router)

@@ -17,10 +17,11 @@ def test_list_models(client):
     resp = client.get("/api/models")
     assert resp.status_code == 200
     data = resp.json()
-    assert "models" in data
+    # v1.1: response shape changed to {providers, current, current_provider}
+    assert "providers" in data
     assert "current" in data
-    assert isinstance(data["models"], list)
-    assert len(data["models"]) > 0
+    assert "current_provider" in data
+    assert isinstance(data["providers"], list)
 
 
 def test_switch_model(client):

@@ -42,7 +42,11 @@ sys.modules.setdefault("sse_starlette.sse", _sse_sse)
 
 sys.modules.setdefault("run_agent", MagicMock())
 sys.modules.setdefault("hermes_state", MagicMock())
-sys.modules.setdefault("hermes_cli", MagicMock())
+# hermes_cli mock must look like a package (have __path__) so that
+# `from hermes_cli.submodule import x` works via sys.modules lookup.
+_hermes_cli_mock = MagicMock()
+_hermes_cli_mock.__path__ = []
+sys.modules.setdefault("hermes_cli", _hermes_cli_mock)
 # load_config must return a plain dict so init_from_hermes_config() doesn't
 # accidentally set _current_model to a MagicMock (breaks Pydantic serialisation).
 _hermes_cli_config = MagicMock()
@@ -57,6 +61,40 @@ sys.modules.setdefault("agent", MagicMock())
 sys.modules.setdefault("agent.model_metadata", _model_meta)
 sys.modules.setdefault("agent.context_compressor", _ctx_compressor)
 
+# Auth service deps: credential_pool + codex_device_flow
+_credential_pool = MagicMock()
+_credential_pool.AUTH_TYPE_API_KEY = "api_key"
+_credential_pool.AUTH_TYPE_OAUTH = "oauth"
+_credential_pool.SOURCE_MANUAL = "manual"
+sys.modules.setdefault("agent.credential_pool", _credential_pool)
+sys.modules.setdefault("agent.codex_device_flow", MagicMock())
+sys.modules.setdefault("hermes_cli.auth", MagicMock())
+sys.modules.setdefault("hermes_cli.mcp_config", MagicMock())
+sys.modules.setdefault("hermes_cli.config_lock", MagicMock())
+sys.modules.setdefault("hermes_cli.skills_config", MagicMock())
+sys.modules.setdefault("hermes_cli.skills_hub", MagicMock())
+_model_switch_mock = MagicMock()
+_switch_result = MagicMock()
+_switch_result.success = True
+_switch_result.new_model = "openai/gpt-4o"
+_switch_result.target_provider = "openai"
+_switch_result.base_url = None
+_switch_result.api_mode = "api"
+_switch_result.warning_message = None
+_switch_result.error_message = None
+_model_switch_mock.switch_model.return_value = _switch_result
+sys.modules.setdefault("hermes_cli.model_switch", _model_switch_mock)
+sys.modules.setdefault("hermes_cli.workspace", MagicMock())
+sys.modules.setdefault("agent.skills_service", MagicMock())
+sys.modules.setdefault("agent.workspace_service", MagicMock())
+sys.modules.setdefault("agent.prompt_builder", MagicMock())
+
+# Skills tool stubs
+sys.modules.setdefault("tools", MagicMock())
+sys.modules.setdefault("tools.skills_hub", MagicMock())
+sys.modules.setdefault("tools.skills_guard", MagicMock())
+sys.modules.setdefault("tools.skills_tool", MagicMock())
+
 # ─── 2. App imports (safe after stubs) ────────────────────────────────────────
 from app.main import app  # noqa: E402
 from app.services import agent_service  # noqa: E402
@@ -69,15 +107,13 @@ def _reset_agent_service():
     saved = (
         agent_service._session_db,
         agent_service._current_model,
-        agent_service._base_url,
-        agent_service._api_key,
+        agent_service._current_provider,
     )
     yield
     (
         agent_service._session_db,
         agent_service._current_model,
-        agent_service._base_url,
-        agent_service._api_key,
+        agent_service._current_provider,
     ) = saved
 
 

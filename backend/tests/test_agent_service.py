@@ -35,12 +35,15 @@ def test_create_agent_passes_callbacks(mock_session_db):
     assert kwargs["stream_delta_callback"] is cb
 
 
-def test_switch_model_updates_global():
-    """switch_model updates the module-level _current_model."""
-    original = agent_service._current_model
-    agent_service.switch_model("openai/gpt-4o")
+async def test_switch_model_updates_global():
+    """switch_model updates _current_model when hermes reports success."""
+    result = MagicMock()
+    result.success = True
+    result.new_model = "openai/gpt-4o"
+    result.target_provider = "openai"
+    with patch("hermes_cli.model_switch.switch_model", return_value=result):
+        await agent_service.switch_model("openai/gpt-4o")
     assert agent_service._current_model == "openai/gpt-4o"
-    agent_service._current_model = original  # autouse fixture also resets this
 
 
 def test_get_current_model_returns_model():

@@ -1,8 +1,10 @@
 """Session CRUD routes."""
 from fastapi import APIRouter, HTTPException
 
+import os
+
 from app.schemas import SessionRequest
-from app.services import session_service
+from app.services import session_service, workspace_service
 
 router = APIRouter()
 
@@ -14,6 +16,8 @@ async def list_sessions():
 
 @router.post("/api/sessions", status_code=201)
 async def create_session(req: SessionRequest):
+    # DELTA-5: defensive TERMINAL_CWD reset before session creation
+    os.environ["TERMINAL_CWD"] = workspace_service.current_state()["path"]
     return session_service.create_session(req.name)
 
 

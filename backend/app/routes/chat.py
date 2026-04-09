@@ -6,8 +6,10 @@ from fastapi import APIRouter
 from sse_starlette.sse import EventSourceResponse
 from agent.context_compressor import ContextCompressor
 
+import os
+
 from app.schemas import ChatRequest, CompressRequest
-from app.services import agent_service, session_service
+from app.services import agent_service, session_service, workspace_service
 
 router = APIRouter()
 
@@ -24,6 +26,10 @@ async def send_message(req: ChatRequest):
       run.completed  — final result with usage stats
       run.failed     — error event (always followed by sentinel)
     """
+    # DELTA-5: defensive re-apply — prevents stale TERMINAL_CWD if any hermes
+    # call site mutated os.environ mid-run. workspace_service owns the truth.
+    os.environ["TERMINAL_CWD"] = workspace_service.current_state()["path"]
+
     async def event_generator():
         queue: asyncio.Queue = asyncio.Queue()
 
@@ -113,10 +119,18 @@ async def send_message(req: ChatRequest):
 @router.post("/api/chat/compress")
 async def compress_context(req: CompressRequest):
     """Manually trigger context compression using ContextCompressor (plan scheme B)."""
+    # DELTA-5: defensive TERMINAL_CWD re-apply before tool-spawning operation
+    os.environ["TERMINAL_CWD"] = workspace_service.current_state()["path"]
+    # DELTA-4: resolve credentials from credential_pool instead of cached globals
+    try:
+        from agent.credential_pool import load_pool
+        cur_cred = load_pool(agent_service.get_current_provider() or "openai").peek() if agent_service.get_current_provider() else None
+    except Exception:
+        cur_cred = None
     compressor = ContextCompressor(
-        model=agent_service._current_model,
-        base_url=agent_service._base_url or "",
-        api_key=agent_service._api_key or "",
+        model=agent_service.get_current_model(),
+        base_url=cur_cred.base_url if cur_cred else "",
+        api_key=cur_cred.access_token if cur_cred else "",
     )
     messages = session_service.get_messages(req.session_id)
     compressed = await asyncio.to_thread(compressor.compress, messages)
