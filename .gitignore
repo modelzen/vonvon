@@ -47,14 +47,16 @@ Thumbs.db
 .env
 .env.local
 
-# OMC state (transient runtime data)
-.omc/state/
-.omc/sessions/
-.omc/handoffs/
-.omc/project-memory.json
-.omc/checkpoints/
+# OMC state (transient runtime data) — match at any depth, including backend/.omc/
+**/.omc/state/
+**/.omc/sessions/
+**/.omc/handoffs/
+**/.omc/checkpoints/
+**/.omc/project-memory.json
+**/.omc/subagent-tracking.json
+**/.omc/agent-replay-*.jsonl
 
 # Agent runtime
 .agents/
-.claude/skills/frontend-design/
+.claude/skills/frontend-design
 skills-lock.json

@@ -1,7 +1,0 @@
-{
-  "tool_name": "Bash",
-  "tool_input_preview": "{\"command\":\"sleep 30 && cat /private/tmp/claude-501/-Users-clay-devlop-src-ClayCheung-vonvon/3d0c9d5d-ab5d-4f9e-9f3f-797208409aca/tasks/b3g4h1zef.output 2>/dev/null | tail -5 && echo \\\"---\\\" && /Users...",
-  "error": "Exit code 1\nWARNING: Retrying (Retry(total=3, connect=None, read=None, redirect=None, status=None)) after connection broken by 'SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1081)'))': /simple/annotated-types/\nWARNING: Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1081)'...",
-  "timestamp": "2026-04-09T07:12:38.565Z",
-  "retry_count": 2
-}
