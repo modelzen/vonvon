@@ -3013,6 +3013,72 @@ class AIAgent:
         digest = hashlib.sha1(seed.encode("utf-8")).hexdigest()[:24]
         return f"fc_{digest}"
 
+    @staticmethod
+    def _chat_content_to_responses_parts(content: Any) -> tuple[List[Dict[str, Any]], str]:
+        """Translate a chat-style ``content`` field into Responses API parts.
+
+        Accepts any of:
+          - ``None`` or ``str``: returns the string as a single-item list
+            wrapping an ``input_text`` part, plus the raw text for fallback.
+          - OpenAI chat.completions multimodal list:
+              [{"type":"text","text":"..."},
+               {"type":"image_url","image_url":{"url":"data:image/png;base64,..."}}]
+            → translated to Responses API:
+              [{"type":"input_text","text":"..."},
+               {"type":"input_image","image_url":"data:image/png;base64,..."}]
+          - Already-native Responses parts (``input_text`` / ``input_image``)
+            pass through unchanged.
+
+        Returns ``(parts, plain_text)`` where ``plain_text`` is the
+        concatenation of any text portions — used by callers that need a
+        string fallback (preview logging, pure-text assistant items).
+        """
+        if content is None:
+            return [], ""
+        if isinstance(content, str):
+            text = content
+            if not text.strip():
+                return [], text
+            return [{"type": "input_text", "text": text}], text
+        if not isinstance(content, list):
+            text = str(content)
+            return [{"type": "input_text", "text": text}], text
+
+        parts: List[Dict[str, Any]] = []
+        text_fragments: List[str] = []
+        for part in content:
+            if isinstance(part, str):
+                if part.strip():
+                    parts.append({"type": "input_text", "text": part})
+                    text_fragments.append(part)
+                continue
+            if not isinstance(part, dict):
+                continue
+            ptype = part.get("type")
+            if ptype in {"text", "input_text"}:
+                text_val = str(part.get("text", "") or "")
+                if text_val:
+                    parts.append({"type": "input_text", "text": text_val})
+                    text_fragments.append(text_val)
+                continue
+            if ptype in {"image_url", "input_image"}:
+                image_url: Any = part.get("image_url")
+                if isinstance(image_url, dict):
+                    image_url = image_url.get("url", "")
+                image_url = str(image_url or "").strip()
+                if not image_url:
+                    continue
+                parts.append({"type": "input_image", "image_url": image_url})
+                continue
+            # Unknown part types: best-effort text coercion so we never
+            # emit a garbage str() on the whole list.
+            text_val = str(part.get("text", "") or "")
+            if text_val:
+                parts.append({"type": "input_text", "text": text_val})
+                text_fragments.append(text_val)
+        plain_text = " ".join(frag for frag in text_fragments if frag)
+        return parts, plain_text
+
     def _chat_messages_to_responses_input(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Convert internal chat-style messages to Responses input items."""
         items: List[Dict[str, Any]] = []
@@ -3026,7 +3092,13 @@ class AIAgent:
 
             if role in {"user", "assistant"}:
                 content = msg.get("content", "")
-                content_text = str(content) if content is not None else ""
+                # Translate multimodal content parts (OpenAI chat.completions
+                # `image_url` format) into Responses API `input_image` items.
+                # Pure string content still produces a single input_text part.
+                _parts, content_text = self._chat_content_to_responses_parts(content)
+                _content_has_multimodal = any(
+                    p.get("type") == "input_image" for p in _parts
+                )
 
                 if role == "assistant":
                     # Replay encrypted reasoning items from previous turns
@@ -3092,7 +3164,15 @@ class AIAgent:
                             })
                     continue
 
-                items.append({"role": role, "content": content_text})
+                # User message: preserve multimodal parts so Codex (and any
+                # other Responses API-compatible endpoint) can actually see
+                # images. Fall back to a plain string content when no image
+                # parts exist to keep the on-wire payload identical to the
+                # pre-multimodal-patch behavior for text-only flows.
+                if _content_has_multimodal:
+                    items.append({"role": role, "content": _parts})
+                else:
+                    items.append({"role": role, "content": content_text})
                 continue
 
             if role == "tool":
@@ -3185,6 +3265,59 @@ class AIAgent:
                 content = item.get("content", "")
                 if content is None:
                     content = ""
+                if isinstance(content, list):
+                    # Multimodal content — validate each part and keep the
+                    # Responses API shape intact instead of str()-ing the
+                    # whole list (which silently hangs the API on
+                    # Python-literal garbage). Only ``input_text`` and
+                    # ``input_image`` parts are accepted here; other shapes
+                    # are downgraded to input_text via string coercion.
+                    validated_parts: List[Dict[str, Any]] = []
+                    for part in content:
+                        if isinstance(part, str):
+                            if part.strip():
+                                validated_parts.append({"type": "input_text", "text": part})
+                            continue
+                        if not isinstance(part, dict):
+                            continue
+                        ptype = part.get("type")
+                        if ptype == "input_text":
+                            text_val = part.get("text", "")
+                            if not isinstance(text_val, str):
+                                text_val = str(text_val or "")
+                            if text_val:
+                                validated_parts.append({"type": "input_text", "text": text_val})
+                            continue
+                        if ptype == "input_image":
+                            image_url = part.get("image_url", "")
+                            if not isinstance(image_url, str):
+                                image_url = str(image_url or "")
+                            image_url = image_url.strip()
+                            if not image_url:
+                                continue
+                            image_part: Dict[str, Any] = {
+                                "type": "input_image",
+                                "image_url": image_url,
+                            }
+                            detail = part.get("detail")
+                            if isinstance(detail, str) and detail.strip():
+                                image_part["detail"] = detail.strip()
+                            validated_parts.append(image_part)
+                            continue
+                        # Unknown inner type — coerce to text so we never
+                        # emit a stringified Python literal.
+                        text_val = part.get("text", "")
+                        if not isinstance(text_val, str):
+                            text_val = str(text_val or "")
+                        if text_val:
+                            validated_parts.append({"type": "input_text", "text": text_val})
+                    if not validated_parts:
+                        # Guarantee at least one input_text so the item is
+                        # structurally valid (Responses API rejects empty
+                        # content arrays).
+                        validated_parts.append({"type": "input_text", "text": ""})
+                    normalized.append({"role": role, "content": validated_parts})
+                    continue
                 if not isinstance(content, str):
                     content = str(content)
 
@@ -6913,7 +7046,7 @@ class AIAgent:
 
     def run_conversation(
         self,
-        user_message: str,
+        user_message: Union[str, List[Dict[str, Any]]],
         system_message: str = None,
         conversation_history: List[Dict[str, Any]] = None,
         task_id: str = None,
@@ -6924,7 +7057,14 @@ class AIAgent:
         Run a complete conversation with tool calling until completion.
 
         Args:
-            user_message (str): The user's message/question
+            user_message: The user's message. Typically a string, but callers
+                that need to send multimodal content (e.g. images alongside
+                text for vision-capable endpoints like the Codex Responses
+                API) may pass an OpenAI chat.completions-style content list:
+                ``[{"type":"text","text":"..."},
+                   {"type":"image_url","image_url":{"url":"data:..."}}]``.
+                When passing a list, set ``persist_user_message`` to the
+                plain-text version so transcripts/DB entries stay as strings.
             system_message (str): Custom system message (optional, overrides ephemeral_system_prompt if provided)
             conversation_history (List[Dict]): Previous conversation messages (optional)
             task_id (str): Unique identifier for this task to isolate VMs between concurrent tasks (optional, auto-generated if not provided)
@@ -6933,8 +7073,8 @@ class AIAgent:
                 When None (default), API calls use the standard non-streaming path.
             persist_user_message: Optional clean user message to store in
                 transcripts/history when user_message contains API-only
-                synthetic prefixes.
-                    or queuing follow-up prefetch work.
+                synthetic prefixes OR when user_message is a multimodal list
+                (persistence layer expects string content).
 
         Returns:
             Dict: Complete conversation result with final response and message history
@@ -6993,8 +7133,31 @@ class AIAgent:
         # calls so that nudge logic accumulates correctly in CLI mode.
         self.iteration_budget = IterationBudget(self.max_iterations)
 
-        # Log conversation turn start for debugging/observability
-        _msg_preview = (user_message[:80] + "...") if len(user_message) > 80 else user_message
+        # Log conversation turn start for debugging/observability.
+        # user_message may be a multimodal list — extract a text-only preview
+        # so logging and `_safe_print` below never crash on non-string input.
+        def _extract_preview_text(msg: Any) -> str:
+            if isinstance(msg, str):
+                return msg
+            if isinstance(msg, list):
+                fragments: List[str] = []
+                for part in msg:
+                    if isinstance(part, str):
+                        fragments.append(part)
+                        continue
+                    if not isinstance(part, dict):
+                        continue
+                    ptype = part.get("type")
+                    if ptype in {"text", "input_text"}:
+                        t = str(part.get("text", "") or "")
+                        if t:
+                            fragments.append(t)
+                    elif ptype in {"image_url", "input_image"}:
+                        fragments.append("[image]")
+                return " ".join(fragments)
+            return str(msg or "")
+        _msg_preview_src = _extract_preview_text(user_message)
+        _msg_preview = (_msg_preview_src[:80] + "...") if len(_msg_preview_src) > 80 else _msg_preview_src
         _msg_preview = _msg_preview.replace("\n", " ")
         logger.info(
             "conversation turn: session=%s model=%s provider=%s platform=%s history=%d msg=%r",
@@ -7050,7 +7213,9 @@ class AIAgent:
         self._persist_user_message_idx = current_turn_user_idx
         
         if not self.quiet_mode:
-            self._safe_print(f"💬 Starting conversation: '{user_message[:60]}{'...' if len(user_message) > 60 else ''}'")
+            # Reuse the multimodal-safe text preview from the log step above.
+            _print_preview = _msg_preview_src[:60] + ("..." if len(_msg_preview_src) > 60 else "")
+            self._safe_print(f"💬 Starting conversation: '{_print_preview}'")
         
         # ── System prompt (cached per session for prefix caching) ──
         # Built once on first call, reused for all subsequent calls.

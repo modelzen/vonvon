@@ -1,6 +1,7 @@
 """Chat routes: SSE streaming endpoint and context compression."""
 import asyncio
 import json
+from typing import Any
 
 from fastapi import APIRouter
 from sse_starlette.sse import EventSourceResponse
@@ -62,21 +63,44 @@ async def send_message(req: ChatRequest):
 
         history = session_service.get_messages(req.session_id)
 
-        # Build effective user_message: gracefully degrade image attachments to
-        # a text hint because the primary model (openai-codex / gpt-5.3-codex)
-        # does NOT accept image_url parts via chat.completions and hangs hermes
-        # (no delta / no run.completed), which then holds _agent_lock forever
-        # and freezes every subsequent request. Reinstate multimodal once
-        # vonvon can route to a vision-capable model.
-        effective_message = req.message or ""
-        if req.attachments:
-            img_count = sum(1 for a in req.attachments if a.type == "image")
-            if img_count:
-                note = (
-                    f"\n\n[用户附带了 {img_count} 张图片，但当前模型不支持直接看图；"
-                    f"请让用户切换到 vision 模型或文字描述图片内容。]"
-                )
-                effective_message = (effective_message + note).strip() or note.strip()
+        # Build effective user_message.
+        #
+        # When the user attaches images we pass a multimodal content list to
+        # hermes.AIAgent.run_conversation. The list uses the OpenAI
+        # chat.completions format (``{"type":"image_url","image_url":{"url":...}}``);
+        # run_agent's ``_chat_messages_to_responses_input`` translates it to
+        # the Responses API ``input_image`` shape for openai-codex so
+        # gpt-5.3-codex actually sees the image.
+        #
+        # ``persist_user_message`` is set to a plain-text summary so the
+        # SessionDB transcript (which stores ``messages.content`` as TEXT)
+        # never has to serialize a list. Multimodal data only lives in the
+        # current turn's API payload, not in history.
+        plain_text = (req.message or "").strip()
+        image_count = sum(1 for a in (req.attachments or []) if a.type == "image")
+        if image_count:
+            # Build OpenAI chat.completions multimodal content list.
+            content_parts: list[dict] = []
+            if plain_text:
+                content_parts.append({"type": "text", "text": plain_text})
+            for att in req.attachments:
+                if att.type != "image" or not att.data_url:
+                    continue
+                content_parts.append({
+                    "type": "image_url",
+                    "image_url": {"url": att.data_url},
+                })
+            effective_message: Any = content_parts
+            # Plain-text placeholder for session DB: short and stable.
+            image_names = [a.name for a in req.attachments if a.type == "image" and a.name]
+            if image_names:
+                placeholder_tail = " ".join(f"[图片:{n}]" for n in image_names)
+            else:
+                placeholder_tail = " ".join(["[图片]"] * image_count)
+            persisted_text = (f"{plain_text} {placeholder_tail}" if plain_text else placeholder_tail).strip()
+        else:
+            effective_message = plain_text
+            persisted_text = None
 
         async def run_agent():
             lock_held = False
@@ -107,6 +131,7 @@ async def send_message(req: ChatRequest):
                     agent.run_conversation,
                     user_message=effective_message,
                     conversation_history=history,
+                    persist_user_message=persisted_text,
                 )
 
                 # NOTE: use last_prompt_tokens (last API call's prompt size),
