@@ -15,3 +15,54 @@ body {
 @keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
 @keyframes fade-in { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:translateY(0)} }
 @keyframes dot-bounce { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-4px)} }
+
+/* Assistant message markdown body. Keeps block elements snug inside the
+   pink chat bubble and uses the same soft-pink accents for code/quotes.
+   Scoped with .vonvon-md so we never affect anything outside the bubble. */
+.vonvon-md { font-size: 13px; line-height: 1.55; color: #333; word-break: break-word; }
+.vonvon-md > *:first-child { margin-top: 0 !important; }
+.vonvon-md > *:last-child { margin-bottom: 0 !important; }
+.vonvon-md p { margin: 0 0 6px 0; white-space: pre-wrap; }
+.vonvon-md ul, .vonvon-md ol { margin: 0 0 6px 0; padding-left: 20px; }
+.vonvon-md li { margin: 2px 0; }
+.vonvon-md li > p { margin: 0; }
+.vonvon-md h1, .vonvon-md h2, .vonvon-md h3, .vonvon-md h4, .vonvon-md h5, .vonvon-md h6 {
+  font-weight: 700; margin: 6px 0 4px 0; line-height: 1.3;
+}
+.vonvon-md h1 { font-size: 15px; }
+.vonvon-md h2 { font-size: 14px; }
+.vonvon-md h3, .vonvon-md h4, .vonvon-md h5, .vonvon-md h6 { font-size: 13px; }
+.vonvon-md strong { font-weight: 700; }
+.vonvon-md em { font-style: italic; }
+.vonvon-md a { color: #FF1493; text-decoration: underline; }
+.vonvon-md code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  background: rgba(255,105,180,0.1);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+.vonvon-md pre {
+  background: #fdf2f8;
+  border: 1px solid #fce4ec;
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin: 4px 0 6px 0;
+  overflow-x: auto;
+}
+.vonvon-md pre code {
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  font-size: 12px;
+}
+.vonvon-md blockquote {
+  border-left: 3px solid #fce4ec;
+  margin: 4px 0 6px 0;
+  padding: 0 8px;
+  color: #666;
+}
+.vonvon-md hr { border: none; border-top: 1px solid #fce4ec; margin: 6px 0; }
+.vonvon-md table { border-collapse: collapse; margin: 4px 0 6px 0; font-size: 12px; }
+.vonvon-md th, .vonvon-md td { border: 1px solid #fce4ec; padding: 3px 6px; }
+.vonvon-md th { background: #fff5f9; font-weight: 700; }

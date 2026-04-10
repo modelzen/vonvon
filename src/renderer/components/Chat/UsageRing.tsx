@@ -4,58 +4,68 @@ interface Props {
   percent: number
 }
 
+// Compact context-usage ring intended to live inside the top header strip
+// alongside the settings/close buttons. Previously this was absolute-
+// positioned over the message list, which covered the tail of long
+// conversations. Now it's a flow element so messages can breathe.
 export function UsageRing({ percent }: Props): React.ReactElement {
   const p = Math.max(0, Math.min(100, Math.round(percent)))
-  const radius = 14
+  const size = 28
+  const strokeWidth = 2.5
+  const radius = (size - strokeWidth) / 2
+  const center = size / 2
   const circ = 2 * Math.PI * radius
   const offset = circ * (1 - p / 100)
   const color = p >= 80 ? '#E53935' : p >= 50 ? '#FF9800' : '#FF69B4'
   return (
     <div
+      title={`上下文已使用 ${p}%`}
       style={{
-        position: 'absolute',
-        right: 14,
-        bottom: 78,
-        width: 38,
-        height: 38,
+        position: 'relative',
+        width: size,
+        height: size,
         borderRadius: '50%',
-        background: 'rgba(255,255,255,0.95)',
-        boxShadow: '0 2px 8px rgba(255,105,180,0.18)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        zIndex: 10,
-        pointerEvents: 'none'
+        flexShrink: 0
       }}
     >
       <svg
-        width="38"
-        height="38"
-        viewBox="0 0 38 38"
+        width={size}
+        height={size}
+        viewBox={`0 0 ${size} ${size}`}
         style={{ position: 'absolute', inset: 0 }}
       >
-        <circle cx="19" cy="19" r={radius} fill="none" stroke="#f5f5f5" strokeWidth="3" />
         <circle
-          cx="19"
-          cy="19"
+          cx={center}
+          cy={center}
+          r={radius}
+          fill="none"
+          stroke="#fce4ec"
+          strokeWidth={strokeWidth}
+        />
+        <circle
+          cx={center}
+          cy={center}
           r={radius}
           fill="none"
           stroke={color}
-          strokeWidth="3"
+          strokeWidth={strokeWidth}
           strokeDasharray={circ}
           strokeDashoffset={offset}
           strokeLinecap="round"
-          transform="rotate(-90 19 19)"
+          transform={`rotate(-90 ${center} ${center})`}
           style={{ transition: 'stroke-dashoffset 400ms ease, stroke 200ms ease' }}
         />
       </svg>
       <span
         style={{
-          fontSize: 9,
+          fontSize: 8,
           fontWeight: 700,
           color,
-          zIndex: 1,
-          lineHeight: 1
+          lineHeight: 1,
+          letterSpacing: '-0.2px'
         }}
       >
         {p}%

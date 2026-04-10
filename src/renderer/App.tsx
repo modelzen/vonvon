@@ -13,7 +13,7 @@ function App(): React.ReactElement {
   const [showSettings, setShowSettings] = useState(false)
   const [backendEnabled, setBackendEnabled] = useState(false)
   const { activeSession } = useSession()
-  const { messages: agentMessages, isLoading, usagePercent, sendMessage } =
+  const { messages: agentMessages, isLoading, usagePercent, sendMessage, thinking } =
     useAgentChat(activeSession?.id)
   const [displayPercent, setDisplayPercent] = useState(0)
 
@@ -49,6 +49,7 @@ function App(): React.ReactElement {
           {backendEnabled && <SessionSwitcher />}
         </div>
         <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+          {backendEnabled && <UsageRing percent={displayPercent} />}
           <button onClick={() => setShowSettings(true)} title="设置"
             style={{ width: 28, height: 28, borderRadius: 8, border: 'none', cursor: 'pointer',
               background: 'rgba(255,105,180,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FF69B4', fontSize: 14 }}>
@@ -67,7 +68,7 @@ function App(): React.ReactElement {
             flex: 1, display: 'flex', flexDirection: 'column',
             overflow: 'hidden', minHeight: 0, position: 'relative'
           }}>
-            <AgentMessageList messages={agentMessages} isLoading={isLoading} />
+            <AgentMessageList messages={agentMessages} isLoading={isLoading} thinking={thinking} />
             {activeSession && (
               <CompressHint percent={displayPercent} sessionId={activeSession.id} onCompressed={setDisplayPercent} />
             )}
@@ -76,7 +77,6 @@ function App(): React.ReactElement {
               onSendWithAttachments={(msg, atts) => { if (activeSession) sendMessage(msg, activeSession.id, atts) }}
               isLoading={isLoading}
             />
-            <UsageRing percent={displayPercent} />
           </div>
         ) : (
           <ChatContainer />
