@@ -11,6 +11,9 @@ dist/
 build/
 *.app/
 
+# TypeScript incremental build cache
+*.tsbuildinfo
+
 # Native build
 native/build/
 native/Release/
