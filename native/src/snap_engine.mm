@@ -2,6 +2,7 @@
 #import "kirby_window.h"
 #import "animator.h"
 #import <CoreGraphics/CoreGraphics.h>
+#import <unistd.h>
 
 static const CGFloat kSnapDistance = 60.0;
 // How often we poll Feishu's bounds while the ball is docked, so the ball
@@ -128,6 +129,72 @@ static const NSTimeInterval kDockedTrackingInterval = 1.0 / 30.0;
     return NSMakePoint(trX - half, nsY - half);
 }
 
+/**
+ * Returns YES if any window from a non-Feishu, non-self process occludes
+ * the anchor region around Feishu's top-right corner (where vonvon sits).
+ *
+ * We walk the on-screen window list in z-order (front-to-back) and, for
+ * every layer-0 normal app window we see BEFORE reaching Feishu itself,
+ * check whether its bounds intersect a small 60×60 box around the corner
+ * point. If yes → something is covering the anchor → return YES.
+ *
+ * Filters:
+ *   - windows owned by our own process (kirby NSPanel + sidebar
+ *     BrowserWindow) — skipped by PID check. Also layer != 0.
+ *   - Feishu/Lark sub-windows (tooltips, popovers, menus) — skipped by
+ *     owner name unless their bounds match the main Feishu window.
+ *   - menubar / dock / status-item extras — skipped by layer != 0.
+ */
+- (BOOL)isFeishuAnchorOccluded:(CGRect)feishuBounds {
+    CGFloat cornerX = feishuBounds.origin.x + feishuBounds.size.width;
+    CGFloat cornerY = feishuBounds.origin.y;
+    // Check a 60×60 box centered on the corner — this is where the ball
+    // body lives once docked. If a browser window, terminal, etc. overlaps
+    // this box, the ball visually disconnects from Feishu.
+    CGRect target = CGRectMake(cornerX - 30, cornerY - 30, 60, 60);
+
+    CFArrayRef list = CGWindowListCopyWindowInfo(
+        kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements,
+        kCGNullWindowID);
+    if (!list) return NO;
+
+    pid_t myPid = getpid();
+    NSArray *windows = (__bridge_transfer NSArray *)list;
+
+    for (NSDictionary *info in windows) {
+        NSNumber *ownerPidN = info[(__bridge NSString *)kCGWindowOwnerPID];
+        if (ownerPidN && (pid_t)[ownerPidN intValue] == myPid) continue;
+
+        NSNumber *layer = info[(__bridge NSString *)kCGWindowLayer];
+        if (layer && [layer intValue] != 0) continue;
+
+        NSDictionary *bd = info[(__bridge NSString *)kCGWindowBounds];
+        CGRect bounds = CGRectZero;
+        if (!CGRectMakeWithDictionaryRepresentation((__bridge CFDictionaryRef)bd, &bounds)) continue;
+
+        NSString *owner = info[(__bridge NSString *)kCGWindowOwnerName];
+        BOOL isFeishuOwner = [owner isEqualToString:@"Lark"]   ||
+                             [owner isEqualToString:@"Feishu"] ||
+                             [owner isEqualToString:@"飞书"];
+
+        // Reached the main Feishu window without any occluder — we're clear.
+        if (isFeishuOwner && CGRectEqualToRect(bounds, feishuBounds)) {
+            return NO;
+        }
+        // Other Feishu sub-windows (tooltips, dropdowns, etc.) don't count
+        // as occluders — the user is still actively using Feishu.
+        if (isFeishuOwner) continue;
+
+        if (CGRectIntersectsRect(bounds, target)) {
+            return YES;
+        }
+    }
+    // Didn't find main Feishu in the list at all (shouldn't normally happen
+    // because the caller already resolved its bounds, but defensively treat
+    // it as "occluded / gone").
+    return YES;
+}
+
 - (void)startTrackingTimer {
     dispatch_async(dispatch_get_main_queue(), ^{
         [self stopTrackingTimer];
@@ -151,6 +218,16 @@ static const NSTimeInterval kDockedTrackingInterval = 1.0 / 30.0;
     // Feishu is gone (minimized/hidden/quit). Fall out to floating via the
     // full detach animation so the user sees the ball fly back to center.
     if (CGRectIsEmpty(cur)) {
+        [[Animator shared] performDetachAnimation];
+        return;
+    }
+
+    // Feishu is still there but another app's window covers its top-right
+    // corner (e.g. user switched to a browser that overlaps Feishu). The
+    // ball would visually disconnect from Feishu, so detach the same way
+    // we do when Feishu disappears. User can re-snap by bringing Feishu
+    // forward and dragging the ball again.
+    if ([self isFeishuAnchorOccluded:cur]) {
         [[Animator shared] performDetachAnimation];
         return;
     }
