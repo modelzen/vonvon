@@ -2,6 +2,7 @@ import { app, BrowserWindow, shell } from 'electron'
 import { join } from 'path'
 import { registerIpcHandlers } from './ipc'
 import { initKirby, destroyKirby } from './native/kirby'
+import { startBackend, stopBackend } from './backend'
 
 const isDev = !app.isPackaged
 
@@ -46,6 +47,12 @@ function createMainWindow(): BrowserWindow {
 }
 
 
+// Kick off the FastAPI backend as early as possible so it's (likely) ready
+// by the time the renderer makes its first request. Fire-and-forget — startup
+// continues even if the backend fails to spawn (frontend will show its
+// existing "backend offline" UX).
+startBackend().catch((err) => console.error('[backend] startBackend failed:', err))
+
 app.whenReady().then(() => {
   registerIpcHandlers()
   mainWindow = createMainWindow()
@@ -67,6 +74,11 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
   }
+})
+
+// Make sure the spawned uvicorn process doesn't outlive Electron.
+app.on('before-quit', () => {
+  stopBackend()
 })
 
 export function getMainWindow(): BrowserWindow | null {
