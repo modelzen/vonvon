@@ -66,3 +66,5 @@ body {
 .vonvon-md table { border-collapse: collapse; margin: 4px 0 6px 0; font-size: 12px; }
 .vonvon-md th, .vonvon-md td { border: 1px solid #fce4ec; padding: 3px 6px; }
 .vonvon-md th { background: #fff5f9; font-weight: 700; }
+
+.vonvon-tab-bar-scroll::-webkit-scrollbar { display: none; }

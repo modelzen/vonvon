@@ -1,86 +1,116 @@
 import React, { useState, useEffect } from 'react'
-import { SettingsPanel } from './components/Settings/SettingsPanel'
-import { ChatContainer } from './components/Chat/ChatContainer'
-import { SessionSwitcher } from './components/Session/SessionSwitcher'
+import { TabBar } from './components/Session/TabBar'
+import { SessionHistoryDropdown } from './components/Session/SessionHistoryDropdown'
 import { useAgentChat } from './hooks/useAgentChat'
 import { useSession } from './hooks/useSession'
 import { CompressHint } from './components/Chat/CompressHint'
 import { InputArea } from './components/Chat/InputArea'
 import { AgentMessageList } from './components/Chat/AgentMessageList'
 import { UsageRing } from './components/Chat/UsageRing'
+import { AgentModelSelector } from './components/Chat/AgentModelSelector'
+
+// `#floating` is set by windows.ts when opening the standalone chat window;
+// we use it to (a) leave room for macOS traffic lights in the header and
+// (b) hide the ✕ detach button, which is meaningless in standalone mode.
+const isFloatingWindow = window.location.hash === '#floating'
 
 function App(): React.ReactElement {
-  const [showSettings, setShowSettings] = useState(false)
-  const [backendEnabled, setBackendEnabled] = useState(false)
-  const { activeSession } = useSession()
+  const { activeSession, newTab } = useSession()
   const { messages: agentMessages, isLoading, usagePercent, sendMessage, thinking } =
     useAgentChat(activeSession?.id)
   const [displayPercent, setDisplayPercent] = useState(0)
 
   useEffect(() => { setDisplayPercent(usagePercent) }, [usagePercent])
 
-  const refreshBackendConfig = () => {
-    window.electron.getBackendConfig().then((cfg) => setBackendEnabled(cfg.enabled))
-  }
-
-  useEffect(() => {
-    refreshBackendConfig()
-  }, [])
-
-  if (showSettings) {
-    // Re-read backend config on close so toggling "启用 Agent 模式" in
-    // Settings takes effect immediately instead of requiring an app restart.
-    return <SettingsPanel onBack={() => { refreshBackendConfig(); setShowSettings(false) }} />
-  }
-
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '10px 14px', borderBottom: '1px solid #fce4ec',
-        background: 'rgba(255,255,255,0.92)', flexShrink: 0
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{
-            fontSize: 15, fontWeight: 700, letterSpacing: '-0.3px',
-            background: 'linear-gradient(135deg, #FF69B4, #FF1493)',
-            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent'
-          }}>Vonvon</span>
-          {backendEnabled && <SessionSwitcher />}
-        </div>
-        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-          {backendEnabled && <UsageRing percent={displayPercent} />}
-          <button onClick={() => setShowSettings(true)} title="设置"
-            style={{ width: 28, height: 28, borderRadius: 8, border: 'none', cursor: 'pointer',
-              background: 'rgba(255,105,180,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FF69B4', fontSize: 14 }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+        display: 'flex', alignItems: 'flex-end', gap: 6,
+        // Floating (standalone) window uses titleBarStyle: 'hiddenInset', so
+        // we need ~86px left padding to clear the macOS traffic lights.
+        // The Feishu-snapped sidebar is frameless and needs no padding.
+        padding: isFloatingWindow ? '10px 10px 0 86px' : '10px 10px 0',
+        borderBottom: '1px solid #fce4ec',
+        background: 'rgba(255,255,255,0.92)', flexShrink: 0,
+        WebkitAppRegion: isFloatingWindow ? 'drag' : 'no-drag',
+      } as React.CSSProperties}>
+        {/* Scrollable tab strip — individual tabs use margin-bottom: -1 to
+            sit flush with the header's border-bottom. */}
+        <TabBar />
+        {/* Right-aligned icon group — fixed so it's always visible even
+            when the tab strip overflows horizontally. paddingBottom keeps
+            it aligned with the tab baseline. */}
+        <div style={{
+          display: 'flex', gap: 2, alignItems: 'center',
+          paddingBottom: 4,
+          flexShrink: 0,
+          WebkitAppRegion: 'no-drag',
+        } as React.CSSProperties}>
+          <button
+            onClick={() => { void newTab() }}
+            title="新建会话"
+            style={{
+              width: 26, height: 26,
+              border: 'none',
+              background: 'transparent',
+              color: '#FF69B4',
+              cursor: 'pointer',
+              borderRadius: 8,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(252,228,236,0.6)' }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent' }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
           </button>
-          <button onClick={() => { try { (window as any).electron?.detachKirby?.() } catch {} }} title="脱离"
-            style={{ width: 28, height: 28, borderRadius: 8, border: 'none', cursor: 'pointer',
-              background: 'rgba(255,105,180,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FF69B4', fontSize: 12 }}>
-            ✕
-          </button>
+          <SessionHistoryDropdown />
+          {!isFloatingWindow && (
+            <button
+              onClick={() => { try { (window as any).electron?.detachKirby?.() } catch {} }}
+              title="脱离"
+              style={{
+                width: 26, height: 26,
+                border: 'none',
+                background: 'transparent',
+                color: '#9e9e9e',
+                cursor: 'pointer',
+                borderRadius: 8,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                fontSize: 12,
+              }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = '#FF69B4'; (e.currentTarget as HTMLButtonElement).style.background = 'rgba(252,228,236,0.6)' }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = '#9e9e9e'; (e.currentTarget as HTMLButtonElement).style.background = 'transparent' }}
+            >
+              ✕
+            </button>
+          )}
         </div>
       </div>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
-        {backendEnabled ? (
-          <div style={{
-            flex: 1, display: 'flex', flexDirection: 'column',
-            overflow: 'hidden', minHeight: 0, position: 'relative'
-          }}>
-            <AgentMessageList messages={agentMessages} isLoading={isLoading} thinking={thinking} />
-            {activeSession && (
-              <CompressHint percent={displayPercent} sessionId={activeSession.id} onCompressed={setDisplayPercent} />
-            )}
-            <InputArea
-              onSend={(msg) => { if (activeSession) sendMessage(msg, activeSession.id) }}
-              onSendWithAttachments={(msg, atts) => { if (activeSession) sendMessage(msg, activeSession.id, atts) }}
-              isLoading={isLoading}
-            />
-          </div>
-        ) : (
-          <ChatContainer />
-        )}
+        <div style={{
+          flex: 1, display: 'flex', flexDirection: 'column',
+          overflow: 'hidden', minHeight: 0, position: 'relative'
+        }}>
+          <AgentMessageList messages={agentMessages} isLoading={isLoading} thinking={thinking} />
+          {activeSession && (
+            <CompressHint percent={displayPercent} sessionId={activeSession.id} onCompressed={setDisplayPercent} />
+          )}
+          <InputArea
+            onSend={(msg) => { if (activeSession) sendMessage(msg, activeSession.id) }}
+            onSendWithAttachments={(msg, atts) => { if (activeSession) sendMessage(msg, activeSession.id, atts) }}
+            isLoading={isLoading}
+            toolbarLeft={<AgentModelSelector />}
+            toolbarRight={<UsageRing percent={displayPercent} />}
+          />
+        </div>
       </div>
     </div>
   )

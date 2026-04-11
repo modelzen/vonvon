@@ -23,6 +23,13 @@ interface StoreSchema {
   messages: ChatMessage[]
   backendUrl: string
   backendEnabled: boolean
+  // Whitelist of model IDs (hermes provider models) that the chat page
+  // is allowed to surface in its model picker. Persisted across restarts
+  // so the user's curation survives app relaunches.
+  modelWhitelist: string[]
+  // Tab bar persistence
+  openTabs: string[]
+  activeTabId: string | null
 }
 
 export class ChatStore {
@@ -43,7 +50,10 @@ export class ChatStore {
             },
             messages: [],
             backendUrl: 'http://localhost:8000',
-            backendEnabled: false
+            backendEnabled: true,
+            modelWhitelist: [],
+            openTabs: [],
+            activeTabId: null
           }
         })
       })()
@@ -147,6 +157,43 @@ export class ChatStore {
     const store = await this.ensureStore()
     if (config.url !== undefined) store.set('backendUrl', config.url)
     if (config.enabled !== undefined) store.set('backendEnabled', config.enabled)
+  }
+
+  async getModelWhitelist(): Promise<string[]> {
+    const store = await this.ensureStore()
+    const raw = store.get('modelWhitelist') as unknown
+    return Array.isArray(raw) ? (raw as string[]) : []
+  }
+
+  async setModelWhitelist(ids: string[]): Promise<void> {
+    const store = await this.ensureStore()
+    // Defensive: dedupe and reject non-strings so bad renderer input can't
+    // corrupt the persisted config.
+    const clean = Array.from(new Set(ids.filter((v) => typeof v === 'string' && v.length > 0)))
+    store.set('modelWhitelist', clean)
+  }
+
+  async getOpenTabs(): Promise<string[]> {
+    const store = await this.ensureStore()
+    const raw = store.get('openTabs') as unknown
+    return Array.isArray(raw) ? (raw as string[]) : []
+  }
+
+  async setOpenTabs(ids: string[]): Promise<void> {
+    const store = await this.ensureStore()
+    const clean = Array.from(new Set(ids.filter((v) => typeof v === 'string' && v.length > 0)))
+    store.set('openTabs', clean)
+  }
+
+  async getActiveTabId(): Promise<string | null> {
+    const store = await this.ensureStore()
+    const val = store.get('activeTabId') as unknown
+    return typeof val === 'string' ? val : null
+  }
+
+  async setActiveTabId(id: string | null): Promise<void> {
+    const store = await this.ensureStore()
+    store.set('activeTabId', id)
   }
 }
 

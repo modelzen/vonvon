@@ -2,6 +2,7 @@ import { ipcMain, dialog, shell } from 'electron'
 import { chatStore } from './store'
 import { registry } from './providers/registry'
 import { registerKirbyIpcHandlers } from './native/kirby'
+import { openSettingsWindow, closeSettingsWindow } from './windows'
 
 export function registerIpcHandlers(): void {
   // Chat: send message with streaming response
@@ -61,6 +62,9 @@ export function registerIpcHandlers(): void {
       const cfg = await chatStore.getBackendConfig()
       return key === 'backendUrl' ? cfg.url : cfg.enabled
     }
+    if (key === 'modelWhitelist') return chatStore.getModelWhitelist()
+    if (key === 'openTabs') return chatStore.getOpenTabs()
+    if (key === 'activeTabId') return chatStore.getActiveTabId()
     return null
   })
 
@@ -71,6 +75,12 @@ export function registerIpcHandlers(): void {
       await chatStore.setBackendConfig({ url: value as string })
     } else if (key === 'backendEnabled') {
       await chatStore.setBackendConfig({ enabled: value as boolean })
+    } else if (key === 'modelWhitelist') {
+      await chatStore.setModelWhitelist(Array.isArray(value) ? (value as string[]) : [])
+    } else if (key === 'openTabs') {
+      await chatStore.setOpenTabs(Array.isArray(value) ? (value as string[]) : [])
+    } else if (key === 'activeTabId') {
+      await chatStore.setActiveTabId(typeof value === 'string' ? value : null)
     }
   })
 
@@ -80,6 +90,14 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('backend:config:set', async (_event, config: Partial<{ url: string; enabled: boolean }>) => {
     await chatStore.setBackendConfig(config)
+  })
+
+  // Settings window — opened on right-click in chat sidebar header
+  ipcMain.on('settings:open', () => {
+    openSettingsWindow()
+  })
+  ipcMain.on('settings:close', () => {
+    closeSettingsWindow()
   })
 
   // Settings: get current settings (apiKeys as booleans, no raw keys exposed)

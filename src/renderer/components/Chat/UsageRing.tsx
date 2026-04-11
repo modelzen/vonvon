@@ -1,14 +1,11 @@
-import React from 'react'
+import React, { useState } from 'react'
 
 interface Props {
   percent: number
 }
 
-// Compact context-usage ring intended to live inside the top header strip
-// alongside the settings/close buttons. Previously this was absolute-
-// positioned over the message list, which covered the tail of long
-// conversations. Now it's a flow element so messages can breathe.
 export function UsageRing({ percent }: Props): React.ReactElement {
+  const [hovered, setHovered] = useState(false)
   const p = Math.max(0, Math.min(100, Math.round(percent)))
   const size = 28
   const strokeWidth = 2.5
@@ -17,20 +14,51 @@ export function UsageRing({ percent }: Props): React.ReactElement {
   const circ = 2 * Math.PI * radius
   const offset = circ * (1 - p / 100)
   const color = p >= 80 ? '#E53935' : p >= 50 ? '#FF9800' : '#FF69B4'
+
   return (
     <div
-      title={`上下文已使用 ${p}%`}
-      style={{
-        position: 'relative',
-        width: size,
-        height: size,
-        borderRadius: '50%',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        flexShrink: 0
-      }}
+      style={{ position: 'relative', width: size, height: size, flexShrink: 0, cursor: 'help' }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
     >
+      {/* Tooltip above ring */}
+      <div
+        style={{
+          position: 'absolute',
+          bottom: 'calc(100% + 6px)',
+          left: '50%',
+          transform: `translateX(-50%) translateY(${hovered ? 0 : 4}px)`,
+          background: '#1f1f1f',
+          color: '#fff',
+          fontSize: 10.5,
+          fontWeight: 500,
+          padding: '4px 9px',
+          borderRadius: 6,
+          whiteSpace: 'nowrap',
+          pointerEvents: 'none',
+          opacity: hovered ? 1 : 0,
+          transition: 'opacity 180ms ease, transform 180ms ease',
+          zIndex: 100,
+        }}
+      >
+        {`上下文 ${p}%`}
+        {/* Triangle arrow pointing down */}
+        <div
+          style={{
+            position: 'absolute',
+            top: '100%',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: 0,
+            height: 0,
+            borderLeft: '4px solid transparent',
+            borderRight: '4px solid transparent',
+            borderTop: '4px solid #1f1f1f',
+          }}
+        />
+      </div>
+
+      {/* SVG ring */}
       <svg
         width={size}
         height={size}
@@ -59,17 +87,31 @@ export function UsageRing({ percent }: Props): React.ReactElement {
           style={{ transition: 'stroke-dashoffset 400ms ease, stroke 200ms ease' }}
         />
       </svg>
-      <span
+
+      {/* Centered percentage — visible only on hover */}
+      <div
         style={{
-          fontSize: 8,
-          fontWeight: 700,
-          color,
-          lineHeight: 1,
-          letterSpacing: '-0.2px'
+          position: 'absolute',
+          inset: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          opacity: hovered ? 1 : 0,
+          transition: 'opacity 150ms ease',
         }}
       >
-        {p}%
-      </span>
+        <span
+          style={{
+            fontSize: 8,
+            fontWeight: 700,
+            color,
+            lineHeight: 1,
+            letterSpacing: '-0.2px',
+          }}
+        >
+          {p}%
+        </span>
+      </div>
     </div>
   )
 }
