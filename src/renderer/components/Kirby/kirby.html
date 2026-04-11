@@ -77,5 +77,14 @@
   </head>
   <body>
     <div class="kirby" title="Vonvon AI"></div>
+    <script>
+      // Suppress WebKit's default context menu ("Reload" etc.) on the
+      // Kirby ball. The native DragHandler's NSEvent right-click monitor
+      // still fires and triggers opening the settings window — we just
+      // don't want two menus (ours + WebKit's fallback) racing.
+      document.addEventListener('contextmenu', function (e) {
+        e.preventDefault()
+      })
+    </script>
   </body>
 </html>

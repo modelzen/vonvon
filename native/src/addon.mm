@@ -9,9 +9,10 @@
 #import "animator.h"
 
 // ── Threadsafe function handles ────────────────────────────────────────────
-static napi_threadsafe_function g_proximityFn = nullptr;
-static napi_threadsafe_function g_completeFn  = nullptr;
-static napi_threadsafe_function g_detachFn    = nullptr;
+static napi_threadsafe_function g_proximityFn  = nullptr;
+static napi_threadsafe_function g_completeFn   = nullptr;
+static napi_threadsafe_function g_detachFn     = nullptr;
+static napi_threadsafe_function g_rightClickFn = nullptr;
 
 // CallJs: snap-proximity  (data = heap-alloc'd double*)
 static void CallSnapProximity(napi_env env, napi_value jsCb,
@@ -170,6 +171,21 @@ Napi::Value DetachToFloating(const Napi::CallbackInfo& info) {
     return info.Env().Undefined();
 }
 
+Napi::Value OnRightClick(const Napi::CallbackInfo& info) {
+    napi_env env = info.Env();
+    if (g_rightClickFn) {
+        napi_release_threadsafe_function(g_rightClickFn, napi_tsfn_release);
+        g_rightClickFn = nullptr;
+    }
+    g_rightClickFn = MakeTsfn(env, static_cast<napi_value>(info[0]),
+                               "RightClick", CallNoArgs);
+    [DragHandler shared].onRightClick = ^{
+        if (g_rightClickFn)
+            napi_call_threadsafe_function(g_rightClickFn, nullptr, napi_tsfn_nonblocking);
+    };
+    return info.Env().Undefined();
+}
+
 // ── Module init ─────────────────────────────────────────────────────────────
 
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
@@ -182,6 +198,7 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("onDetach",          Napi::Function::New(env, OnDetach));
     exports.Set("detachToFloating",  Napi::Function::New(env, DetachToFloating));
     exports.Set("setVisible",       Napi::Function::New(env, SetVisible));
+    exports.Set("onRightClick",      Napi::Function::New(env, OnRightClick));
     return exports;
 }
 

@@ -13,7 +13,11 @@ function createMainWindow(): BrowserWindow {
     height: 600,
     show: false,          // Hidden at startup! Only shown when Kirby snaps.
     frame: false,         // Frameless sidebar
-    resizable: false,
+    // Resizable so the docked sidebar can be widened by dragging its left
+    // edge. The height is locked to Feishu's height via setMinimumSize /
+    // setMaximumSize applied on snap (see kirby.ts onSnapComplete), so in
+    // practice users can only change the width.
+    resizable: true,
     autoHideMenuBar: true,
     skipTaskbar: true,
     webPreferences: {
@@ -40,6 +44,7 @@ function createMainWindow(): BrowserWindow {
 
   return win
 }
+
 
 app.whenReady().then(() => {
   registerIpcHandlers()

@@ -24,4 +24,8 @@ declare module 'vonvon-native' {
 
   /** Trigger the detach animation (docked → floating). */
   export function detachToFloating(): void
+
+  /** Register a callback fired when the user right-clicks the Kirby panel
+   *  (only while floating — suppressed when docked). */
+  export function onRightClick(callback: () => void): void
 }
