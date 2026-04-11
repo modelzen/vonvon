@@ -1,168 +1,329 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useHermesConfig, ProviderInfo } from '../../hooks/useHermesConfig'
+import { SectionCard } from './SectionCard'
+import { tokens } from './settingsStyles'
 
-const SECTION_STYLE: React.CSSProperties = { padding: '16px 0', borderBottom: '1px solid #fce4ec' }
-const LABEL_STYLE: React.CSSProperties = { fontSize: 12, color: '#555', display: 'block', marginBottom: 4 }
-const INPUT_STYLE: React.CSSProperties = {
-  width: '100%', padding: '6px 10px', fontSize: 12,
-  border: '1px solid #fce4ec', borderRadius: 6, outline: 'none', boxSizing: 'border-box',
-}
-const SELECT_STYLE: React.CSSProperties = { ...INPUT_STYLE, background: '#fff' }
-const BTN_PRIMARY: React.CSSProperties = {
-  padding: '6px 18px', fontSize: 12, borderRadius: 6, border: 'none',
-  background: 'linear-gradient(135deg, #FF69B4, #FF1493)', color: '#fff',
-  cursor: 'pointer', fontWeight: 600,
-}
-
+/**
+ * "可用模型" whitelist panel.
+ *
+ * Settings page only curates which models the chat page is allowed to show
+ * in its picker. The actual model switch happens on the chat page itself.
+ *
+ * Storage: electron-store key `modelWhitelist`, persisted via main/store.ts.
+ * First-run seeded with the hermes backend's currently-selected model so the
+ * chat picker is never empty.
+ */
 export function HermesModelPanel(): React.ReactElement {
-  const { listModels, switchModel } = useHermesConfig()
+  const { listModels } = useHermesConfig()
 
   const [providers, setProviders] = useState<ProviderInfo[]>([])
-  const [currentModel, setCurrentModel] = useState('')
-  const [currentProvider, setCurrentProvider] = useState('')
-
-  const [selectedProvider, setSelectedProvider] = useState('')
-  const [selectedModel, setSelectedModel] = useState('')
-  const [baseUrl, setBaseUrl] = useState('')
-  const [persist, setPersist] = useState(false)
-
+  const [whitelist, setWhitelist] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
-  const [applying, setApplying] = useState(false)
-  const [toast, setToast] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
 
   useEffect(() => {
-    setLoading(true)
-    listModels()
-      .then((data) => {
+    let cancelled = false
+    async function load() {
+      setLoading(true)
+      try {
+        const [data, stored] = await Promise.all([
+          listModels(),
+          window.electron.storeGet('modelWhitelist') as Promise<unknown>,
+        ])
+        if (cancelled) return
         setProviders(data.providers)
-        setCurrentModel(data.current)
-        setCurrentProvider(data.current_provider)
-        setSelectedProvider(data.current_provider || data.providers[0]?.slug || '')
-        setSelectedModel(data.current)
-      })
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false))
+        const ids = Array.isArray(stored) ? (stored as string[]) : []
+        if (ids.length === 0 && data.current) {
+          const seed = new Set([data.current])
+          setWhitelist(seed)
+          await window.electron.storeSet('modelWhitelist', Array.from(seed))
+        } else {
+          setWhitelist(new Set(ids))
+        }
+      } catch (e: any) {
+        if (!cancelled) setError(e?.message ?? '加载失败')
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    load()
+    return () => {
+      cancelled = true
+    }
   }, [])
 
-  const availableModels =
-    providers.find((p) => p.slug === selectedProvider)?.models ?? []
-
-  const handleApply = async () => {
-    if (!selectedModel) return
-    setApplying(true)
-    setError(null)
+  const persist = async (next: Set<string>) => {
+    setWhitelist(next)
     try {
-      const res = await switchModel({
-        model: selectedModel,
-        provider: selectedProvider || undefined,
-        base_url: baseUrl || undefined,
-        persist,
-      })
-      setCurrentModel(res.model)
-      setCurrentProvider(res.provider)
-      setToast(persist ? '已持久化到 hermes 配置' : '已切换（本次会话有效）')
-      setTimeout(() => setToast(null), 3000)
-    } catch (e: any) {
-      setError(e.message)
-    } finally {
-      setApplying(false)
+      await window.electron.storeSet('modelWhitelist', Array.from(next))
+    } catch (e) {
+      console.error('persist whitelist failed', e)
     }
   }
 
+  const toggle = (modelId: string) => {
+    const next = new Set(whitelist)
+    if (next.has(modelId)) next.delete(modelId)
+    else next.add(modelId)
+    persist(next)
+  }
+
+  const selectAllInProvider = (p: ProviderInfo) => {
+    const next = new Set(whitelist)
+    p.models.forEach((m) => next.add(m))
+    persist(next)
+  }
+
+  const clearProvider = (p: ProviderInfo) => {
+    const next = new Set(whitelist)
+    p.models.forEach((m) => next.delete(m))
+    persist(next)
+  }
+
+  const filteredProviders = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return providers
+    return providers
+      .map((p) => ({
+        ...p,
+        models: p.models.filter(
+          (m) => m.toLowerCase().includes(q) || p.name.toLowerCase().includes(q)
+        ),
+      }))
+      .filter((p) => p.models.length > 0)
+  }, [providers, query])
+
+  const totalSelected = whitelist.size
+  const totalAvailable = providers.reduce((sum, p) => sum + p.models.length, 0)
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+
   if (loading) {
     return (
-      <div style={SECTION_STYLE}>
-        <h3 style={{ fontSize: 13, fontWeight: 600, color: '#d81b60', marginBottom: 8 }}>模型选择</h3>
-        <div style={{ fontSize: 12, color: '#aaa' }}>加载中…</div>
-      </div>
+      <SectionCard title="可用模型" subtitle="勾选要在对话页下拉中显示的模型">
+        <div style={{ fontSize: 12, color: tokens.inkMuted, padding: '6px 0' }}>加载中…</div>
+      </SectionCard>
+    )
+  }
+
+  if (providers.length === 0) {
+    return (
+      <SectionCard title="可用模型" subtitle="勾选要在对话页下拉中显示的模型">
+        <div
+          style={{
+            fontSize: 12,
+            color: tokens.inkMuted,
+            padding: '14px',
+            borderRadius: tokens.radiusControl,
+            background: tokens.petal,
+            lineHeight: 1.6,
+          }}
+        >
+          还没有配置 provider。先到上面的&nbsp;
+          <strong style={{ color: tokens.brandHeader }}>模型 Provider</strong>
+          &nbsp;区域添加账号,这里就会出现可勾选的模型。
+        </div>
+      </SectionCard>
     )
   }
 
   return (
-    <div style={SECTION_STYLE}>
-      <h3 style={{ fontSize: 13, fontWeight: 600, color: '#d81b60', marginBottom: 12 }}>模型选择</h3>
+    <SectionCard
+      title="可用模型"
+      subtitle={`勾选的模型会出现在对话页的切换菜单中。当前 ${totalSelected} / ${totalAvailable} 个`}
+      action={
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="过滤…"
+          style={{
+            padding: '5px 12px',
+            fontSize: 11,
+            fontFamily: tokens.font,
+            border: `1px solid ${tokens.border}`,
+            borderRadius: tokens.radiusPill,
+            outline: 'none',
+            background: '#fff',
+            color: tokens.ink,
+            width: 130,
+          }}
+        />
+      }
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {filteredProviders.map((p) => {
+          const selectedInGroup = p.models.filter((m) => whitelist.has(m)).length
+          const allSelected = selectedInGroup === p.models.length && p.models.length > 0
 
-      {providers.length === 0 ? (
-        <div style={{ fontSize: 12, color: '#888', padding: '8px 0' }}>
-          请先在下方"认证"区配置 provider
-        </div>
-      ) : (
-        <>
-          <div style={{ marginBottom: 10 }}>
-            <label style={LABEL_STYLE}>Provider</label>
-            <select
-              value={selectedProvider}
-              onChange={(e) => {
-                setSelectedProvider(e.target.value)
-                setSelectedModel('')
-              }}
-              style={SELECT_STYLE}
-            >
-              {providers.map((p) => (
-                <option key={p.slug} value={p.slug}>
-                  {p.name} ({p.total_models} 个模型)
-                </option>
-              ))}
-            </select>
+          return (
+            <div key={p.slug}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  marginBottom: 8,
+                  flexWrap: 'wrap',
+                }}
+              >
+                <span style={{ fontSize: 12, fontWeight: 600, color: tokens.ink }}>
+                  {p.name}
+                </span>
+                <span
+                  style={{
+                    fontSize: 10,
+                    color: tokens.inkMuted,
+                    fontFeatureSettings: '"tnum"',
+                  }}
+                >
+                  {selectedInGroup}/{p.models.length}
+                </span>
+                {p.is_current && (
+                  <span
+                    style={{
+                      fontSize: 9,
+                      fontWeight: 600,
+                      padding: '1px 7px',
+                      borderRadius: tokens.radiusPill,
+                      background: tokens.petal,
+                      color: tokens.brandHeader,
+                      border: `1px solid ${tokens.border}`,
+                      letterSpacing: 0.3,
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    活跃
+                  </span>
+                )}
+                <div style={{ flex: 1 }} />
+                <button
+                  onClick={() => (allSelected ? clearProvider(p) : selectAllInProvider(p))}
+                  style={{
+                    fontSize: 11,
+                    color: tokens.brand,
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: '2px 4px',
+                    fontWeight: 500,
+                  }}
+                >
+                  {allSelected ? '全部取消' : '全部勾选'}
+                </button>
+              </div>
+
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+                  gap: 4,
+                }}
+              >
+                {p.models.map((model) => {
+                  const checked = whitelist.has(model)
+                  return (
+                    <label
+                      key={model}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 9,
+                        padding: '7px 10px',
+                        borderRadius: tokens.radiusControl,
+                        cursor: 'pointer',
+                        background: checked ? tokens.petal : 'transparent',
+                        border: `1px solid ${checked ? tokens.border : 'transparent'}`,
+                        transition: `background ${tokens.durFast} ${tokens.ease}`,
+                        minWidth: 0,
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!checked)
+                          (e.currentTarget as HTMLElement).style.background = '#fafafa'
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!checked)
+                          (e.currentTarget as HTMLElement).style.background = 'transparent'
+                      }}
+                    >
+                      <CustomCheckbox checked={checked} onChange={() => toggle(model)} />
+                      <span
+                        style={{
+                          fontSize: 12,
+                          color: checked ? tokens.ink : tokens.inkSoft,
+                          fontFamily: tokens.monoFont,
+                          fontWeight: checked ? 500 : 400,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          minWidth: 0,
+                        }}
+                      >
+                        {model}
+                      </span>
+                    </label>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })}
+
+        {filteredProviders.length === 0 && query && (
+          <div style={{ fontSize: 12, color: tokens.inkMuted, padding: '6px 2px' }}>
+            没有匹配 "{query}" 的模型
           </div>
+        )}
+      </div>
 
-          <div style={{ marginBottom: 10 }}>
-            <label style={LABEL_STYLE}>模型</label>
-            <select
-              value={selectedModel}
-              onChange={(e) => setSelectedModel(e.target.value)}
-              style={SELECT_STYLE}
-            >
-              <option value="">— 选择模型 —</option>
-              {availableModels.map((m) => (
-                <option key={m} value={m}>{m}</option>
-              ))}
-            </select>
-          </div>
-
-          <div style={{ marginBottom: 10 }}>
-            <label style={LABEL_STYLE}>Base URL（可选，覆盖默认端点）</label>
-            <input
-              value={baseUrl}
-              onChange={(e) => setBaseUrl(e.target.value)}
-              placeholder="https://api.openai.com/v1"
-              style={INPUT_STYLE}
-            />
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-            <input
-              type="checkbox"
-              id="model-persist"
-              checked={persist}
-              onChange={(e) => setPersist(e.target.checked)}
-            />
-            <label htmlFor="model-persist" style={{ fontSize: 12, color: '#555', cursor: 'pointer' }}>
-              持久化到 hermes 配置（重启后生效）
-            </label>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <button onClick={handleApply} disabled={applying || !selectedModel} style={{
-              ...BTN_PRIMARY, opacity: (applying || !selectedModel) ? 0.6 : 1,
-              cursor: (applying || !selectedModel) ? 'default' : 'pointer',
-            }}>
-              {applying ? '切换中…' : '应用'}
-            </button>
-            <span style={{ fontSize: 11, color: '#aaa' }}>
-              当前：{currentProvider ? `${currentProvider} / ` : ''}{currentModel || '—'}
-            </span>
-          </div>
-        </>
-      )}
-
-      {toast && (
-        <div style={{ marginTop: 8, fontSize: 12, color: '#4caf50' }}>{toast}</div>
-      )}
       {error && (
-        <div style={{ marginTop: 8, fontSize: 12, color: '#e53935' }}>{error}</div>
+        <div style={{ marginTop: 10, fontSize: 12, color: tokens.danger }}>{error}</div>
       )}
-    </div>
+    </SectionCard>
+  )
+}
+
+// ─── Custom checkbox ────────────────────────────────────────────────────────
+
+function CustomCheckbox({
+  checked,
+  onChange,
+}: {
+  checked: boolean
+  onChange: () => void
+}): React.ReactElement {
+  return (
+    <span
+      onClick={(e) => {
+        e.preventDefault()
+        onChange()
+      }}
+      style={{
+        width: 14,
+        height: 14,
+        borderRadius: 4,
+        border: `1.5px solid ${checked ? tokens.brand : tokens.border}`,
+        background: checked
+          ? `linear-gradient(135deg, ${tokens.brand}, ${tokens.brandStrong})`
+          : '#fff',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+        transition: `all ${tokens.durFast} ${tokens.ease}`,
+      }}
+    >
+      {checked && (
+        <svg width="9" height="9" viewBox="0 0 10 10" fill="none">
+          <path
+            d="M1.5 5.2L4 7.5L8.5 2.5"
+            stroke="#fff"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      )}
+    </span>
   )
 }

@@ -1,22 +1,14 @@
 import React, { useEffect, useState } from 'react'
 import { useHermesConfig, McpServerConfig, McpServerView, McpProbeResult } from '../../hooks/useHermesConfig'
-
-const SECTION_STYLE: React.CSSProperties = { padding: '16px 0', borderBottom: '1px solid #fce4ec' }
-const LABEL_STYLE: React.CSSProperties = { fontSize: 12, color: '#555', display: 'block', marginBottom: 4 }
-const INPUT_STYLE: React.CSSProperties = {
-  width: '100%', padding: '6px 10px', fontSize: 12,
-  border: '1px solid #fce4ec', borderRadius: 6, outline: 'none', boxSizing: 'border-box',
-}
-const BTN_PRIMARY: React.CSSProperties = {
-  padding: '6px 16px', fontSize: 12, borderRadius: 6, border: 'none',
-  background: 'linear-gradient(135deg, #FF69B4, #FF1493)', color: '#fff',
-  cursor: 'pointer', fontWeight: 600,
-}
-const BTN_GHOST: React.CSSProperties = {
-  padding: '5px 12px', fontSize: 12, borderRadius: 6,
-  border: '1px solid #FF69B4', background: '#fff', color: '#FF69B4',
-  cursor: 'pointer', fontWeight: 600,
-}
+import { SectionCard } from './SectionCard'
+import {
+  tokens,
+  inputStyle as INPUT_STYLE,
+  btnPrimaryStyle as BTN_PRIMARY,
+  btnGhostStyle as BTN_GHOST,
+  labelStyle as LABEL_STYLE,
+  applyFocusRing,
+} from './settingsStyles'
 
 // ── Probe result modal ───────────────────────────────────────────────────────
 
@@ -200,44 +192,93 @@ export function McpServerPanel(): React.ReactElement {
   }
 
   return (
-    <div style={SECTION_STYLE}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-        <h3 style={{ fontSize: 13, fontWeight: 600, color: '#d81b60' }}>MCP 服务器</h3>
-        <button onClick={() => setShowAdd(true)} style={BTN_PRIMARY}>+ 添加</button>
-      </div>
-
+    <SectionCard
+      title="MCP 服务器"
+      index="03"
+      subtitle={servers.length > 0 ? `已接入 ${servers.length} 个服务器` : '连接 Model Context Protocol 服务器以扩展工具'}
+      action={
+        <button onClick={() => setShowAdd(true)} style={BTN_PRIMARY}>
+          + 添加
+        </button>
+      }
+    >
       {loading ? (
-        <div style={{ fontSize: 12, color: '#aaa' }}>加载中…</div>
+        <div style={{ fontSize: 12, color: tokens.inkMuted }}>加载中…</div>
       ) : servers.length === 0 ? (
-        <div style={{ fontSize: 12, color: '#aaa' }}>暂无 MCP 服务器</div>
+        <div
+          style={{
+            fontSize: 12,
+            color: tokens.inkMuted,
+            padding: '14px 14px',
+            borderRadius: 12,
+            background: tokens.petal,
+            textAlign: 'center',
+            lineHeight: 1.6,
+          }}
+        >
+          暂无 MCP 服务器
+        </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {servers.map((s) => (
-            <div key={s.name} style={{
-              display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px',
-              borderRadius: 6, background: '#fafafa', border: '1px solid #eee',
-            }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: '#333', minWidth: 80 }}>{s.name}</span>
-              <span style={{ fontSize: 11, color: '#888', flex: 1 }}>
+            <div
+              key={s.name}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                padding: '10px 14px',
+                borderRadius: 12,
+                background: tokens.cardSoft,
+                border: `1px solid ${tokens.inkHair}`,
+                transition: `all ${tokens.durFast} ${tokens.easeOut}`,
+              }}
+            >
+              <span style={{ fontSize: 12.5, fontWeight: 600, color: tokens.ink, minWidth: 80 }}>
+                {s.name}
+              </span>
+              <span style={{ fontSize: 11, color: tokens.inkMuted, flex: 1, fontFamily: tokens.monoFont }}>
                 {s.url ?? s.command}
                 {s.tools_count !== undefined && ` · ${s.tools_count} tools`}
               </span>
-              <span style={{
-                fontSize: 10,
-                color: s.enabled ? '#4caf50' : '#e53935',
-              }}>
+              <span
+                style={{
+                  fontSize: 9,
+                  fontWeight: 600,
+                  padding: '2px 8px',
+                  borderRadius: tokens.radiusPill,
+                  background: s.enabled ? '#E7F6EE' : '#FCE9E9',
+                  color: s.enabled ? tokens.success : tokens.danger,
+                  letterSpacing: 0.4,
+                  textTransform: 'uppercase',
+                }}
+              >
                 {s.enabled ? '启用' : '禁用'}
               </span>
               <button
                 onClick={() => handleTest(s.name)}
                 disabled={testingName === s.name}
-                style={{ fontSize: 11, color: '#FF69B4', background: 'none', border: 'none', cursor: 'pointer' }}
+                style={{
+                  fontSize: 11,
+                  color: tokens.blossom,
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontWeight: 500,
+                }}
               >
                 {testingName === s.name ? '测试中…' : '测试'}
               </button>
               <button
                 onClick={() => handleRemove(s.name)}
-                style={{ fontSize: 11, color: '#e53935', background: 'none', border: 'none', cursor: 'pointer' }}
+                style={{
+                  fontSize: 11,
+                  color: tokens.danger,
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontWeight: 500,
+                }}
               >
                 删除
               </button>
@@ -246,11 +287,14 @@ export function McpServerPanel(): React.ReactElement {
         </div>
       )}
 
-      {error && <div style={{ marginTop: 8, fontSize: 12, color: '#e53935' }}>{error}</div>}
+      {error && <div style={{ marginTop: 10, fontSize: 12, color: tokens.danger }}>{error}</div>}
 
       {showAdd && (
         <AddDrawer
-          onAdded={(s) => { setServers((prev) => [...prev, s]); setShowAdd(false) }}
+          onAdded={(s) => {
+            setServers((prev) => [...prev, s])
+            setShowAdd(false)
+          }}
           onClose={() => setShowAdd(false)}
         />
       )}
@@ -262,6 +306,6 @@ export function McpServerPanel(): React.ReactElement {
           onClose={() => setProbeResult(null)}
         />
       )}
-    </div>
+    </SectionCard>
   )
 }

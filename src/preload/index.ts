@@ -43,6 +43,10 @@ contextBridge.exposeInMainWorld('electron', {
   detachKirby: () => ipcRenderer.send('kirby:detach'),
   getKirbyState: () => ipcRenderer.invoke('kirby:getState'),
 
+  // Settings window — opens a separate BrowserWindow rendering SettingsPanel
+  openSettings: (): void => ipcRenderer.send('settings:open'),
+  closeSettings: (): void => ipcRenderer.send('settings:close'),
+
   // Event listeners
   on: (channel: string, callback: (...args: unknown[]) => void) => {
     const allowedChannels = [
@@ -81,6 +85,8 @@ declare global {
       showItemInFolder(path: string): void
       detachKirby(): void
       getKirbyState(): Promise<'floating' | 'snapping' | 'docked'>
+      openSettings(): void
+      closeSettings(): void
       on(channel: string, callback: (...args: unknown[]) => void): void
       off(channel: string, callback: (...args: unknown[]) => void): void
     }

@@ -4,7 +4,11 @@ const DEFAULT_BACKEND_URL = 'http://localhost:8000'
 
 export function useBackend() {
   const [backendUrl, setBackendUrl] = useState(DEFAULT_BACKEND_URL)
-  const [backendEnabled, setBackendEnabled] = useState(false)
+  // Vonvon is always in agent mode now — the old direct-mode toggle has
+  // been removed from the UI. The state stays around so legacy callers
+  // (useHermesConfig etc.) keep working without refactoring, but it is
+  // effectively a constant `true`.
+  const [backendEnabled, setBackendEnabled] = useState(true)
   const [isConnected, setIsConnected] = useState(false)
 
   // Load config from Electron store on mount
