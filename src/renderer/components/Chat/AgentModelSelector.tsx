@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useCallback } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useHermesConfig, ProviderInfo } from '../../hooks/useHermesConfig'
 
 /**
@@ -20,29 +20,55 @@ export function AgentModelSelector(): React.ReactElement {
   const [current, setCurrent] = useState('')
   const [error, setError] = useState<string | null>(null)
 
-  // Load providers + whitelist once on mount, and also whenever the window
-  // regains focus (cheap way to pick up settings changes without wiring up
-  // a full event bus).
-  const refresh = useCallback(async () => {
-    try {
-      const [data, stored] = await Promise.all([
-        listModels(),
-        window.electron.storeGet('modelWhitelist') as Promise<unknown>,
-      ])
-      setProviders(data.providers)
-      setCurrent(data.current)
-      setWhitelist(new Set(Array.isArray(stored) ? (stored as string[]) : []))
-    } catch (e: any) {
-      setError(e?.message ?? 'load failed')
-    }
-  }, [listModels])
+  // useHermesConfig() returns brand-new function references on every render.
+  // If we put `listModels`/`switchModel` directly into a useCallback or
+  // useEffect dep array, we get an infinite refresh loop:
+  //   render → new listModels → useCallback recreates refresh → useEffect
+  //   re-runs → calls refresh → setState → render → ...
+  // and the loop overwrites our optimistic `current` on every tick (which is
+  // exactly why model switching felt laggy). Capture them in refs so we can
+  // call the latest version without invalidating any callbacks.
+  const listModelsRef = useRef(listModels)
+  const switchModelRef = useRef(switchModel)
+  listModelsRef.current = listModels
+  switchModelRef.current = switchModel
 
+  // True while a user-initiated switch is in flight. When set, the periodic
+  // (focus-triggered) refresh skips updating `current` so it can't clobber
+  // the optimistic value before the backend has actually flipped.
+  const switchingRef = useRef(false)
+
+  // Load providers + whitelist once on mount, and again whenever the window
+  // regains focus — cheap way to pick up settings changes without wiring a
+  // full event bus.
   useEffect(() => {
+    let cancelled = false
+
+    const refresh = async () => {
+      try {
+        const [data, stored] = await Promise.all([
+          listModelsRef.current(),
+          window.electron.storeGet('modelWhitelist') as Promise<unknown>,
+        ])
+        if (cancelled) return
+        setProviders(data.providers)
+        if (!switchingRef.current) {
+          setCurrent(data.current)
+        }
+        setWhitelist(new Set(Array.isArray(stored) ? (stored as string[]) : []))
+      } catch (e: any) {
+        if (!cancelled) setError(e?.message ?? 'load failed')
+      }
+    }
+
     refresh()
     const onFocus = () => refresh()
     window.addEventListener('focus', onFocus)
-    return () => window.removeEventListener('focus', onFocus)
-  }, [refresh])
+    return () => {
+      cancelled = true
+      window.removeEventListener('focus', onFocus)
+    }
+  }, [])
 
   // Build the grouped option list, keeping only whitelisted models.
   const groups = useMemo(() => {
@@ -64,20 +90,26 @@ export function AgentModelSelector(): React.ReactElement {
   const handleChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
     const value = e.target.value
     if (!value || value === current) return
-    // Find which provider owns it so we can pass provider hint along.
+    // Optimistic update — flip the displayed model immediately so the
+    // dropdown reflects the user's choice without waiting on the round-trip
+    // to /api/models/current. Switching models triggers credential pool
+    // reloads on the backend and can take a noticeable beat.
+    const previous = current
+    setCurrent(value)
+    setError(null)
+    switchingRef.current = true
     const owner = providers.find((p) => p.models.includes(value))
     try {
-      await switchModel({
+      await switchModelRef.current({
         model: value,
         provider: owner?.slug,
         persist: true,
       })
-      setCurrent(value)
-      setError(null)
     } catch (err: any) {
       setError(err?.message ?? 'switch failed')
-      // Revert select to the last known current
-      e.target.value = current
+      setCurrent(previous)
+    } finally {
+      switchingRef.current = false
     }
   }
 

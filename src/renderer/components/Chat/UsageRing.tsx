@@ -7,8 +7,11 @@ interface Props {
 export function UsageRing({ percent }: Props): React.ReactElement {
   const [hovered, setHovered] = useState(false)
   const p = Math.max(0, Math.min(100, Math.round(percent)))
-  const size = 28
-  const strokeWidth = 2.5
+  // Smaller than the 30px send button so it reads as an indicator, not a
+  // sibling control. Tooltip on hover still surfaces the exact percentage,
+  // so the inner number can be dropped at this size.
+  const size = 18
+  const strokeWidth = 2
   const radius = (size - strokeWidth) / 2
   const center = size / 2
   const circ = 2 * Math.PI * radius
@@ -17,7 +20,7 @@ export function UsageRing({ percent }: Props): React.ReactElement {
 
   return (
     <div
-      style={{ position: 'relative', width: size, height: size, flexShrink: 0, cursor: 'help' }}
+      style={{ position: 'relative', width: size, height: size, flexShrink: 0, cursor: 'default' }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
@@ -88,30 +91,6 @@ export function UsageRing({ percent }: Props): React.ReactElement {
         />
       </svg>
 
-      {/* Centered percentage — visible only on hover */}
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          opacity: hovered ? 1 : 0,
-          transition: 'opacity 150ms ease',
-        }}
-      >
-        <span
-          style={{
-            fontSize: 8,
-            fontWeight: 700,
-            color,
-            lineHeight: 1,
-            letterSpacing: '-0.2px',
-          }}
-        >
-          {p}%
-        </span>
-      </div>
     </div>
   )
 }

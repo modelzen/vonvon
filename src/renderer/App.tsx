@@ -16,7 +16,7 @@ const isFloatingWindow = window.location.hash === '#floating'
 
 function App(): React.ReactElement {
   const { activeSession, newTab } = useSession()
-  const { messages: agentMessages, isLoading, usagePercent, sendMessage, thinking } =
+  const { messages: agentMessages, isLoading, usagePercent, sendMessage, thinking, stop } =
     useAgentChat(activeSession?.id)
   const [displayPercent, setDisplayPercent] = useState(0)
 
@@ -107,6 +107,7 @@ function App(): React.ReactElement {
             onSend={(msg) => { if (activeSession) sendMessage(msg, activeSession.id) }}
             onSendWithAttachments={(msg, atts) => { if (activeSession) sendMessage(msg, activeSession.id, atts) }}
             isLoading={isLoading}
+            onStop={stop}
             toolbarLeft={<AgentModelSelector />}
             toolbarRight={<UsageRing percent={displayPercent} />}
           />

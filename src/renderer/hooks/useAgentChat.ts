@@ -459,6 +459,17 @@ export function useAgentChat(sessionId: string | null | undefined) {
     setThinking('')
   }, [])
 
+  // Abort the in-flight streaming request without wiping history. Used by
+  // the input area's "stop" button so the user can interrupt a long-running
+  // tool chain or runaway generation, then keep the conversation. Anything
+  // already streamed into the assistant placeholder stays in the bubble.
+  const stop = useCallback(() => {
+    abortRef.current?.abort()
+    abortRef.current = null
+    setIsLoading(false)
+    setThinking('')
+  }, [])
+
   return {
     messages,
     isLoading,
@@ -466,6 +477,7 @@ export function useAgentChat(sessionId: string | null | undefined) {
     sendMessage,
     clearMessages,
     loadingHistory,
-    thinking
+    thinking,
+    stop
   }
 }
