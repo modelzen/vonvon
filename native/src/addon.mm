@@ -9,10 +9,13 @@
 #import "animator.h"
 
 // ── Threadsafe function handles ────────────────────────────────────────────
-static napi_threadsafe_function g_proximityFn  = nullptr;
-static napi_threadsafe_function g_completeFn   = nullptr;
-static napi_threadsafe_function g_detachFn     = nullptr;
-static napi_threadsafe_function g_rightClickFn = nullptr;
+static napi_threadsafe_function g_proximityFn      = nullptr;
+static napi_threadsafe_function g_completeFn       = nullptr;
+static napi_threadsafe_function g_detachFn         = nullptr;
+static napi_threadsafe_function g_rightClickFn     = nullptr;
+static napi_threadsafe_function g_dockedClickFn    = nullptr;
+static napi_threadsafe_function g_dragLeaveFn      = nullptr;
+static napi_threadsafe_function g_collapseSidebarFn = nullptr;
 
 // CallJs: snap-proximity  (data = heap-alloc'd double*)
 static void CallSnapProximity(napi_env env, napi_value jsCb,
@@ -98,10 +101,37 @@ Napi::Value DestroyKirbyWindow(const Napi::CallbackInfo& info) {
 
 Napi::Value GetKirbyState(const Napi::CallbackInfo& info) {
     switch ([KirbyWindow shared].state) {
-        case KirbyStateSnapping: return Napi::String::New(info.Env(), "snapping");
-        case KirbyStateDocked:   return Napi::String::New(info.Env(), "docked");
-        default:                 return Napi::String::New(info.Env(), "floating");
+        case KirbyStateSnapping:        return Napi::String::New(info.Env(), "snapping");
+        case KirbyStateDockedExpanded:  return Napi::String::New(info.Env(), "dockedExpanded");
+        case KirbyStateDockedCollapsed: return Napi::String::New(info.Env(), "dockedCollapsed");
+        default:                        return Napi::String::New(info.Env(), "floating");
     }
+}
+
+// JS → Native: force the ball into a specific SVG form. Used for edge cases
+// like initial load; most form changes are driven from inside the native
+// state machine. Accepts "floating"|"snapping"|"dockedExpanded"|"dockedCollapsed".
+Napi::Value SetKirbyForm(const Napi::CallbackInfo& info) {
+    std::string form = info[0].As<Napi::String>().Utf8Value();
+    NSString *nsForm = [NSString stringWithUTF8String:form.c_str()];
+    [[KirbyWindow shared] setForm:nsForm];
+    return info.Env().Undefined();
+}
+
+// JS → Native: collapse the sidebar (triggered when user clicks the ✕ on
+// the sidebar header). Updates native state and switches the SVG form;
+// JS is responsible for hiding the sidebar BrowserWindow.
+Napi::Value CollapseSidebar(const Napi::CallbackInfo& info) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        KirbyWindow *k = [KirbyWindow shared];
+        // Only transition from dockedExpanded — ignore if already collapsed
+        // or if user detached the ball in the meantime.
+        if (k.state == KirbyStateDockedExpanded) {
+            k.state = KirbyStateDockedCollapsed;
+            [k setForm:@"dockedCollapsed"];
+        }
+    });
+    return info.Env().Undefined();
 }
 
 Napi::Value LoadContent(const Napi::CallbackInfo& info) {
@@ -186,6 +216,63 @@ Napi::Value OnRightClick(const Napi::CallbackInfo& info) {
     return info.Env().Undefined();
 }
 
+// Native → JS: ball clicked while dockedCollapsed. Carries current Feishu
+// bounds so JS can position the sidebar (Feishu may have moved since the
+// last onSnapComplete if the user dragged Feishu while collapsed).
+Napi::Value OnDockedClick(const Napi::CallbackInfo& info) {
+    napi_env env = info.Env();
+    if (g_dockedClickFn) {
+        napi_release_threadsafe_function(g_dockedClickFn, napi_tsfn_release);
+        g_dockedClickFn = nullptr;
+    }
+    g_dockedClickFn = MakeTsfn(env, static_cast<napi_value>(info[0]),
+                                "DockedClick", CallSnapCompleteWithBounds);
+    [DragHandler shared].onDockedClick = ^{
+        if (g_dockedClickFn) {
+            CGRect fb = [SnapEngine shared].targetFeishuBounds;
+            FeishuBounds *b = new FeishuBounds{
+                fb.origin.x, fb.origin.y, fb.size.width, fb.size.height};
+            napi_call_threadsafe_function(g_dockedClickFn, b, napi_tsfn_nonblocking);
+        }
+    };
+    return info.Env().Undefined();
+}
+
+// Native → JS: user dragged the ball past the 8px threshold out of a
+// docked state. Native has already reset state+form; JS hides the sidebar.
+Napi::Value OnDragLeave(const Napi::CallbackInfo& info) {
+    napi_env env = info.Env();
+    if (g_dragLeaveFn) {
+        napi_release_threadsafe_function(g_dragLeaveFn, napi_tsfn_release);
+        g_dragLeaveFn = nullptr;
+    }
+    g_dragLeaveFn = MakeTsfn(env, static_cast<napi_value>(info[0]),
+                              "DragLeave", CallNoArgs);
+    [DragHandler shared].onDragLeave = ^{
+        if (g_dragLeaveFn)
+            napi_call_threadsafe_function(g_dragLeaveFn, nullptr, napi_tsfn_nonblocking);
+    };
+    return info.Env().Undefined();
+}
+
+// Native → JS: Feishu window moved/resized while dockedExpanded. Native
+// has already moved the ball to the new corner and flipped state to
+// dockedCollapsed + form dockedCollapsed; JS hides the sidebar.
+Napi::Value OnCollapseSidebar(const Napi::CallbackInfo& info) {
+    napi_env env = info.Env();
+    if (g_collapseSidebarFn) {
+        napi_release_threadsafe_function(g_collapseSidebarFn, napi_tsfn_release);
+        g_collapseSidebarFn = nullptr;
+    }
+    g_collapseSidebarFn = MakeTsfn(env, static_cast<napi_value>(info[0]),
+                                    "CollapseSidebar", CallNoArgs);
+    [SnapEngine shared].onCollapseSidebar = ^{
+        if (g_collapseSidebarFn)
+            napi_call_threadsafe_function(g_collapseSidebarFn, nullptr, napi_tsfn_nonblocking);
+    };
+    return info.Env().Undefined();
+}
+
 // ── Module init ─────────────────────────────────────────────────────────────
 
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
@@ -197,8 +284,13 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("onSnapComplete",    Napi::Function::New(env, OnSnapComplete));
     exports.Set("onDetach",          Napi::Function::New(env, OnDetach));
     exports.Set("detachToFloating",  Napi::Function::New(env, DetachToFloating));
-    exports.Set("setVisible",       Napi::Function::New(env, SetVisible));
+    exports.Set("setVisible",        Napi::Function::New(env, SetVisible));
     exports.Set("onRightClick",      Napi::Function::New(env, OnRightClick));
+    exports.Set("onDockedClick",     Napi::Function::New(env, OnDockedClick));
+    exports.Set("onDragLeave",       Napi::Function::New(env, OnDragLeave));
+    exports.Set("onCollapseSidebar", Napi::Function::New(env, OnCollapseSidebar));
+    exports.Set("setKirbyForm",      Napi::Function::New(env, SetKirbyForm));
+    exports.Set("collapseSidebar",   Napi::Function::New(env, CollapseSidebar));
     return exports;
 }
 

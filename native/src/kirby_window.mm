@@ -11,7 +11,11 @@
 
 - (void)createAtX:(CGFloat)x y:(CGFloat)y {
     dispatch_async(dispatch_get_main_queue(), ^{
-        NSRect frame = NSMakeRect(x, y, 80, 80);
+        // Panel is a fixed 120×120 bounding box. The SVG inside paints the
+        // actual mascot in different poses for each state. See kirby_window.h
+        // for rationale (oversized bbox so dockedCollapsed can protrude out
+        // of the Feishu top-right corner without resizing the panel).
+        NSRect frame = NSMakeRect(x, y, kKirbyPanelSize, kKirbyPanelSize);
         self.panel = [[NSPanel alloc]
             initWithContentRect:frame
             styleMask:(NSWindowStyleMaskBorderless |
@@ -29,12 +33,14 @@
 
         // WKWebView fills the panel
         WKWebViewConfiguration *cfg = [[WKWebViewConfiguration alloc] init];
-        self.webView = [[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 80, 80)
+        self.webView = [[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, kKirbyPanelSize, kKirbyPanelSize)
                                           configuration:cfg];
-        // Transparent background
+        // Transparent background. No corner-radius clip — the SVG draws the
+        // ball shape directly, and clipping to a circle would hide dock-mode
+        // arms/feet that poke outside the ball's nominal outline.
         [self.webView setValue:@(NO) forKey:@"drawsBackground"];
-        self.webView.layer.cornerRadius  = 40.0;
-        self.webView.layer.masksToBounds = YES;
+        self.webView.layer.cornerRadius  = 0.0;
+        self.webView.layer.masksToBounds = NO;
         self.webView.wantsLayer          = YES;
 
         self.panel.contentView = self.webView;
@@ -78,6 +84,17 @@
         if (!self.webView) return;
         [self.webView evaluateJavaScript:js completionHandler:nil];
     });
+}
+
+- (void)setForm:(NSString *)formName {
+    if (!formName) return;
+    // JS-escape the form name (defensive — our values are simple ASCII).
+    NSString *escaped = [formName stringByReplacingOccurrencesOfString:@"'"
+                                                             withString:@"\\'"];
+    NSString *js = [NSString stringWithFormat:
+        @"if (typeof window.__setKirbyForm === 'function') { window.__setKirbyForm('%@'); }",
+        escaped];
+    [self evaluateJS:js];
 }
 
 @end

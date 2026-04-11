@@ -41,6 +41,9 @@ contextBridge.exposeInMainWorld('electron', {
 
   // Kirby — Stage 2
   detachKirby: () => ipcRenderer.send('kirby:detach'),
+  // Sidebar ✕: collapse the sidebar but keep the ball docked at Feishu's
+  // top-right corner. See src/main/native/kirby.ts for the full state flow.
+  closeKirbySidebar: () => ipcRenderer.send('kirby:close-sidebar'),
   getKirbyState: () => ipcRenderer.invoke('kirby:getState'),
 
   // Settings window — opens a separate BrowserWindow rendering SettingsPanel
@@ -51,7 +54,8 @@ contextBridge.exposeInMainWorld('electron', {
   on: (channel: string, callback: (...args: unknown[]) => void) => {
     const allowedChannels = [
       'chat:chunk', 'chat:error', 'chat:done',
-      'kirby:snap-proximity', 'kirby:snap-complete', 'kirby:detach'
+      'kirby:snap-proximity', 'kirby:snap-complete', 'kirby:detach',
+      'kirby:sidebar-show', 'kirby:sidebar-hide'
     ]
     if (allowedChannels.includes(channel)) {
       ipcRenderer.on(channel, (_event, ...args) => callback(...args))
@@ -84,7 +88,10 @@ declare global {
       openExternal(url: string): Promise<void>
       showItemInFolder(path: string): void
       detachKirby(): void
-      getKirbyState(): Promise<'floating' | 'snapping' | 'docked'>
+      closeKirbySidebar(): void
+      getKirbyState(): Promise<
+        'floating' | 'snapping' | 'dockedExpanded' | 'dockedCollapsed'
+      >
       openSettings(): void
       closeSettings(): void
       on(channel: string, callback: (...args: unknown[]) => void): void

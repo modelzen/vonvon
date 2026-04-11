@@ -9,22 +9,96 @@ import {
 
 type FeishuBounds = { x: number; y: number; width: number; height: number }
 
+type KirbyForm = 'floating' | 'snapping' | 'dockedExpanded' | 'dockedCollapsed'
+
 type KirbyNative = {
   createKirbyWindow(x: number, y: number): void
   destroyKirbyWindow(): void
-  getKirbyState(): 'floating' | 'snapping' | 'docked'
+  getKirbyState():
+    | 'floating'
+    | 'snapping'
+    | 'dockedExpanded'
+    | 'dockedCollapsed'
   loadContent(url: string): void
   setVisible(visible: boolean): void
   onSnapProximity(cb: (distance: number) => void): void
   onSnapComplete(cb: (feishuBounds: FeishuBounds) => void): void
   onDetach(cb: () => void): void
+  onDockedClick?(cb: (feishuBounds: FeishuBounds) => void): void
+  onDragLeave?(cb: () => void): void
+  onCollapseSidebar?(cb: () => void): void
   detachToFloating(): void
+  setKirbyForm?(form: KirbyForm): void
+  collapseSidebar?(): void
   onRightClick?(cb: () => void): void
 }
 
 let native: KirbyNative | null = null
 let _mainWin: BrowserWindow | null = null
 let _kirbyUrl = ''
+// Latest known Feishu bounds, kept in sync via onSnapComplete /
+// onDockedClick callbacks. Used when the user hides→shows the sidebar via
+// the ✕ button and we need to re-position on the current Feishu window.
+let _lastFeishuBounds: FeishuBounds | null = null
+
+/**
+ * Apply the given Feishu bounds to the main BrowserWindow sidebar:
+ * position it flush against Feishu's right edge, match its height, and
+ * preserve the user's previously-dragged width (falling back to 360).
+ * Caller is responsible for calling show() afterwards if needed.
+ */
+function applySidebarBounds(feishu: FeishuBounds): void {
+  if (!_mainWin) return
+  const sidebarX = Math.round(feishu.x + feishu.width)
+  const sidebarY = Math.round(feishu.y)
+  const sidebarH = Math.round(feishu.height)
+
+  // Recall the user's last preferred width if any; default to 360.
+  const currentW = _mainWin.getBounds().width
+  const persistedW = currentW >= 280 && currentW <= 800 ? currentW : 360
+
+  _mainWin.setBounds({
+    x: sidebarX,
+    y: sidebarY,
+    width: persistedW,
+    height: sidebarH,
+  })
+  // Lock height to Feishu's height but leave width freely resizable
+  // within reasonable bounds. Electron treats (0, 0) as "no limit",
+  // which is what we want for an unbounded width ceiling.
+  _mainWin.setMinimumSize(280, sidebarH)
+  _mainWin.setMaximumSize(900, sidebarH)
+  _mainWin.setAlwaysOnTop(true, 'floating')
+}
+
+/**
+ * Hide the sidebar BrowserWindow and release the height-lock installed by
+ * applySidebarBounds. Safe to call when already hidden.
+ *
+ * If `animate` is true, sends 'kirby:sidebar-hide' first so the renderer
+ * plays the scaleX(1→0) exit animation, then hides after 240ms (matches
+ * the keyframe duration in App.tsx). Pass false for "Feishu disappeared"
+ * paths where we want an instant hide.
+ */
+function releaseSidebar(animate: boolean = false): void {
+  if (!_mainWin) return
+  _mainWin.setAlwaysOnTop(false)
+  _mainWin.setMinimumSize(0, 0)
+  _mainWin.setMaximumSize(0, 0)
+  if (!_mainWin.isVisible()) return
+
+  if (animate) {
+    const win = _mainWin
+    win.webContents.send('kirby:sidebar-hide')
+    setTimeout(() => {
+      if (!win.isDestroyed() && win.isVisible()) {
+        win.hide()
+      }
+    }, 240)
+  } else {
+    _mainWin.hide()
+  }
+}
 
 function loadAddon(): KirbyNative | null {
   if (native) return native
@@ -62,61 +136,68 @@ export function initKirby(mainWindow: BrowserWindow): void {
   })
 
   addon.onSnapComplete((feishuBounds: FeishuBounds) => {
-    // NSPanel is already hidden by the native animator.
+    // The ball NSPanel stays visible at Feishu's top-right corner — native
+    // handles positioning + SVG form. We only show the sidebar here.
     // Snapping to Feishu is mutually exclusive with the standalone chat
     // window — if one is open, close it.
     if (isFloatingChatWindowOpen()) {
       closeFloatingChatWindow()
     }
 
-    // Now show + position the main BrowserWindow as sidebar next to Feishu
+    _lastFeishuBounds = feishuBounds
     if (_mainWin) {
-      // feishuBounds uses CG coordinates (top-left origin, y-down)
-      // Electron setBounds also uses screen coordinates (top-left origin, y-down)
-      const sidebarX = Math.round(feishuBounds.x + feishuBounds.width)
-      const sidebarY = Math.round(feishuBounds.y)
-      const sidebarH = Math.round(feishuBounds.height)
-
-      // Recall the user's last preferred width if any; default to 360.
-      const currentW = _mainWin.getBounds().width
-      const persistedW =
-        currentW >= 280 && currentW <= 800 ? currentW : 360
-
-      _mainWin.setBounds({
-        x: sidebarX,
-        y: sidebarY,
-        width: persistedW,
-        height: sidebarH
-      })
-      // Lock height to Feishu's height but leave width freely resizable
-      // within reasonable bounds. Electron treats (0, 0) as "no limit",
-      // which is what we want for an unbounded width ceiling.
-      _mainWin.setMinimumSize(280, sidebarH)
-      _mainWin.setMaximumSize(900, sidebarH)
-      _mainWin.setAlwaysOnTop(true, 'floating')
+      applySidebarBounds(feishuBounds)
       _mainWin.show()
+      // Notify renderer so it can play the entry animation.
+      _mainWin.webContents.send('kirby:sidebar-show')
     }
 
     _mainWin?.webContents.send('kirby:snap-complete')
   })
 
   addon.onDetach(() => {
-    // Hide the main BrowserWindow sidebar
-    if (_mainWin) {
-      _mainWin.setAlwaysOnTop(false)
-      // Release the height-lock installed on snap, otherwise any future
-      // resize attempts on the hidden window could get clamped.
-      _mainWin.setMinimumSize(0, 0)
-      _mainWin.setMaximumSize(0, 0)
-      _mainWin.hide()
-    }
-
-    // NSPanel is already made visible and resized by performDetachAnimation
-    // Just reload the kirby bubble content
-    addon.loadContent(_kirbyUrl)
-
+    // Hide the main BrowserWindow sidebar. Used when Feishu disappears
+    // (minimized/hidden/quit) — native ran performDetachAnimation to put
+    // the ball back at screen center.
+    releaseSidebar()
+    // Kirby bubble content is already reloaded by setForm → floating.
     _mainWin?.webContents.send('kirby:detach')
   })
+
+  // Ball clicked while dockedCollapsed → native already switched state to
+  // dockedExpanded + form dockedExpanded. Re-show the sidebar.
+  if (typeof addon.onDockedClick === 'function') {
+    addon.onDockedClick((feishuBounds: FeishuBounds) => {
+      if (isFloatingChatWindowOpen()) {
+        closeFloatingChatWindow()
+      }
+      _lastFeishuBounds = feishuBounds
+      if (_mainWin) {
+        applySidebarBounds(feishuBounds)
+        _mainWin.show()
+        _mainWin.webContents.send('kirby:sidebar-show')
+      }
+    })
+  }
+
+  // User dragged the ball past 8px threshold while docked → native already
+  // reset state+form; we hide the sidebar. Ball continues to follow mouse.
+  // Animate the sidebar collapse so it visually retracts toward the ball.
+  if (typeof addon.onDragLeave === 'function') {
+    addon.onDragLeave(() => {
+      releaseSidebar(true)
+      _mainWin?.webContents.send('kirby:detach')
+    })
+  }
+
+  // Feishu window moved/resized while dockedExpanded → native already
+  // collapsed state + form and kept the ball glued to the new corner.
+  // Animate the sidebar collapse (releaseSidebar(true) sends sidebar-hide).
+  if (typeof addon.onCollapseSidebar === 'function') {
+    addon.onCollapseSidebar(() => {
+      releaseSidebar(true)
+    })
+  }
 
   // Right-clicking the Kirby ball (while floating) shows a context menu
   // with two actions: open settings, or open a standalone (resizable)
@@ -139,19 +220,18 @@ export function initKirby(mainWindow: BrowserWindow): void {
           click: () => openSettingsWindow(),
         },
       ])
-      // popup() needs a BrowserWindow reference. The Kirby panel is a
-      // native NSPanel (not a BrowserWindow), so we use _mainWin as the
-      // anchor — it's allowed to be hidden, and Electron places the menu
-      // at the current cursor position regardless.
-      const anchor =
-        _mainWin && !_mainWin.isDestroyed()
-          ? _mainWin
-          : BrowserWindow.getAllWindows()[0]
-      if (anchor) {
-        menu.popup({ window: anchor })
-      } else {
-        menu.popup()
-      }
+      // Let macOS' popUpContextMenu handle positioning natively. Calling
+      // `menu.popup()` with no options uses the current NSEvent / mouse
+      // location, which is correct across multiple displays.
+      //
+      // What did NOT work:
+      //   - `menu.popup({ window: _mainWin })` — anchored to the sidebar
+      //     BrowserWindow, which may live on a different monitor from the
+      //     ball, so the menu appeared on the sidebar's screen.
+      //   - `menu.popup({ x, y })` with global screen coords — Electron
+      //     treats x/y as window-local, so without a window they land in
+      //     a wrong slot (top-right of some screen).
+      menu.popup()
     })
   } else {
     console.warn('[kirby] onRightClick not available — rebuild the native addon with `npm run rebuild`')
@@ -162,6 +242,19 @@ export function initKirby(mainWindow: BrowserWindow): void {
 export function registerKirbyIpcHandlers(): void {
   ipcMain.on('kirby:detach', () => {
     loadAddon()?.detachToFloating()
+  })
+
+  // Sidebar ✕ button: collapse the sidebar but keep the ball docked at
+  // Feishu's top-right corner. Native transitions dockedExpanded →
+  // dockedCollapsed + switches SVG form; we animate-hide the BrowserWindow
+  // (releaseSidebar(true) sends 'kirby:sidebar-hide' first then hides
+  // after the 240ms exit animation completes).
+  ipcMain.on('kirby:close-sidebar', () => {
+    const addon = loadAddon()
+    if (addon && typeof addon.collapseSidebar === 'function') {
+      addon.collapseSidebar()
+    }
+    releaseSidebar(true)
   })
 
   ipcMain.handle('kirby:getState', () =>

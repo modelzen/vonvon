@@ -17,16 +17,13 @@
         KirbyWindow *kirby = [KirbyWindow shared];
         if (!kirby.panel) return;
 
-        CGRect feishu      = [SnapEngine shared].targetFeishuBounds;
-        CGFloat screenH    = NSScreen.mainScreen.frame.size.height;
-
-        // Convert CG top-left coords → NS bottom-left coords
+        // Target: panel's geometric center lands on Feishu's top-right corner.
+        CGRect feishu = [SnapEngine shared].targetFeishuBounds;
+        NSPoint targetOrigin =
+            [[SnapEngine shared] dockedTopRightOriginForFeishuBounds:feishu];
         NSRect target = NSMakeRect(
-            feishu.origin.x + feishu.size.width,        // right of Feishu
-            screenH - feishu.origin.y - feishu.size.height, // NS y
-            360.0,
-            feishu.size.height
-        );
+            targetOrigin.x, targetOrigin.y,
+            kKirbyPanelSize, kKirbyPanelSize);
 
         [NSAnimationContext runAnimationGroup:^(NSAnimationContext *ctx) {
             ctx.duration       = 0.3;
@@ -35,10 +32,11 @@
             ctx.allowsImplicitAnimation = YES;
             [[kirby.panel animator] setFrame:target display:YES];
         } completionHandler:^{
-            kirby.state = KirbyStateDocked;
-
-            // Hide NSPanel - the JS layer will show the main BrowserWindow as sidebar
-            [kirby setVisible:NO];
+            // Ball remains visible — it stays glued to the Feishu top-right
+            // corner from now on. The JS layer will show the sidebar
+            // BrowserWindow in response to notifySnapComplete.
+            kirby.state = KirbyStateDockedExpanded;
+            [kirby setForm:@"dockedExpanded"];
 
             [[SnapEngine shared] notifySnapComplete];
             [[SnapEngine shared] startTrackingTimer];
@@ -54,16 +52,16 @@
         [[SnapEngine shared] stopTrackingTimer];
         [SnapEngine shared].isInSnapZone = NO;
 
-        // First make panel visible again (it was hidden after snap)
+        // The panel is already visible in the new flow (we no longer hide it
+        // after snap), but make sure — defensive against legacy paths.
         [kirby setVisible:YES];
 
-        // Get screen center for re-positioning (panel may be at sidebar position)
+        // Re-center the ball on screen at 120×120.
         NSRect screenFrame = NSScreen.mainScreen.frame;
-        CGFloat centerX = NSMidX(screenFrame) - 40;
-        CGFloat centerY = NSMidY(screenFrame) - 40;
-
-        // Reset panel to 80×80 at screen center
-        NSRect target = NSMakeRect(centerX, centerY, 80, 80);
+        CGFloat half = kKirbyPanelSize / 2;
+        CGFloat centerX = NSMidX(screenFrame) - half;
+        CGFloat centerY = NSMidY(screenFrame) - half;
+        NSRect target = NSMakeRect(centerX, centerY, kKirbyPanelSize, kKirbyPanelSize);
 
         [NSAnimationContext runAnimationGroup:^(NSAnimationContext *ctx) {
             ctx.duration       = 0.3;
@@ -72,9 +70,12 @@
             ctx.allowsImplicitAnimation = YES;
             [[kirby.panel animator] setFrame:target display:YES];
         } completionHandler:^{
-            kirby.webView.frame = NSMakeRect(0, 0, 80, 80);
-            kirby.webView.layer.cornerRadius = 40.0;
+            kirby.webView.frame = NSMakeRect(0, 0, kKirbyPanelSize, kKirbyPanelSize);
+            // No corner-radius clip — SVG draws the shape (see kirby_window.mm).
+            kirby.webView.layer.cornerRadius = 0.0;
+            kirby.webView.layer.masksToBounds = NO;
             kirby.state = KirbyStateFloating;
+            [kirby setForm:@"floating"];
             [[SnapEngine shared] notifyDetach];
         }];
     });

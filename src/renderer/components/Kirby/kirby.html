@@ -2,7 +2,7 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <title>Kirby</title>
+    <title>Vonvon</title>
     <style>
       * {
         margin: 0;
@@ -21,63 +21,300 @@
         -webkit-app-region: drag;
       }
 
-      .kirby {
-        width: 80px;
-        height: 80px;
-        border-radius: 50%;
-        background: radial-gradient(
-          circle at 35% 35%,
-          #ffb3d9 0%,
-          #ff69b4 40%,
-          #ff1493 100%
-        );
-        box-shadow:
-          0 4px 15px rgba(255, 105, 180, 0.5),
-          inset 0 -3px 8px rgba(255, 20, 147, 0.3),
-          inset 0 3px 8px rgba(255, 255, 255, 0.4);
-        cursor: pointer;
-        transition: transform 0.3s ease, box-shadow 0.3s ease;
+      #root {
+        width: 120px;
+        height: 120px;
         position: relative;
       }
 
-      .kirby:hover {
-        transform: scale(1.05);
-      }
-
-      .kirby:active {
-        transform: scale(0.95);
-      }
-
-      /* Eyes */
-      .kirby::before {
-        content: '';
+      /*
+       * Four visual forms (synced from docs/vonvon-forms-prototype.html v4):
+       *   .floating         – free-floating pink ball (default)
+       *   .snapping         – pear-shaped, body pulled toward Feishu's right edge
+       *   .docked-expanded  – D-shape sitting on Feishu's top-right corner with
+       *                       sidebar open. Body center x=60 = Feishu right edge,
+       *                       bottom y=60 = Feishu top edge. Strict flat bottom.
+       *   .docked-collapsed – near-circle with a 90° bite cut out of the
+       *                       lower-left. Bite tip exactly at (60, 60).
+       *                       Two straight cuts along y=60 and x=60 — must
+       *                       be lines, NOT curves, otherwise Q3 is invaded.
+       *
+       * Forms swap via opacity crossfade so they don't pop.
+       */
+      .kirby-form {
         position: absolute;
-        top: 28px;
-        left: 18px;
-        width: 10px;
-        height: 12px;
-        background: #1a1a2e;
-        border-radius: 50%;
-        box-shadow: 24px 0 0 #1a1a2e;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        opacity: 0;
+        transform: scale(0.9);
+        transition: opacity 200ms ease, transform 200ms ease;
+        pointer-events: none;
       }
 
-      /* Blush */
-      .kirby::after {
-        content: '';
-        position: absolute;
-        top: 44px;
-        left: 12px;
-        width: 14px;
-        height: 8px;
-        background: rgba(255, 100, 150, 0.5);
-        border-radius: 50%;
-        box-shadow: 32px 0 0 rgba(255, 100, 150, 0.5);
+      .kirby-form.active {
+        opacity: 1;
+        transform: scale(1);
+        pointer-events: auto;
+      }
+
+      .kirby-form svg {
+        width: 120px;
+        height: 120px;
+        display: block;
+        /* Don't clip arms/feet that poke outside the nominal ball bbox. */
+        overflow: visible;
       }
     </style>
   </head>
   <body>
-    <div class="kirby" title="Vonvon AI"></div>
+    <div id="root">
+
+      <!-- ============ FORM 1: FLOATING ============ -->
+      <div class="kirby-form floating active" data-skin="default">
+        <svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <radialGradient id="f1-body" cx="38%" cy="30%" r="68%" fx="38%" fy="30%">
+              <stop offset="0%"   stop-color="#ffe2ee"/>
+              <stop offset="30%"  stop-color="#ffb6da"/>
+              <stop offset="70%"  stop-color="#ff6fb4"/>
+              <stop offset="100%" stop-color="#e11f85"/>
+            </radialGradient>
+            <radialGradient id="f1-spec" cx="36%" cy="26%" r="42%">
+              <stop offset="0%"   stop-color="rgba(255,255,255,0.75)"/>
+              <stop offset="60%"  stop-color="rgba(255,255,255,0.12)"/>
+              <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+            </radialGradient>
+            <filter id="f1-blush" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="2"/>
+            </filter>
+          </defs>
+          <g>
+            <circle cx="60" cy="60" r="38" fill="url(#f1-body)"/>
+            <circle cx="60" cy="60" r="38" fill="url(#f1-spec)"/>
+            <ellipse cx="46" cy="40" rx="6" ry="4" fill="rgba(255,255,255,0.55)" transform="rotate(-25 46 40)"/>
+            <ellipse cx="43" cy="68" rx="7.5" ry="4.5" fill="rgba(255,90,150,0.38)" filter="url(#f1-blush)"/>
+            <ellipse cx="77" cy="68" rx="7.5" ry="4.5" fill="rgba(255,90,150,0.38)" filter="url(#f1-blush)"/>
+            <circle cx="49" cy="56" r="5.5" fill="#1a1230"/>
+            <circle cx="47.5" cy="54" r="1.8" fill="#fff"/>
+            <circle cx="71" cy="56" r="5.5" fill="#1a1230"/>
+            <circle cx="69.5" cy="54" r="1.8" fill="#fff"/>
+            <path d="M 55 66 Q 60 71 65 66" stroke="#c2185b" stroke-width="2" fill="none" stroke-linecap="round"/>
+          </g>
+        </svg>
+      </div>
+
+      <!--
+        ============ FORM 2: SNAPPING ============
+        Pear-shaped body pulled toward Feishu's right edge (to the left of
+        the panel). Eyes look left toward Feishu, surprised "o" mouth.
+        Used during the snap proximity zone, before the user releases.
+      -->
+      <div class="kirby-form snapping" data-skin="default">
+        <svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <radialGradient id="sn-body" cx="30%" cy="40%" r="72%" fx="30%" fy="40%">
+              <stop offset="0%"   stop-color="#ffe2ee"/>
+              <stop offset="30%"  stop-color="#ffb6da"/>
+              <stop offset="70%"  stop-color="#ff6fb4"/>
+              <stop offset="100%" stop-color="#e11f85"/>
+            </radialGradient>
+            <radialGradient id="sn-spec" cx="30%" cy="35%" r="42%">
+              <stop offset="0%"   stop-color="rgba(255,255,255,0.72)"/>
+              <stop offset="60%"  stop-color="rgba(255,255,255,0.10)"/>
+              <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+            </radialGradient>
+            <filter id="sn-blush" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="2"/>
+            </filter>
+          </defs>
+          <g>
+            <path d="
+              M 10 60
+              C 10 32 28 18 50 20
+              C 72 22 90 38 92 56
+              C 94 72 86 84 72 90
+              C 56 98 38 98 24 88
+              C 14 80 10 72 10 60 Z
+            " fill="url(#sn-body)"/>
+            <path d="
+              M 10 60
+              C 10 32 28 18 50 20
+              C 72 22 90 38 92 56
+              C 94 72 86 84 72 90
+              C 56 98 38 98 24 88
+              C 14 80 10 72 10 60 Z
+            " fill="url(#sn-spec)"/>
+            <!-- eyes look left toward Feishu's right edge -->
+            <circle cx="36" cy="50" r="5" fill="#1a1230"/>
+            <circle cx="34.5" cy="48" r="1.7" fill="#fff"/>
+            <circle cx="58" cy="52" r="5" fill="#1a1230"/>
+            <circle cx="56.5" cy="50" r="1.7" fill="#fff"/>
+            <!-- surprised "o" mouth -->
+            <ellipse cx="46" cy="64" rx="3" ry="3.5" fill="#c2185b"/>
+            <!-- blush -->
+            <ellipse cx="26" cy="66" rx="5" ry="3" fill="rgba(255,90,150,0.38)" filter="url(#sn-blush)"/>
+            <ellipse cx="66" cy="66" rx="5" ry="3" fill="rgba(255,90,150,0.38)" filter="url(#sn-blush)"/>
+          </g>
+        </svg>
+      </div>
+
+      <!--
+        ============ FORM 3: DOCKED EXPANDED ============
+        D shape: top semicircle + strict flat bottom y=60.
+        Center x=60 = Feishu right edge, bottom y=60 = Feishu top edge.
+        Left half (x<60) sits in air above Feishu's top edge,
+        right half (x>60) sits in air above the sidebar's top edge.
+        IMPORTANT: bottom is L 98 60 L 22 60 (real flat line), NOT a bezier
+        — beziers tend to dip below y=60 and invade Feishu.
+      -->
+      <div class="kirby-form docked-expanded" data-skin="default">
+        <svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <radialGradient id="ds-body" cx="38%" cy="22%" r="75%" fx="38%" fy="22%">
+              <stop offset="0%"   stop-color="#ffe2ee"/>
+              <stop offset="30%"  stop-color="#ffb6da"/>
+              <stop offset="70%"  stop-color="#ff6fb4"/>
+              <stop offset="100%" stop-color="#e11f85"/>
+            </radialGradient>
+            <radialGradient id="ds-spec" cx="38%" cy="18%" r="46%">
+              <stop offset="0%"   stop-color="rgba(255,255,255,0.72)"/>
+              <stop offset="60%"  stop-color="rgba(255,255,255,0.10)"/>
+              <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+            </radialGradient>
+            <filter id="ds-blush" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="2"/>
+            </filter>
+          </defs>
+          <g>
+            <path d="
+              M 22 38
+              C 22 8 38 0 60 0
+              C 82 0 98 8 98 38
+              L 98 60
+              L 22 60
+              Z
+            " fill="url(#ds-body)"/>
+            <path d="
+              M 22 38
+              C 22 8 38 0 60 0
+              C 82 0 98 8 98 38
+              L 98 60
+              L 22 60
+              Z
+            " fill="url(#ds-spec)"/>
+            <!-- contact shadow on Feishu top edge -->
+            <ellipse cx="60" cy="62" rx="30" ry="1.4" fill="rgba(0,0,0,0.18)"/>
+            <!-- symmetric eyes facing forward -->
+            <circle cx="47" cy="28" r="5.5" fill="#1a1230"/>
+            <circle cx="45.5" cy="26" r="1.8" fill="#fff"/>
+            <circle cx="73" cy="28" r="5.5" fill="#1a1230"/>
+            <circle cx="71.5" cy="26" r="1.8" fill="#fff"/>
+            <!-- relaxed mouth -->
+            <path d="M 54 38 Q 60 44 66 38" stroke="#c2185b" stroke-width="2" fill="none" stroke-linecap="round"/>
+            <!-- blush -->
+            <ellipse cx="36" cy="38" rx="6" ry="3.5" fill="rgba(255,90,150,0.38)" filter="url(#ds-blush)"/>
+            <ellipse cx="84" cy="38" rx="6" ry="3.5" fill="rgba(255,90,150,0.38)" filter="url(#ds-blush)"/>
+          </g>
+        </svg>
+      </div>
+
+      <!--
+        ============ FORM 4: DOCKED COLLAPSED ============
+        Near-perfect circle with a 90° bite cut out of the lower-left corner.
+        Bite tip exactly at (60, 60) = Feishu's top-right corner.
+        Two straight cuts: one along y=60 (from circle's left arc point to
+        the tip) and one along x=60 (from the tip to the circle's bottom arc
+        point). The big arc is ~282°, the bite is ~78°.
+        IMPORTANT: the L 20 60 + Z (closing back to x=60) MUST be straight
+        lines. Do not replace them with curves — curves dip into Q3 and
+        invade Feishu's window content.
+      -->
+      <div class="kirby-form docked-collapsed" data-skin="default">
+        <svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <radialGradient id="dc-body" cx="45%" cy="32%" r="72%" fx="45%" fy="32%">
+              <stop offset="0%"   stop-color="#ffe2ee"/>
+              <stop offset="30%"  stop-color="#ffb6da"/>
+              <stop offset="70%"  stop-color="#ff6fb4"/>
+              <stop offset="100%" stop-color="#d8167f"/>
+            </radialGradient>
+            <radialGradient id="dc-spec" cx="45%" cy="28%" r="46%">
+              <stop offset="0%"   stop-color="rgba(255,255,255,0.70)"/>
+              <stop offset="65%"  stop-color="rgba(255,255,255,0.08)"/>
+              <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+            </radialGradient>
+            <filter id="dc-blush" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="2"/>
+            </filter>
+          </defs>
+          <g>
+            <!--
+              Path geometry:
+              - M 60 60: start at the bite tip = Feishu top-right corner
+              - L 20 60: straight line LEFT along y=60 (Feishu top edge)
+              - A 45 45 0 1 1 60 100: ~282° clockwise arc, radius 45,
+                from (20, 60) over the top → right → bottom to (60, 100)
+              - Z: straight line UP along x=60 back to (60, 60) = Feishu right edge
+
+              All arc points lie outside Q3 (x<60 && y>60). The bite is a
+              right triangle with the right angle at (60, 60).
+            -->
+            <path d="
+              M 60 60
+              L 20 60
+              A 45 45 0 1 1 60 100
+              Z
+            " fill="url(#dc-body)"/>
+            <path d="
+              M 60 60
+              L 20 60
+              A 45 45 0 1 1 60 100
+              Z
+            " fill="url(#dc-spec)"/>
+
+            <!-- face above the bite, away from the corner -->
+            <ellipse cx="47" cy="50" rx="6" ry="3.5" fill="rgba(255,90,150,0.38)" filter="url(#dc-blush)"/>
+            <ellipse cx="83" cy="50" rx="6" ry="3.5" fill="rgba(255,90,150,0.38)" filter="url(#dc-blush)"/>
+            <circle cx="55" cy="42" r="5" fill="#1a1230"/>
+            <circle cx="53.5" cy="40" r="1.7" fill="#fff"/>
+            <circle cx="75" cy="42" r="5" fill="#1a1230"/>
+            <circle cx="73.5" cy="40" r="1.7" fill="#fff"/>
+            <path d="M 60 52 Q 65 57 70 52" stroke="#c2185b" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+          </g>
+        </svg>
+      </div>
+
+    </div>
+
     <script>
+      // Switch visual form. Called by the native layer via evaluateJS.
+      //
+      // Accepted values:
+      //   'floating'        – free-floating pink ball (default)
+      //   'snapping'        – pear shape, used while in the snap proximity zone
+      //   'dockedExpanded'  – D shape, perched on Feishu corner with sidebar open
+      //   'dockedCollapsed' – near-circle with a 90° bite at lower-left corner
+      window.__setKirbyForm = function (form) {
+        var target
+        switch (form) {
+          case 'snapping':        target = 'snapping';         break
+          case 'dockedExpanded':  target = 'docked-expanded';  break
+          case 'dockedCollapsed': target = 'docked-collapsed'; break
+          case 'floating':
+          default:                target = 'floating';         break
+        }
+        var nodes = document.querySelectorAll('.kirby-form')
+        for (var i = 0; i < nodes.length; i++) {
+          var el = nodes[i]
+          if (el.classList.contains(target)) {
+            el.classList.add('active')
+          } else {
+            el.classList.remove('active')
+          }
+        }
+      }
+
       // Suppress WebKit's default context menu ("Reload" etc.) on the
       // Kirby ball. The native DragHandler's NSEvent right-click monitor
       // still fires and triggers opening the settings window — we just

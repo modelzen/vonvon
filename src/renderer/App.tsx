@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { TabBar } from './components/Session/TabBar'
 import { SessionHistoryDropdown } from './components/Session/SessionHistoryDropdown'
 import { useAgentChat } from './hooks/useAgentChat'
@@ -19,11 +19,93 @@ function App(): React.ReactElement {
   const { messages: agentMessages, isLoading, usagePercent, sendMessage, thinking, stop } =
     useAgentChat(activeSession?.id)
   const [displayPercent, setDisplayPercent] = useState(0)
+  // Bumps each time the main process tells us the sidebar was (re)shown,
+  // so we can replay the entry animation even though the React tree doesn't
+  // unmount when the BrowserWindow is hide/show'd.
+  const [sidebarShowTick, setSidebarShowTick] = useState(0)
+  // Same idea but for the exit animation: main sends 'kirby:sidebar-hide'
+  // ~240ms before actually hiding the BrowserWindow, giving us time to play
+  // a scaleX(1→0) collapse anchored at top-left.
+  const [sidebarHideTick, setSidebarHideTick] = useState(0)
 
   useEffect(() => { setDisplayPercent(usagePercent) }, [usagePercent])
 
+  // Listen for sidebar show/hide events from main so we can replay the CSS
+  // entry/exit animations on the still-mounted React tree.
+  useEffect(() => {
+    if (isFloatingWindow) return
+    const showHandler = (): void => setSidebarShowTick((t) => t + 1)
+    const hideHandler = (): void => setSidebarHideTick((t) => t + 1)
+    try {
+      ;(window as any).electron?.on?.('kirby:sidebar-show', showHandler)
+      ;(window as any).electron?.on?.('kirby:sidebar-hide', hideHandler)
+    } catch {}
+    return () => {
+      try {
+        ;(window as any).electron?.off?.('kirby:sidebar-show', showHandler)
+        ;(window as any).electron?.off?.('kirby:sidebar-hide', hideHandler)
+      } catch {}
+    }
+  }, [])
+
+  // Replay the entry animation on each show-tick. CSS animations don't
+  // replay on their own when the same class is already applied, so we
+  // toggle it off, force reflow, then toggle back on. Also strip the
+  // exit class so we don't end up with both at once.
+  const rootRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (sidebarShowTick === 0 || isFloatingWindow) return
+    const el = rootRef.current
+    if (!el) return
+    el.classList.remove('kirby-sidebar-exit')
+    el.classList.remove('kirby-sidebar-entry')
+    void el.offsetWidth
+    el.classList.add('kirby-sidebar-entry')
+  }, [sidebarShowTick])
+
+  // Same dance for the exit animation. Main hides the BrowserWindow 240ms
+  // after sending sidebar-hide, so by then the animation has played out
+  // and the window simply disappears.
+  useEffect(() => {
+    if (sidebarHideTick === 0 || isFloatingWindow) return
+    const el = rootRef.current
+    if (!el) return
+    el.classList.remove('kirby-sidebar-entry')
+    el.classList.remove('kirby-sidebar-exit')
+    void el.offsetWidth
+    el.classList.add('kirby-sidebar-exit')
+  }, [sidebarHideTick])
+
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div
+      ref={rootRef}
+      style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+    >
+      {/* Sidebar entry animation (replayed on kirby:sidebar-show events).
+          Anchored to top-LEFT so scaleX(0→1) makes the sidebar appear to
+          grow rightward out of the docked vonvon ball. The ball sits at
+          Feishu's top-right corner = sidebar's top-left corner, so the
+          left edge stays pinned to the ball while the right edge sweeps
+          out. transform-origin: top right would have made it pop from
+          the wrong side. */}
+      <style>{`
+        @keyframes kirby-sidebar-entry {
+          from { opacity: 0; transform: scaleX(0); }
+          to   { opacity: 1; transform: scaleX(1); }
+        }
+        .kirby-sidebar-entry {
+          animation: kirby-sidebar-entry 240ms cubic-bezier(0.2, 0.8, 0.3, 1);
+          transform-origin: top left;
+        }
+        @keyframes kirby-sidebar-exit {
+          from { opacity: 1; transform: scaleX(1); }
+          to   { opacity: 0; transform: scaleX(0); }
+        }
+        .kirby-sidebar-exit {
+          animation: kirby-sidebar-exit 240ms cubic-bezier(0.4, 0, 0.8, 0.2);
+          transform-origin: top left;
+        }
+      `}</style>
       <div style={{
         display: 'flex', alignItems: 'flex-end', gap: 6,
         // Floating (standalone) window uses titleBarStyle: 'hiddenInset', so
@@ -71,8 +153,8 @@ function App(): React.ReactElement {
           <SessionHistoryDropdown />
           {!isFloatingWindow && (
             <button
-              onClick={() => { try { (window as any).electron?.detachKirby?.() } catch {} }}
-              title="脱离"
+              onClick={() => { try { (window as any).electron?.closeKirbySidebar?.() } catch {} }}
+              title="收起"
               style={{
                 width: 26, height: 26,
                 border: 'none',
