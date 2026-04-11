@@ -102,14 +102,25 @@ function releaseSidebar(animate: boolean = false): void {
 
 function loadAddon(): KirbyNative | null {
   if (native) return native
-  try {
-    const addonPath = join(app.getAppPath(), 'native/build/Release/kirby_native.node')
-    native = require(addonPath) as KirbyNative
-    return native
-  } catch (err) {
-    console.error('[kirby] native addon not found – run `cd native && npx cmake-js build` first:', err)
-    return null
+  // In packaged mode, .node files are unpacked outside app.asar via
+  // electron-builder's `asarUnpack`, so app.getAppPath() (which points at
+  // the asar) needs swapping to app.asar.unpacked.
+  const appPath = app.getAppPath()
+  const unpackedPath = appPath.replace(/app\.asar$/, 'app.asar.unpacked')
+  const candidates = [
+    join(unpackedPath, 'native/build/Release/kirby_native.node'),
+    join(appPath, 'native/build/Release/kirby_native.node'),
+  ]
+  for (const addonPath of candidates) {
+    try {
+      native = require(addonPath) as KirbyNative
+      return native
+    } catch {
+      // try next
+    }
   }
+  console.error('[kirby] native addon not found – run `cd native && npx cmake-js build` first. Tried:', candidates)
+  return null
 }
 
 export function initKirby(mainWindow: BrowserWindow): void {
@@ -125,9 +136,19 @@ export function initKirby(mainWindow: BrowserWindow): void {
   addon.createKirbyWindow(x, y)
 
   const isDev = !app.isPackaged
-  _kirbyUrl = isDev
-    ? 'http://localhost:5173/components/Kirby/kirby.html'
-    : `file://${join(app.getAppPath(), 'dist/renderer/components/Kirby/kirby.html')}`
+  if (isDev) {
+    _kirbyUrl = 'http://localhost:5173/components/Kirby/kirby.html'
+  } else {
+    // Kirby is rendered by a raw WKWebView inside the native addon —
+    // not an Electron BrowserWindow — so the file:// URL has to point
+    // at a real on-disk file, not an entry inside app.asar. We rely on
+    // electron-builder unpacking kirby.html to app.asar.unpacked/ via
+    // the asarUnpack glob in electron-builder.yml.
+    const appPath = app.getAppPath()
+    const unpackedPath = appPath.replace(/app\.asar$/, 'app.asar.unpacked')
+    _kirbyUrl = `file://${join(unpackedPath, 'out/renderer/components/Kirby/kirby.html')}`
+  }
+  console.log('[kirby] loading url:', _kirbyUrl)
   addon.loadContent(_kirbyUrl)
 
   // Bridge native callbacks → Electron main window management

@@ -6,21 +6,83 @@ directories:
   output: release
   buildResources: build
 
+# Files bundled INTO app.asar. electron-vite outputs to out/, so the
+# previous `dist/**` glob was a bug — nothing was being picked up.
+#
+# DO NOT add `!node_modules/**/*` here — electron-builder auto-includes
+# production `dependencies` from package.json when `files` is explicit,
+# but an explicit exclusion overrides that and kills electron-store &
+# friends at runtime with ERR_MODULE_NOT_FOUND.
 files:
-  - dist/**/*
-  - node_modules/**/*
-  - "!node_modules/.cache/**/*"
+  - out/**/*
+  - package.json
+  - native/build/Release/*.node
+
+# Two classes of things can't be read from inside app.asar:
+#   1. .node binaries — Node's dlopen refuses to mmap out of an asar
+#   2. HTML files loaded by the NATIVE kirby WKWebView (it bypasses
+#      Electron's asar protocol handler and goes straight to disk)
+# Both need to live under app.asar.unpacked/.
+asarUnpack:
+  - native/build/Release/*.node
+  - out/renderer/components/Kirby/kirby.html
+
+# Sideloaded resources that DON'T go into app.asar — copied verbatim to
+# Vonvon.app/Contents/Resources/. Includes:
+#   - backend/             : FastAPI source (app/main.py, hermes-agent subtree)
+#   - backend-runtime/     : python-build-standalone + all pip deps
+#                            (produced by scripts/build-runtime.sh)
+#   - native/build/Release : kirby_native.node (also asarUnpacked above)
+extraResources:
+  - from: backend
+    to: backend
+    filter:
+      - "**/*"
+      - "!.venv/**"
+      - "!__pycache__/**"
+      - "!**/__pycache__/**"
+      - "!**/*.pyc"
+      - "!tests/**"
+      - "!hermes-agent/tests/**"
+      - "!hermes-agent/.venv/**"
+      - "!hermes-agent/node_modules/**"
+      - "!hermes-agent/.git/**"
+      - "!hermes-agent/hermes_agent.egg-info/**"
+      - "!hermes-agent/website/**"
+      - "!hermes-agent/landingpage/**"
+      - "!hermes-agent/docs/**"
+      - "!hermes-agent/docker/**"
+      - "!hermes-agent/tinker-atropos/**"
+      - "!hermes-agent/datagen-config-examples/**"
+  - from: .dist/backend-runtime
+    to: backend-runtime
+    filter:
+      - "**/*"
+      - "!**/__pycache__/**"
+      - "!**/*.pyc"
+      - "!**/tests/**"
+      - "!lib/python3.*/test/**"
+      - "!lib/python3.*/idlelib/**"
+      - "!lib/python3.*/ensurepip/**"
+      - "!lib/python3.*/tkinter/**"
+      - "!share/man/**"
 
 mac:
   target:
     - target: dmg
       arch:
-        - universal
-  icon: resources/icon.icns
-  hardenedRuntime: true
+        - arm64
+  icon: build/icon.icns
+  # hardenedRuntime requires notarization to be useful. We're ad-hoc
+  # signing (no Apple Developer account), so leaving hardenedRuntime ON
+  # just blocks the bundled Python interpreter from loading its own
+  # dylibs on the target machine. Turn it off.
+  hardenedRuntime: false
   gatekeeperAssess: false
-  entitlements: build/entitlements.mac.plist
-  entitlementsInherit: build/entitlements.mac.inherit.plist
+  # The bundled python-build-standalone runtime has its own (already
+  # signed) binaries. Let electron-builder re-sign with ad-hoc (-).
+  identity: null
+  minimumSystemVersion: "12.0"
 
 dmg:
   contents:
@@ -31,8 +93,3 @@ dmg:
     - x: 130
       y: 150
       type: file
-
-afterSign: scripts/notarize.js
-
-nativeRebuilder:
-  buildFromSource: true

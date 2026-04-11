@@ -11,10 +11,9 @@ const BACKEND_HOST = '127.0.0.1'
 let backendProc: ChildProcess | null = null
 
 /**
- * Locate the backend directory.
+ * Locate the backend source directory (contains app/main.py).
  *  - Dev:       <repo>/backend
- *  - Packaged:  process.resourcesPath/backend  (must be added via
- *               electron-builder extraResources when packaging)
+ *  - Packaged:  process.resourcesPath/backend  (added via extraResources)
  */
 function resolveBackendDir(): string | null {
   const candidates = [
@@ -28,10 +27,24 @@ function resolveBackendDir(): string | null {
 }
 
 /**
- * Resolve the uvicorn binary inside the project venv. Returns null if no
- * venv is set up; caller can fall back to `python -m uvicorn` via `python`.
+ * Resolve the Python runtime that should run uvicorn.
+ *
+ * Priority:
+ *  1. Packaged bundled runtime: Resources/backend-runtime/bin/python3
+ *     (a python-build-standalone install with backend + hermes-agent
+ *      preinstalled — shipped via electron-builder extraResources)
+ *  2. Dev venv: <repo>/backend/.venv/bin/{uvicorn,python}
+ *
+ * Returns null if no runtime is available.
  */
 function resolveUvicorn(backendDir: string): { cmd: string; args: string[] } | null {
+  // 1. Packaged bundled runtime
+  const bundledPy = join(process.resourcesPath || '', 'backend-runtime', 'bin', 'python3')
+  if (existsSync(bundledPy)) {
+    return { cmd: bundledPy, args: ['-m', 'uvicorn'] }
+  }
+
+  // 2. Dev venv
   const venvUvicorn = join(backendDir, '.venv', 'bin', 'uvicorn')
   if (existsSync(venvUvicorn)) {
     return { cmd: venvUvicorn, args: [] }

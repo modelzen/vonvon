@@ -8,8 +8,21 @@ package-lock.json.bak
 # Electron build artifacts
 out/
 dist/
-build/
+# Ignore CONTENTS of top-level build/ (not the dir itself) so we can
+# re-include the icon sources referenced by electron-builder.yml.
+# git won't descend into a fully-ignored dir, which would make !rules
+# no-ops — see the gitignore manpage.
+/build/*
+!/build/icon.icns
+!/build/icon.svg
+# Nested build/ dirs (submodules / hermes-agent) — list explicitly so
+# the /build/* pattern above doesn't leak into them.
+backend/hermes-agent/build/
 *.app/
+
+# electron-builder packaging staging + output
+.dist/
+release/
 
 # TypeScript incremental build cache
 *.tsbuildinfo
