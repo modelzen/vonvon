@@ -62,7 +62,15 @@ export interface AgentMessage {
   attachments?: AgentAttachment[]
 }
 
-export function useAgentChat(sessionId: string | null | undefined) {
+const DEFAULT_SESSION_NAME_RE = /^会话 \d{2}:\d{2}:\d{2}$/
+
+interface UseAgentChatOpts {
+  sessionName?: string
+  onTitleUpdate?: (title: string) => void
+  onRunCompleted?: () => void
+}
+
+export function useAgentChat(sessionId: string | null | undefined, opts?: UseAgentChatOpts) {
   const { apiFetch } = useBackend()
   const [messages, setMessages] = useState<AgentMessage[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -75,12 +83,18 @@ export function useAgentChat(sessionId: string | null | undefined) {
   // append deltas here for the current in-flight run.
   const [thinking, setThinking] = useState('')
   const abortRef = useRef<AbortController | null>(null)
+  // Avoid stale closure: always read the latest opts inside callbacks.
+  const optsRef = useRef(opts)
+  optsRef.current = opts
+  // Fire auto-title once per session (reset when sessionId changes).
+  const hasSummarizedRef = useRef(false)
 
   // Reset + load history whenever the active session changes.
   useEffect(() => {
     // Abort any in-flight streaming request from the previous session.
     abortRef.current?.abort()
     abortRef.current = null
+    hasSummarizedRef.current = false
     setMessages([])
     setIsLoading(false)
     setThinking('')
@@ -420,6 +434,31 @@ export function useAgentChat(sessionId: string | null | undefined) {
                 writeCachedUsage(sessionId, pct)
                 setIsLoading(false)
                 setThinking('')
+                optsRef.current?.onRunCompleted?.()
+                // Auto-title: fire once for default-named sessions after first run.
+                if (
+                  !hasSummarizedRef.current &&
+                  optsRef.current?.sessionName &&
+                  DEFAULT_SESSION_NAME_RE.test(optsRef.current.sessionName)
+                ) {
+                  hasSummarizedRef.current = true
+                  void (async () => {
+                    const autoTitle = await window.electron?.storeGet?.('autoTitleEnabled')
+                    if (autoTitle === false) return
+                    const titleModel = await window.electron?.storeGet?.('titleSummaryModel') as
+                      { model: string; provider: string } | null | undefined
+                    try {
+                      const r = await apiFetch(`/api/sessions/${sessionId}/summarize`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(titleModel ?? {}),
+                      })
+                      if (!r.ok) return
+                      const result = (await r.json()) as { name?: string }
+                      if (result.name) optsRef.current?.onTitleUpdate?.(result.name)
+                    } catch { /* silent */ }
+                  })()
+                }
               } else if (currentEvent === 'run.failed') {
                 setMessages((prev) =>
                   prev.map((m) =>

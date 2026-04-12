@@ -15,9 +15,17 @@ import { AgentModelSelector } from './components/Chat/AgentModelSelector'
 const isFloatingWindow = window.location.hash === '#floating'
 
 function App(): React.ReactElement {
-  const { activeSession, newTab } = useSession()
+  const { activeSession, newTab, updateSessionName, touchSession } = useSession()
   const { messages: agentMessages, isLoading, usagePercent, sendMessage, thinking, stop } =
-    useAgentChat(activeSession?.id)
+    useAgentChat(activeSession?.id, {
+      sessionName: activeSession?.name,
+      onTitleUpdate: (title) => {
+        if (activeSession) updateSessionName(activeSession.id, title)
+      },
+      onRunCompleted: () => {
+        if (activeSession) touchSession(activeSession.id)
+      },
+    })
   const [displayPercent, setDisplayPercent] = useState(0)
   // Bumps each time the main process tells us the sidebar was (re)shown,
   // so we can replay the entry animation even though the React tree doesn't

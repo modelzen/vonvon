@@ -4,6 +4,7 @@ import { HermesModelPanel } from './HermesModelPanel'
 import { HermesAuthPanel } from './HermesAuthPanel'
 import { McpServerPanel } from './McpServerPanel'
 import { SkillsPanel } from './SkillsPanel'
+import { ChatPreferencesPanel } from './ChatPreferencesPanel'
 import {
   pageStyle,
   headerStyle,
@@ -30,6 +31,7 @@ export function SettingsPanel(): React.ReactElement {
       <div style={scrollAreaStyle}>
         <HermesAuthPanel />
         <HermesModelPanel />
+        <ChatPreferencesPanel />
         <McpServerPanel />
         <SkillsPanel />
         <AboutSection />

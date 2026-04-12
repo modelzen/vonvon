@@ -5,6 +5,16 @@ import os
 
 from app.schemas import SessionRequest
 from app.services import session_service, workspace_service
+from pydantic import BaseModel
+
+
+class RenameRequest(BaseModel):
+    name: str
+
+
+class SummarizeRequest(BaseModel):
+    model: str | None = None
+    provider: str | None = None
 
 router = APIRouter()
 
@@ -37,6 +47,22 @@ async def reset_session(session_id: str):
 @router.get("/api/sessions/{session_id}/usage")
 async def get_usage(session_id: str):
     return session_service.get_usage(session_id)
+
+
+@router.patch("/api/sessions/{session_id}")
+async def rename_session(session_id: str, req: RenameRequest):
+    session_service.rename_session(session_id, req.name)
+    return {"id": session_id, "name": req.name}
+
+
+@router.post("/api/sessions/{session_id}/summarize")
+async def summarize_session_title(session_id: str, req: SummarizeRequest = SummarizeRequest()):
+    title = await session_service.summarize_title(
+        session_id, model=req.model, provider=req.provider
+    )
+    if not title:
+        raise HTTPException(status_code=422, detail="Could not generate title")
+    return {"id": session_id, "name": title}
 
 
 @router.get("/api/sessions/{session_id}/messages")

@@ -16,6 +16,8 @@ interface SessionContextValue {
   switchSession: (session: Session) => void
   deleteSession: (id: string) => Promise<void>
   resetSession: (id: string) => Promise<void>
+  updateSessionName: (id: string, name: string) => void
+  touchSession: (id: string) => void
   // Tab bar state
   openTabs: string[]
   activeTabId: string | null
@@ -186,6 +188,16 @@ export function SessionProvider({ children }: { children: React.ReactNode }): Re
     [apiFetch, activeSession]
   )
 
+  const updateSessionName = useCallback((id: string, name: string) => {
+    setSessions(prev => prev.map(s => s.id === id ? { ...s, name } : s))
+    setActiveSession(prev => prev?.id === id ? { ...prev, name } : prev)
+  }, [])
+
+  const touchSession = useCallback((id: string) => {
+    const now = Date.now() / 1000
+    setSessions(prev => prev.map(s => s.id === id ? { ...s, last_active: now } : s))
+  }, [])
+
   const resetSession = useCallback(
     async (id: string) => {
       try {
@@ -205,6 +217,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }): Re
     switchSession,
     deleteSession,
     resetSession,
+    updateSessionName,
+    touchSession,
     openTabs,
     activeTabId,
     openTab,
