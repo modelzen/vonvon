@@ -442,20 +442,24 @@ export function useAgentChat(sessionId: string | null | undefined, opts?: UseAge
                   DEFAULT_SESSION_NAME_RE.test(optsRef.current.sessionName)
                 ) {
                   hasSummarizedRef.current = true
+                  // Capture session-specific values now, before any await,
+                  // so a session switch mid-flight doesn't corrupt another session.
+                  const onTitleUpdate = optsRef.current?.onTitleUpdate
+                  const capturedSessionId = sessionId
                   void (async () => {
                     const autoTitle = await window.electron?.storeGet?.('autoTitleEnabled')
                     if (autoTitle === false) return
                     const titleModel = await window.electron?.storeGet?.('titleSummaryModel') as
                       { model: string; provider: string } | null | undefined
                     try {
-                      const r = await apiFetch(`/api/sessions/${sessionId}/summarize`, {
+                      const r = await apiFetch(`/api/sessions/${capturedSessionId}/summarize`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(titleModel ?? {}),
                       })
                       if (!r.ok) return
                       const result = (await r.json()) as { name?: string }
-                      if (result.name) optsRef.current?.onTitleUpdate?.(result.name)
+                      if (result.name) onTitleUpdate?.(result.name)
                     } catch { /* silent */ }
                   })()
                 }

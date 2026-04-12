@@ -30,6 +30,9 @@ interface StoreSchema {
   // Tab bar persistence
   openTabs: string[]
   activeTabId: string | null
+  // Auto-title feature
+  autoTitleEnabled: boolean
+  titleSummaryModel: { model: string; provider: string } | null
 }
 
 export class ChatStore {
@@ -53,7 +56,9 @@ export class ChatStore {
             backendEnabled: true,
             modelWhitelist: [],
             openTabs: [],
-            activeTabId: null
+            activeTabId: null,
+            autoTitleEnabled: true,
+            titleSummaryModel: null
           }
         })
       })()
@@ -194,6 +199,31 @@ export class ChatStore {
   async setActiveTabId(id: string | null): Promise<void> {
     const store = await this.ensureStore()
     store.set('activeTabId', id)
+  }
+
+  async getAutoTitleEnabled(): Promise<boolean> {
+    const store = await this.ensureStore()
+    const val = store.get('autoTitleEnabled') as unknown
+    return typeof val === 'boolean' ? val : true
+  }
+
+  async setAutoTitleEnabled(enabled: boolean): Promise<void> {
+    const store = await this.ensureStore()
+    store.set('autoTitleEnabled', enabled)
+  }
+
+  async getTitleSummaryModel(): Promise<{ model: string; provider: string } | null> {
+    const store = await this.ensureStore()
+    const val = store.get('titleSummaryModel') as unknown
+    if (val && typeof val === 'object' && typeof (val as any).model === 'string') {
+      return val as { model: string; provider: string }
+    }
+    return null
+  }
+
+  async setTitleSummaryModel(val: { model: string; provider: string } | null): Promise<void> {
+    const store = await this.ensureStore()
+    store.set('titleSummaryModel', val ?? null)
   }
 }
 

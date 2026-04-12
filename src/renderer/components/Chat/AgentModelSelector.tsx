@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useHermesConfig, ProviderInfo } from '../../hooks/useHermesConfig'
+import { useSession } from '../../contexts/SessionContext'
 
 /**
  * Agent-mode model picker shown in the chat page header.
@@ -12,8 +13,11 @@ import { useHermesConfig, ProviderInfo } from '../../hooks/useHermesConfig'
  * Grouped by provider via `<optgroup>` for clarity when multiple providers
  * expose models simultaneously.
  */
+const SESSION_MODEL_KEY = (sid: string) => `vonvon:session-model:${sid}`
+
 export function AgentModelSelector(): React.ReactElement {
   const { listModels, switchModel } = useHermesConfig()
+  const { activeSession } = useSession()
 
   const [providers, setProviders] = useState<ProviderInfo[]>([])
   const [whitelist, setWhitelist] = useState<Set<string>>(new Set())
@@ -32,6 +36,10 @@ export function AgentModelSelector(): React.ReactElement {
   const switchModelRef = useRef(switchModel)
   listModelsRef.current = listModels
   switchModelRef.current = switchModel
+
+  // Keep latest providers accessible in effects without adding to deps.
+  const providersRef = useRef(providers)
+  providersRef.current = providers
 
   // True while a user-initiated switch is in flight. When set, the periodic
   // (focus-triggered) refresh skips updating `current` so it can't clobber
@@ -70,6 +78,22 @@ export function AgentModelSelector(): React.ReactElement {
     }
   }, [])
 
+  // When the active session changes, restore that session's saved model.
+  // Uses localStorage so the preference survives page reloads without
+  // requiring any backend schema changes.
+  useEffect(() => {
+    const sid = activeSession?.id
+    if (!sid || switchingRef.current) return
+    const stored = localStorage.getItem(SESSION_MODEL_KEY(sid))
+    if (!stored) return
+    setCurrent(stored)
+    switchingRef.current = true
+    const owner = providersRef.current.find((p) => p.models.includes(stored))
+    switchModelRef.current({ model: stored, provider: owner?.slug, persist: true })
+      .catch(() => {})
+      .finally(() => { switchingRef.current = false })
+  }, [activeSession?.id])
+
   // Build the grouped option list, keeping only whitelisted models.
   const groups = useMemo(() => {
     return providers
@@ -98,6 +122,10 @@ export function AgentModelSelector(): React.ReactElement {
     setCurrent(value)
     setError(null)
     switchingRef.current = true
+    // Persist per-session model preference so switching tabs restores it.
+    const sid = activeSession?.id
+    const prevStored = sid ? localStorage.getItem(SESSION_MODEL_KEY(sid)) : null
+    if (sid) localStorage.setItem(SESSION_MODEL_KEY(sid), value)
     const owner = providers.find((p) => p.models.includes(value))
     try {
       await switchModelRef.current({
@@ -108,6 +136,10 @@ export function AgentModelSelector(): React.ReactElement {
     } catch (err: any) {
       setError(err?.message ?? 'switch failed')
       setCurrent(previous)
+      if (sid) {
+        if (prevStored) localStorage.setItem(SESSION_MODEL_KEY(sid), prevStored)
+        else localStorage.removeItem(SESSION_MODEL_KEY(sid))
+      }
     } finally {
       switchingRef.current = false
     }

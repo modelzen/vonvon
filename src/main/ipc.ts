@@ -65,6 +65,8 @@ export function registerIpcHandlers(): void {
     if (key === 'modelWhitelist') return chatStore.getModelWhitelist()
     if (key === 'openTabs') return chatStore.getOpenTabs()
     if (key === 'activeTabId') return chatStore.getActiveTabId()
+    if (key === 'autoTitleEnabled') return chatStore.getAutoTitleEnabled()
+    if (key === 'titleSummaryModel') return chatStore.getTitleSummaryModel()
     return null
   })
 
@@ -81,6 +83,15 @@ export function registerIpcHandlers(): void {
       await chatStore.setOpenTabs(Array.isArray(value) ? (value as string[]) : [])
     } else if (key === 'activeTabId') {
       await chatStore.setActiveTabId(typeof value === 'string' ? value : null)
+    } else if (key === 'autoTitleEnabled') {
+      await chatStore.setAutoTitleEnabled(typeof value === 'boolean' ? value : true)
+    } else if (key === 'titleSummaryModel') {
+      const m = value as any
+      await chatStore.setTitleSummaryModel(
+        m && typeof m === 'object' && typeof m.model === 'string'
+          ? (m as { model: string; provider: string })
+          : null
+      )
     }
   })
 

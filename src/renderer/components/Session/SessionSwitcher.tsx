@@ -24,7 +24,7 @@ export function SessionSwitcher(): React.ReactElement {
 
   const handleStartNew = () => {
     setCreating(true)
-    setNewName(`会话 ${new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`)
+    setNewName(`会话 ${new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}`)
   }
 
   const handleConfirmNew = async () => {
