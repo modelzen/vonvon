@@ -39,6 +39,7 @@ static const NSTimeInterval kDockedTrackingInterval = 1.0 / 30.0;
     //      chat" window being also layer 0 on some builds).
     CGRect best = CGRectZero;
     CGFloat bestArea = 0;
+    CGWindowID bestID = kCGNullWindowID;
     NSArray *windows = (__bridge_transfer NSArray *)list;
     for (NSDictionary *info in windows) {
         NSString *owner = info[(__bridge NSString *)kCGWindowOwnerName];
@@ -58,8 +59,14 @@ static const NSTimeInterval kDockedTrackingInterval = 1.0 / 30.0;
         if (area > bestArea) {
             best = bounds;
             bestArea = area;
+            NSNumber *wid = info[(__bridge NSString *)kCGWindowNumber];
+            bestID = wid ? (CGWindowID)[wid unsignedIntValue] : kCGNullWindowID;
         }
     }
+    // Cache the window ID so isFeishuAnchorOccluded can identify the main
+    // Feishu window by ID instead of by exact bounds, avoiding a race where
+    // two CGWindowListCopyWindowInfo calls see different positions.
+    self.lastFeishuWindowID = bestID;
     return best;
 }
 
@@ -161,6 +168,8 @@ static const NSTimeInterval kDockedTrackingInterval = 1.0 / 30.0;
     pid_t myPid = getpid();
     NSArray *windows = (__bridge_transfer NSArray *)list;
 
+    CGWindowID feishuWID = self.lastFeishuWindowID;
+
     for (NSDictionary *info in windows) {
         NSNumber *ownerPidN = info[(__bridge NSString *)kCGWindowOwnerPID];
         if (ownerPidN && (pid_t)[ownerPidN intValue] == myPid) continue;
@@ -168,22 +177,28 @@ static const NSTimeInterval kDockedTrackingInterval = 1.0 / 30.0;
         NSNumber *layer = info[(__bridge NSString *)kCGWindowLayer];
         if (layer && [layer intValue] != 0) continue;
 
-        NSDictionary *bd = info[(__bridge NSString *)kCGWindowBounds];
-        CGRect bounds = CGRectZero;
-        if (!CGRectMakeWithDictionaryRepresentation((__bridge CFDictionaryRef)bd, &bounds)) continue;
+        // Identify the Feishu main window by cached window ID — more reliable
+        // than comparing bounds when Feishu is moving (two separate
+        // CGWindowListCopyWindowInfo snapshots may disagree on position).
+        NSNumber *widN = info[(__bridge NSString *)kCGWindowNumber];
+        if (feishuWID != kCGNullWindowID && widN &&
+            (CGWindowID)[widN unsignedIntValue] == feishuWID) {
+            // Reached the main Feishu window without any occluder — we're clear.
+            return NO;
+        }
 
         NSString *owner = info[(__bridge NSString *)kCGWindowOwnerName];
         BOOL isFeishuOwner = [owner isEqualToString:@"Lark"]   ||
                              [owner isEqualToString:@"Feishu"] ||
                              [owner isEqualToString:@"飞书"];
 
-        // Reached the main Feishu window without any occluder — we're clear.
-        if (isFeishuOwner && CGRectEqualToRect(bounds, feishuBounds)) {
-            return NO;
-        }
         // Other Feishu sub-windows (tooltips, dropdowns, etc.) don't count
         // as occluders — the user is still actively using Feishu.
         if (isFeishuOwner) continue;
+
+        NSDictionary *bd = info[(__bridge NSString *)kCGWindowBounds];
+        CGRect bounds = CGRectZero;
+        if (!CGRectMakeWithDictionaryRepresentation((__bridge CFDictionaryRef)bd, &bounds)) continue;
 
         if (CGRectIntersectsRect(bounds, target)) {
             return YES;
@@ -246,13 +261,10 @@ static const NSTimeInterval kDockedTrackingInterval = 1.0 / 30.0;
         [panel setFrameOrigin:newOrigin];
     }
 
-    // First move after a window drag starts → collapse the sidebar so the
-    // user's feishu window stays clean. Subsequent ticks within the same
-    // drag are already collapsed and only update the ball origin.
+    // Feishu moved/resized while sidebar is expanded — notify JS to reposition
+    // the sidebar so it follows the Feishu window. State stays dockedExpanded.
     if (st == KirbyStateDockedExpanded) {
-        [KirbyWindow shared].state = KirbyStateDockedCollapsed;
-        [[KirbyWindow shared] setForm:@"dockedCollapsed"];
-        if (self.onCollapseSidebar) self.onCollapseSidebar();
+        if (self.onFeishuMoved) self.onFeishuMoved(cur);
     }
 }
 

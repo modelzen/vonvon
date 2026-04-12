@@ -16,6 +16,7 @@ static napi_threadsafe_function g_rightClickFn     = nullptr;
 static napi_threadsafe_function g_dockedClickFn    = nullptr;
 static napi_threadsafe_function g_dragLeaveFn      = nullptr;
 static napi_threadsafe_function g_collapseSidebarFn = nullptr;
+static napi_threadsafe_function g_feishuMovedFn    = nullptr;
 
 // CallJs: snap-proximity  (data = heap-alloc'd double*)
 static void CallSnapProximity(napi_env env, napi_value jsCb,
@@ -273,6 +274,27 @@ Napi::Value OnCollapseSidebar(const Napi::CallbackInfo& info) {
     return info.Env().Undefined();
 }
 
+// Native → JS: Feishu window moved/resized while dockedExpanded. Carries the
+// new Feishu bounds so JS can reposition the sidebar without hiding it.
+Napi::Value OnFeishuMoved(const Napi::CallbackInfo& info) {
+    napi_env env = info.Env();
+    if (g_feishuMovedFn) {
+        napi_release_threadsafe_function(g_feishuMovedFn, napi_tsfn_release);
+        g_feishuMovedFn = nullptr;
+    }
+    g_feishuMovedFn = MakeTsfn(env, static_cast<napi_value>(info[0]),
+                                "FeishuMoved", CallSnapCompleteWithBounds);
+    [SnapEngine shared].onFeishuMoved = ^(CGRect newBounds) {
+        if (g_feishuMovedFn) {
+            FeishuBounds *b = new FeishuBounds{
+                newBounds.origin.x, newBounds.origin.y,
+                newBounds.size.width, newBounds.size.height};
+            napi_call_threadsafe_function(g_feishuMovedFn, b, napi_tsfn_nonblocking);
+        }
+    };
+    return info.Env().Undefined();
+}
+
 // ── Module init ─────────────────────────────────────────────────────────────
 
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
@@ -289,6 +311,7 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("onDockedClick",     Napi::Function::New(env, OnDockedClick));
     exports.Set("onDragLeave",       Napi::Function::New(env, OnDragLeave));
     exports.Set("onCollapseSidebar", Napi::Function::New(env, OnCollapseSidebar));
+    exports.Set("onFeishuMoved",     Napi::Function::New(env, OnFeishuMoved));
     exports.Set("setKirbyForm",      Napi::Function::New(env, SetKirbyForm));
     exports.Set("collapseSidebar",   Napi::Function::New(env, CollapseSidebar));
     return exports;

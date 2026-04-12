@@ -27,6 +27,7 @@ type KirbyNative = {
   onDockedClick?(cb: (feishuBounds: FeishuBounds) => void): void
   onDragLeave?(cb: () => void): void
   onCollapseSidebar?(cb: () => void): void
+  onFeishuMoved?(cb: (feishuBounds: FeishuBounds) => void): void
   detachToFloating(): void
   setKirbyForm?(form: KirbyForm): void
   collapseSidebar?(): void
@@ -211,12 +212,12 @@ export function initKirby(mainWindow: BrowserWindow): void {
     })
   }
 
-  // Feishu window moved/resized while dockedExpanded → native already
-  // collapsed state + form and kept the ball glued to the new corner.
-  // Animate the sidebar collapse (releaseSidebar(true) sends sidebar-hide).
-  if (typeof addon.onCollapseSidebar === 'function') {
-    addon.onCollapseSidebar(() => {
-      releaseSidebar(true)
+  // Feishu window moved/resized while dockedExpanded → reposition the sidebar
+  // so it follows the Feishu window without hiding.
+  if (typeof addon.onFeishuMoved === 'function') {
+    addon.onFeishuMoved((feishuBounds: FeishuBounds) => {
+      _lastFeishuBounds = feishuBounds
+      applySidebarBounds(feishuBounds)
     })
   }
 
