@@ -33,6 +33,26 @@ async def list_models():
     except Exception as exc:
         logger.warning("list_authenticated_providers failed: %s", exc)
         providers = []
+
+    # For openai-codex, prefer live-discovered model IDs over the curated subset.
+    for provider in providers:
+        if not isinstance(provider, dict) or provider.get("slug") != "openai-codex":
+            continue
+        try:
+            from agent.credential_pool import load_pool
+            from hermes_cli.codex_models import get_codex_model_ids
+
+            cred = load_pool("openai-codex").peek()
+            access_token = getattr(cred, "access_token", None) if cred else None
+            live_models = get_codex_model_ids(access_token=access_token)
+            if live_models:
+                provider["models"] = live_models
+                provider["total_models"] = len(live_models)
+                provider["source"] = "codex-live"
+        except Exception as exc:
+            logger.warning("openai-codex live discovery failed: %s", exc)
+        break
+
     return {
         "providers": providers,
         "current": agent_service.get_current_model(),
