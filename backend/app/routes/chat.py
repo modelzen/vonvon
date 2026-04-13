@@ -53,6 +53,7 @@ async def send_message(req: ChatRequest):
                         "tool": tool_name,
                         "duration": round(kwargs.get("duration", 0), 3),
                         "error": kwargs.get("is_error", False),
+                        "result": kwargs.get("result"),
                     },
                 })
 

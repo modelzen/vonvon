@@ -407,7 +407,11 @@ export function useAgentChat(sessionId: string | null | undefined, opts?: UseAge
                       ? {
                           ...m,
                           toolStatus: (data.error ? 'failed' : 'completed') as 'completed' | 'failed',
-                          toolDuration: data.duration as number | undefined
+                          toolDuration: data.duration as number | undefined,
+                          toolPreview:
+                            typeof data.result === 'string' && data.result.trim()
+                              ? (data.result as string)
+                              : m.toolPreview
                         }
                       : m
                   )

@@ -10,8 +10,49 @@ interface Props {
   thinking?: string
 }
 
+interface TodoItem {
+  id: string
+  content: string
+  status: 'pending' | 'in_progress' | 'completed' | 'cancelled'
+}
+
+interface TodoPayload {
+  todos: TodoItem[]
+  summary?: {
+    total?: number
+    pending?: number
+    in_progress?: number
+    completed?: number
+    cancelled?: number
+  }
+}
+
 function flattenContent(content: string): string {
   return content.replace(/\s*\n+\s*/g, ' ').trim()
+}
+
+function parseTodoPayload(preview: string): TodoPayload | null {
+  const trimmed = preview.trim()
+  if (!trimmed) return null
+
+  const tryParse = (text: string): TodoPayload | null => {
+    try {
+      const parsed = JSON.parse(text) as TodoPayload
+      if (!parsed || !Array.isArray(parsed.todos)) return null
+      return parsed
+    } catch {
+      return null
+    }
+  }
+
+  const direct = tryParse(trimmed)
+  if (direct) return direct
+
+  const jsonStart = trimmed.indexOf('{')
+  const jsonEnd = trimmed.lastIndexOf('}')
+  if (jsonStart === -1 || jsonEnd === -1 || jsonEnd <= jsonStart) return null
+
+  return tryParse(trimmed.slice(jsonStart, jsonEnd + 1))
 }
 
 // Custom markdown component map. The primary job here is to intercept
@@ -138,6 +179,154 @@ function TypingDots(): React.ReactElement {
   )
 }
 
+function TodoStatusGlyph({
+  status
+}: {
+  status: TodoItem['status']
+}): React.ReactElement {
+  if (status === 'completed') {
+    return (
+      <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+        <circle cx="9" cy="9" r="7.25" fill="#10151d" />
+        <path
+          d="M5.3 9.15 7.55 11.35 12.55 6.45"
+          fill="none"
+          stroke="#fff"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    )
+  }
+
+  if (status === 'in_progress') {
+    return (
+      <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+        <circle cx="9" cy="9" r="7.2" fill="#fff" stroke="#111827" strokeWidth="1.5" />
+        <circle cx="9" cy="9" r="3.1" fill="#111827">
+          <animate
+            attributeName="opacity"
+            values="0.45;1;0.45"
+            dur="1.2s"
+            repeatCount="indefinite"
+          />
+        </circle>
+      </svg>
+    )
+  }
+
+  if (status === 'cancelled') {
+    return (
+      <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+        <circle cx="9" cy="9" r="7.2" fill="#fff" stroke="#d0d5dd" strokeWidth="1.4" />
+        <path
+          d="M6.2 6.2 11.8 11.8M11.8 6.2 6.2 11.8"
+          stroke="#b8bec7"
+          strokeWidth="1.45"
+          strokeLinecap="round"
+        />
+      </svg>
+    )
+  }
+
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+      <circle cx="9" cy="9" r="7.2" fill="#fff" stroke="#c8ced6" strokeWidth="1.4" />
+    </svg>
+  )
+}
+
+function TodoPanel({ msg }: { msg: AgentMessage }): React.ReactElement | null {
+  const payload = parseTodoPayload(msg.toolPreview || '')
+  if (!payload || payload.todos.length === 0) return null
+
+  const total = payload.summary?.total ?? payload.todos.length
+  const completedCount =
+    payload.summary?.completed ?? payload.todos.filter((item) => item.status === 'completed').length
+  const activeItem = payload.todos.find((item) => item.status === 'in_progress')
+
+  return (
+    <div className="vonvon-todo-card">
+      <div className="vonvon-todo-header">
+        <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+          <path
+            d="M4.2 4.8h9.8M8 8.9h6M8 13h4.1"
+            fill="none"
+            stroke="#7c8592"
+            strokeWidth="1.4"
+            strokeLinecap="round"
+          />
+          <path
+            d="M2.8 4.5 3.6 5.3 5.2 3.7M2.8 8.8 3.6 9.6 5.2 8M2.8 13.1 3.6 13.9 5.2 12.3"
+            fill="none"
+            stroke="#7c8592"
+            strokeWidth="1.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+        <div className="vonvon-todo-header-copy">
+          <span className="vonvon-todo-title">
+            共 {total} 个任务，已经完成 {completedCount} 个
+          </span>
+          {msg.toolStatus === 'running' && (
+            <span className="vonvon-todo-subtitle">正在生成任务清单</span>
+          )}
+        </div>
+        <span className="vonvon-todo-expand" aria-hidden="true">
+          <svg width="14" height="14" viewBox="0 0 14 14">
+            <path
+              d="M4.5 9.5 9.6 4.4M6.4 4.4h3.2v3.2"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </span>
+      </div>
+
+      <div className="vonvon-todo-list">
+        {payload.todos.map((item, index) => {
+          const contentClass = [
+            'vonvon-todo-content',
+            item.status === 'completed' ? 'is-completed' : '',
+            item.status === 'in_progress' ? 'is-active' : ''
+          ]
+            .filter(Boolean)
+            .join(' ')
+
+          return (
+            <div key={`${item.id || 'todo'}-${index}`} className="vonvon-todo-row">
+              <span className="vonvon-todo-bullet">
+                <TodoStatusGlyph status={item.status} />
+              </span>
+              <span className="vonvon-todo-order">{index + 1}.</span>
+              <div>
+                <div className={contentClass}>{item.content}</div>
+                {item.status === 'in_progress' && (
+                  <div className="vonvon-todo-status-note">当前进行中</div>
+                )}
+                {item.status === 'cancelled' && (
+                  <div className="vonvon-todo-status-note">已取消</div>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      <div className="vonvon-todo-meta">
+        <span>{msg.toolName || 'todo'}</span>
+        {msg.toolDuration && msg.toolDuration > 0 && <span>· {msg.toolDuration}s</span>}
+        {activeItem && <span>· 正在推进第 {payload.todos.indexOf(activeItem) + 1} 项</span>}
+      </div>
+    </div>
+  )
+}
+
 function renderMessage(msg: AgentMessage, isLoading: boolean): React.ReactElement | null {
   if (msg.role === 'user') {
     return (
@@ -235,6 +424,11 @@ function renderMessage(msg: AgentMessage, isLoading: boolean): React.ReactElemen
 // These behaviours mirror the reference OpenAI/Claude tool UX the user
 // pointed at.
 function ToolCard({ msg }: { msg: AgentMessage }): React.ReactElement {
+  if (msg.toolName === 'todo') {
+    const todoPanel = <TodoPanel msg={msg} />
+    if (todoPanel) return todoPanel
+  }
+
   const isFailed = msg.toolStatus === 'failed'
   const isRunning = msg.toolStatus === 'running'
   const preview = msg.toolPreview && msg.toolPreview.trim() ? msg.toolPreview : ''

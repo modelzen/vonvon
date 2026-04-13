@@ -68,3 +68,134 @@ body {
 .vonvon-md th { background: #fff5f9; font-weight: 700; }
 
 .vonvon-tab-bar-scroll::-webkit-scrollbar { display: none; }
+
+.vonvon-todo-card {
+  position: relative;
+  margin: 8px 0 14px;
+  padding: 16px 18px 14px;
+  border-radius: 22px;
+  border: 1px solid rgba(16, 24, 40, 0.08);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.98), rgba(251,252,253,0.96)),
+    radial-gradient(circle at top right, rgba(255, 20, 147, 0.05), transparent 34%);
+  box-shadow:
+    0 12px 30px rgba(16, 24, 40, 0.06),
+    inset 0 1px 0 rgba(255,255,255,0.9);
+}
+
+.vonvon-todo-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    linear-gradient(135deg, rgba(255,255,255,0.55), transparent 36%),
+    radial-gradient(circle at 85% 12%, rgba(255,255,255,0.85), transparent 24%);
+}
+
+.vonvon-todo-header {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  color: #7c8592;
+}
+
+.vonvon-todo-header-copy {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.vonvon-todo-title {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: #7c8592;
+}
+
+.vonvon-todo-subtitle {
+  font-size: 12px;
+  color: #a0a7b0;
+}
+
+.vonvon-todo-expand {
+  margin-left: auto;
+  color: #a3acb7;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.vonvon-todo-list {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.vonvon-todo-row {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  gap: 10px;
+  align-items: start;
+  color: #1f2430;
+}
+
+.vonvon-todo-bullet {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 3px;
+}
+
+.vonvon-todo-order {
+  min-width: 18px;
+  margin-top: 1px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #9aa3ad;
+}
+
+.vonvon-todo-content {
+  font-size: 13px;
+  line-height: 1.45;
+  letter-spacing: -0.01em;
+}
+
+.vonvon-todo-content.is-completed {
+  color: #8f98a3;
+  text-decoration: line-through;
+  text-decoration-color: rgba(143, 152, 163, 0.5);
+}
+
+.vonvon-todo-content.is-active {
+  color: #141922;
+  font-weight: 600;
+}
+
+.vonvon-todo-status-note {
+  margin-top: 3px;
+  font-size: 11px;
+  color: #a0a7b0;
+}
+
+.vonvon-todo-meta {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(16, 24, 40, 0.06);
+  font-size: 11px;
+  color: #a0a7b0;
+}
