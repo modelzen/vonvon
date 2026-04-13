@@ -1,0 +1,638 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Shell Ribbon Type Color Variants</title>
+    <style>
+      * { box-sizing: border-box; }
+      html, body { margin: 0; min-height: 100%; }
+
+      body {
+        font-family: "Avenir Next", "SF Pro Text", "PingFang SC", sans-serif;
+        background:
+          radial-gradient(circle at top left, rgba(255, 132, 189, 0.12), transparent 22%),
+          radial-gradient(circle at top right, rgba(255, 212, 228, 0.16), transparent 28%),
+          linear-gradient(180deg, #fff9fc, #fff4f9);
+        color: #2a2029;
+      }
+
+      .page {
+        width: min(1480px, calc(100vw - 48px));
+        margin: 0 auto;
+        padding: 42px 0 84px;
+      }
+
+      .hero {
+        display: grid;
+        gap: 14px;
+        margin-bottom: 28px;
+      }
+
+      .eyebrow {
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.18em;
+        color: #cb4b84;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(34px, 5vw, 60px);
+        line-height: 0.95;
+        letter-spacing: -0.06em;
+        font-weight: 700;
+      }
+
+      .hero p {
+        margin: 0;
+        max-width: 860px;
+        color: #766878;
+        font-size: 16px;
+        line-height: 1.65;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 22px;
+      }
+
+      .option {
+        position: relative;
+        overflow: hidden;
+        border-radius: 28px;
+        padding: 18px;
+        background: rgba(255, 255, 255, 0.82);
+        border: 1px solid rgba(228, 190, 209, 0.42);
+        box-shadow:
+          0 28px 60px rgba(138, 80, 108, 0.1),
+          inset 0 1px 0 rgba(255,255,255,0.92);
+      }
+
+      .option::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+          radial-gradient(circle at top right, rgba(255, 174, 208, 0.16), transparent 32%),
+          linear-gradient(180deg, rgba(255,255,255,0.24), transparent 28%);
+        pointer-events: none;
+      }
+
+      .option > * {
+        position: relative;
+        z-index: 1;
+      }
+
+      .meta {
+        display: grid;
+        gap: 8px;
+        margin-bottom: 16px;
+      }
+
+      .meta-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      .id {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.16em;
+        color: #d1457d;
+      }
+
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: rgba(28, 18, 24, 0.05);
+        color: #6c6070;
+        font-size: 12px;
+      }
+
+      h2 {
+        margin: 0;
+        font-size: 28px;
+        line-height: 1;
+        letter-spacing: -0.06em;
+      }
+
+      .meta p {
+        margin: 0;
+        color: #786b79;
+        font-size: 14px;
+        line-height: 1.6;
+      }
+
+      .surface {
+        border-radius: 24px;
+        overflow: hidden;
+        background:
+          linear-gradient(180deg, rgba(255,255,255,0.92), rgba(255,247,250,0.9));
+        border: 1px solid rgba(255,255,255,0.82);
+      }
+
+      .topbar {
+        height: 56px;
+        display: grid;
+        grid-template-columns: 100px 1fr 76px;
+        padding: 0 16px;
+        align-items: center;
+        background:
+          linear-gradient(180deg, rgba(255,255,255,0.94), rgba(255,247,251,0.82));
+        border-bottom: 1px solid rgba(255, 113, 176, 0.14);
+      }
+
+      .traffic {
+        display: flex;
+        gap: 10px;
+      }
+
+      .traffic span {
+        width: 18px;
+        height: 18px;
+        border-radius: 999px;
+      }
+
+      .tabs {
+        height: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: end;
+        gap: 10px;
+      }
+
+      .tab {
+        height: 100%;
+        min-width: 140px;
+        padding: 0 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        color: #baaeb8;
+        border-left: 1px solid rgba(255, 112, 176, 0.12);
+        border-right: 1px solid rgba(255, 112, 176, 0.12);
+      }
+
+      .tab.active {
+        color: #d93b81;
+      }
+
+      .tab-label {
+        font-size: 15px;
+        font-weight: 650;
+        letter-spacing: -0.03em;
+      }
+
+      .body {
+        padding: 18px 18px 16px;
+        min-height: 560px;
+      }
+
+      .send-row {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 18px;
+      }
+
+      .bubble {
+        max-width: 88%;
+        padding: 16px 18px;
+        border-radius: 28px;
+        background: linear-gradient(135deg, #fff4f8, #ffedf4 58%, #ffe7f1);
+        border: 1px solid rgba(255, 132, 189, 0.42);
+        box-shadow: 0 16px 28px rgba(255, 164, 205, 0.15);
+      }
+
+      .token-wrap {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .token {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        min-height: 36px;
+        padding: 0 13px;
+        border-radius: 999px;
+        background: rgba(219, 59, 129, 0.09);
+        border: 1px solid rgba(219, 59, 129, 0.12);
+        color: #7c3156;
+      }
+
+      .token-mark {
+        font-family: "SF Mono", "JetBrains Mono", monospace;
+        font-size: 11px;
+        line-height: 1;
+        font-weight: 700;
+        text-transform: lowercase;
+      }
+
+      .token-name {
+        font-size: 15px;
+        line-height: 1;
+        letter-spacing: -0.03em;
+        font-weight: 650;
+        white-space: nowrap;
+      }
+
+      .token.skill .token-mark {
+        font-size: 13px;
+        text-transform: none;
+      }
+
+      .tools {
+        margin: 20px 0 18px 10px;
+        display: grid;
+        gap: 14px;
+      }
+
+      .tool {
+        display: grid;
+        grid-template-columns: 16px 1fr 18px;
+        gap: 10px;
+        align-items: center;
+        color: #aba4ac;
+        font-family: "SF Mono", "JetBrains Mono", monospace;
+        font-size: 15px;
+      }
+
+      .tool .dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 999px;
+        background: #d4d0d4;
+      }
+
+      .assistant {
+        color: #403242;
+        font-size: 16px;
+        line-height: 1.58;
+      }
+
+      .assistant p {
+        margin: 0 0 10px;
+      }
+
+      .assistant code {
+        display: inline-block;
+        margin: 0 4px 6px 0;
+        padding: 2px 8px 3px;
+        border-radius: 10px;
+        background: rgba(255, 105, 169, 0.1);
+        color: #433543;
+        font-family: "SF Mono", "JetBrains Mono", monospace;
+        font-size: 14px;
+      }
+
+      .assistant ul {
+        margin: 0;
+        padding-left: 20px;
+      }
+
+      .assistant li {
+        margin: 7px 0;
+      }
+
+      .composer {
+        margin-top: 22px;
+        padding: 16px 16px 14px;
+        border-radius: 26px;
+        background: linear-gradient(180deg, rgba(255,255,255,0.92), rgba(255,247,250,0.92));
+        border: 2px solid rgba(255, 146, 197, 0.28);
+        box-shadow: 0 18px 32px rgba(243, 184, 211, 0.12);
+      }
+
+      .composer-tokens {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-bottom: 18px;
+      }
+
+      .composer-token {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        min-height: 36px;
+        padding: 0 13px;
+        border-radius: 999px;
+        background: rgba(219, 59, 129, 0.07);
+        border: 1px solid rgba(219, 59, 129, 0.08);
+      }
+
+      .composer-token .close {
+        color: #aca6ad;
+        font-size: 16px;
+      }
+
+      .composer-bottom {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .model {
+        min-width: 220px;
+        height: 42px;
+        padding: 0 18px;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: space-between;
+        color: #d93b81;
+        background: rgba(255, 248, 252, 0.92);
+        border: 2px solid rgba(255, 146, 197, 0.28);
+        font-size: 16px;
+        font-weight: 600;
+      }
+
+      .caret {
+        width: 0;
+        height: 0;
+        border-left: 7px solid transparent;
+        border-right: 7px solid transparent;
+        border-top: 8px solid currentColor;
+      }
+
+      .send-zone {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+      }
+
+      .spinner {
+        width: 34px;
+        height: 34px;
+        border-radius: 999px;
+        border: 4px solid rgba(255, 153, 201, 0.18);
+        border-top-color: rgba(226, 81, 148, 0.64);
+      }
+
+      .send-btn {
+        width: 52px;
+        height: 52px;
+        border-radius: 999px;
+        display: grid;
+        place-items: center;
+        color: #fff;
+        background: linear-gradient(180deg, #ff70b2, #ee4a93);
+        box-shadow: 0 16px 24px rgba(240, 120, 175, 0.16);
+      }
+
+      .pink-mark { color: #cf4580; }
+      .pink-title { color: #7c3156; }
+
+      .type-pdf { color: #d44b61; }
+      .type-md { color: #3680d7; }
+      .type-py { color: #4b9654; }
+      .type-json { color: #cc8b2f; }
+      .type-txt { color: #8d8d93; }
+      .type-skill { color: #cf4580; }
+
+      .variant-neutral .token-mark,
+      .variant-neutral .composer-token .token-mark {
+        color: #cf4580;
+      }
+
+      .variant-neutral .token-name,
+      .variant-neutral .composer-token .token-name {
+        color: #7c3156;
+      }
+
+      .variant-accent .token-name,
+      .variant-accent .composer-token .token-name {
+        color: #5d4358;
+      }
+
+      .variant-accent .token-mark.type-pdf,
+      .variant-accent .composer-token .token-mark.type-pdf { color: #d44b61; }
+      .variant-accent .token-mark.type-md,
+      .variant-accent .composer-token .token-mark.type-md { color: #3680d7; }
+      .variant-accent .token-mark.type-py,
+      .variant-accent .composer-token .token-mark.type-py { color: #4b9654; }
+      .variant-accent .token-mark.type-json,
+      .variant-accent .composer-token .token-mark.type-json { color: #cc8b2f; }
+      .variant-accent .token-mark.type-txt,
+      .variant-accent .composer-token .token-mark.type-txt { color: #8d8d93; }
+      .variant-accent .token-mark.type-skill,
+      .variant-accent .composer-token .token-mark.type-skill { color: #cf4580; }
+
+      .variant-full .token-name.type-pdf,
+      .variant-full .composer-token .token-name.type-pdf { color: #ba4055; }
+      .variant-full .token-name.type-md,
+      .variant-full .composer-token .token-name.type-md { color: #2f73c0; }
+      .variant-full .token-name.type-py,
+      .variant-full .composer-token .token-name.type-py { color: #407c47; }
+      .variant-full .token-name.type-json,
+      .variant-full .composer-token .token-name.type-json { color: #b87722; }
+      .variant-full .token-name.type-txt,
+      .variant-full .composer-token .token-name.type-txt { color: #7e7e86; }
+      .variant-full .token-name.type-skill,
+      .variant-full .composer-token .token-name.type-skill { color: #b63c74; }
+
+      .variant-full .token-mark.type-pdf,
+      .variant-full .composer-token .token-mark.type-pdf { color: #d44b61; }
+      .variant-full .token-mark.type-md,
+      .variant-full .composer-token .token-mark.type-md { color: #3680d7; }
+      .variant-full .token-mark.type-py,
+      .variant-full .composer-token .token-mark.type-py { color: #4b9654; }
+      .variant-full .token-mark.type-json,
+      .variant-full .composer-token .token-mark.type-json { color: #cc8b2f; }
+      .variant-full .token-mark.type-txt,
+      .variant-full .composer-token .token-mark.type-txt { color: #8d8d93; }
+      .variant-full .token-mark.type-skill,
+      .variant-full .composer-token .token-mark.type-skill { color: #cf4580; }
+
+      @media (max-width: 1280px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <section class="hero">
+        <div class="eyebrow">Shell Ribbon Variants</div>
+        <h1>同一套浅粉底，比较文件类型颜色怎么进来</h1>
+        <p>
+          三个版本都建立在你刚才偏向的 4 号浅粉方向上。区别只在 token：
+          左边是“标题和图标全统一”，中间是“只有图标/前缀分彩”，右边是“图标和标题都跟着文件类型走”。
+        </p>
+      </section>
+
+      <section class="grid">
+        <article class="option variant-neutral">
+          <div class="meta">
+            <div class="meta-top">
+              <div class="id">Option 4A</div>
+              <div class="tag">图标统一 · 标题统一</div>
+            </div>
+            <h2>Mono Tokens</h2>
+            <p>最稳。文件类型信息不靠颜色区分，而是靠前缀字符。整体最干净。</p>
+          </div>
+          <div class="surface">
+            <div class="topbar">
+              <div class="traffic"><span style="background:#ff6057"></span><span style="background:#ffbd2f"></span><span style="background:#28c840"></span></div>
+              <div class="tabs">
+                <div class="tab active"><span class="tab-label">会话 21:1...</span><span class="tab-close">×</span></div>
+                <div class="tab"><span class="tab-label">会话 21:2...</span><span class="tab-close">×</span></div>
+              </div>
+              <div></div>
+            </div>
+            <div class="body">
+              <div class="send-row">
+                <div class="bubble">
+                  <div class="token-wrap">
+                    <span class="token skill"><span class="token-mark type-skill">⌘</span><span class="token-name type-skill">ocr-and-documents</span></span>
+                    <span class="token"><span class="token-mark type-json">json</span><span class="token-name type-json">Agent技能脏数据.json</span></span>
+                    <span class="token"><span class="token-mark type-py">py</span><span class="token-name type-py">mock.py</span></span>
+                    <span class="token"><span class="token-mark type-pdf">pdf</span><span class="token-name type-pdf">Open API 文档 - 权限管理.pdf</span></span>
+                  </div>
+                </div>
+              </div>
+              <div class="tools">
+                <div class="tool"><span class="dot"></span><span>search_files</span><span>▸</span></div>
+                <div class="tool"><span class="dot"></span><span>execute_code</span><span>▸</span></div>
+                <div class="tool"><span class="dot"></span><span>read_file</span><span>▸</span></div>
+              </div>
+              <div class="assistant">
+                <p>已完成提取 ✅</p>
+                <p>我已从这个文件提取文本，并识别到主要接口有：</p>
+                <p><code>POST /v1/oapi/authority/inviteMembers</code><code>GET /v1/oapi/authority/workspace_members</code></p>
+              </div>
+              <div class="composer">
+                <div class="composer-tokens">
+                  <span class="composer-token"><span class="token-mark type-skill">⌘</span><span class="token-name type-skill">llm-wiki</span><span class="close">×</span></span>
+                  <span class="composer-token"><span class="token-mark type-py">py</span><span class="token-name type-py">mock.py</span><span class="close">×</span></span>
+                  <span class="composer-token"><span class="token-mark type-md">md</span><span class="token-name type-md">告警分析-10281101.md</span><span class="close">×</span></span>
+                </div>
+                <div class="composer-bottom">
+                  <div class="model"><span>gpt-5.3-codex</span><span class="caret"></span></div>
+                  <div class="send-zone"><div class="spinner"></div><div class="send-btn">↑</div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="option variant-accent">
+          <div class="meta">
+            <div class="meta-top">
+              <div class="id">Option 4B</div>
+              <div class="tag">图标分彩 · 标题统一</div>
+            </div>
+            <h2>Accent Prefix</h2>
+            <p>我觉得这是最可能中的版本。类型信息有颜色记忆，但标题区不会变花。</p>
+          </div>
+          <div class="surface">
+            <div class="topbar">
+              <div class="traffic"><span style="background:#ff6057"></span><span style="background:#ffbd2f"></span><span style="background:#28c840"></span></div>
+              <div class="tabs">
+                <div class="tab active"><span class="tab-label">会话 21:1...</span><span class="tab-close">×</span></div>
+                <div class="tab"><span class="tab-label">会话 21:2...</span><span class="tab-close">×</span></div>
+              </div>
+              <div></div>
+            </div>
+            <div class="body">
+              <div class="send-row">
+                <div class="bubble">
+                  <div class="token-wrap">
+                    <span class="token skill"><span class="token-mark type-skill">⌘</span><span class="token-name type-skill">ocr-and-documents</span></span>
+                    <span class="token"><span class="token-mark type-json">json</span><span class="token-name type-json">Agent技能脏数据.json</span></span>
+                    <span class="token"><span class="token-mark type-py">py</span><span class="token-name type-py">mock.py</span></span>
+                    <span class="token"><span class="token-mark type-pdf">pdf</span><span class="token-name type-pdf">Open API 文档 - 权限管理.pdf</span></span>
+                  </div>
+                </div>
+              </div>
+              <div class="tools">
+                <div class="tool"><span class="dot"></span><span>search_files</span><span>▸</span></div>
+                <div class="tool"><span class="dot"></span><span>execute_code</span><span>▸</span></div>
+                <div class="tool"><span class="dot"></span><span>read_file</span><span>▸</span></div>
+              </div>
+              <div class="assistant">
+                <p>已完成提取 ✅</p>
+                <p>我已从这个文件提取文本，并识别到主要接口有：</p>
+                <p><code>POST /v1/oapi/authority/inviteMembers</code><code>GET /v1/oapi/authority/workspace_members</code></p>
+              </div>
+              <div class="composer">
+                <div class="composer-tokens">
+                  <span class="composer-token"><span class="token-mark type-skill">⌘</span><span class="token-name type-skill">llm-wiki</span><span class="close">×</span></span>
+                  <span class="composer-token"><span class="token-mark type-py">py</span><span class="token-name type-py">mock.py</span><span class="close">×</span></span>
+                  <span class="composer-token"><span class="token-mark type-md">md</span><span class="token-name type-md">告警分析-10281101.md</span><span class="close">×</span></span>
+                </div>
+                <div class="composer-bottom">
+                  <div class="model"><span>gpt-5.3-codex</span><span class="caret"></span></div>
+                  <div class="send-zone"><div class="spinner"></div><div class="send-btn">↑</div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="option variant-full">
+          <div class="meta">
+            <div class="meta-top">
+              <div class="id">Option 4C</div>
+              <div class="tag">图标分彩 · 标题也分彩</div>
+            </div>
+            <h2>Full Type Tint</h2>
+            <p>信息最直观，但也最容易碎。适合你想让文件类型一眼就被扫到的情况。</p>
+          </div>
+          <div class="surface">
+            <div class="topbar">
+              <div class="traffic"><span style="background:#ff6057"></span><span style="background:#ffbd2f"></span><span style="background:#28c840"></span></div>
+              <div class="tabs">
+                <div class="tab active"><span class="tab-label">会话 21:1...</span><span class="tab-close">×</span></div>
+                <div class="tab"><span class="tab-label">会话 21:2...</span><span class="tab-close">×</span></div>
+              </div>
+              <div></div>
+            </div>
+            <div class="body">
+              <div class="send-row">
+                <div class="bubble">
+                  <div class="token-wrap">
+                    <span class="token skill"><span class="token-mark type-skill">⌘</span><span class="token-name type-skill">ocr-and-documents</span></span>
+                    <span class="token"><span class="token-mark type-json">json</span><span class="token-name type-json">Agent技能脏数据.json</span></span>
+                    <span class="token"><span class="token-mark type-py">py</span><span class="token-name type-py">mock.py</span></span>
+                    <span class="token"><span class="token-mark type-pdf">pdf</span><span class="token-name type-pdf">Open API 文档 - 权限管理.pdf</span></span>
+                  </div>
+                </div>
+              </div>
+              <div class="tools">
+                <div class="tool"><span class="dot"></span><span>search_files</span><span>▸</span></div>
+                <div class="tool"><span class="dot"></span><span>execute_code</span><span>▸</span></div>
+                <div class="tool"><span class="dot"></span><span>read_file</span><span>▸</span></div>
+              </div>
+              <div class="assistant">
+                <p>已完成提取 ✅</p>
+                <p>我已从这个文件提取文本，并识别到主要接口有：</p>
+                <p><code>POST /v1/oapi/authority/inviteMembers</code><code>GET /v1/oapi/authority/workspace_members</code></p>
+              </div>
+              <div class="composer">
+                <div class="composer-tokens">
+                  <span class="composer-token"><span class="token-mark type-skill">⌘</span><span class="token-name type-skill">llm-wiki</span><span class="close">×</span></span>
+                  <span class="composer-token"><span class="token-mark type-py">py</span><span class="token-name type-py">mock.py</span><span class="close">×</span></span>
+                  <span class="composer-token"><span class="token-mark type-md">md</span><span class="token-name type-md">告警分析-10281101.md</span><span class="close">×</span></span>
+                </div>
+                <div class="composer-bottom">
+                  <div class="model"><span>gpt-5.3-codex</span><span class="caret"></span></div>
+                  <div class="send-zone"><div class="spinner"></div><div class="send-btn">↑</div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>

@@ -3,41 +3,57 @@ import React, { useEffect, useState } from 'react'
 // ── File type metadata ────────────────────────────────────────────────────────
 
 interface FileTypeInfo {
-  label: string   // short badge text
-  color: string   // chip background color
-  textColor: string
+  label: string
+  accent: string
+  titleColor: string
+}
+
+export type ChipTone = 'default' | 'user'
+
+function hexToRgba(hex: string, alpha: number): string {
+  const raw = hex.replace('#', '')
+  const full = raw.length === 3 ? raw.split('').map((char) => char + char).join('') : raw
+  const value = parseInt(full, 16)
+  const r = (value >> 16) & 255
+  const g = (value >> 8) & 255
+  const b = value & 255
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
 }
 
 export function getFileTypeInfo(filename: string): FileTypeInfo {
   const ext = filename.split('.').pop()?.toLowerCase() ?? ''
   switch (ext) {
     case 'py':
-      return { label: 'PY', color: '#2E7D32', textColor: '#fff' }
+      return { label: 'PY', accent: '#4B9654', titleColor: '#407C47' }
     case 'js':
     case 'jsx':
     case 'mjs':
-      return { label: 'JS', color: '#F57F17', textColor: '#fff' }
+      return { label: 'JS', accent: '#D07D21', titleColor: '#B86C1A' }
     case 'ts':
     case 'tsx':
-      return { label: 'TS', color: '#1565C0', textColor: '#fff' }
+      return { label: 'TS', accent: '#2F73C0', titleColor: '#2A67AB' }
     case 'md':
     case 'mdx':
-      return { label: 'MD', color: '#1976D2', textColor: '#fff' }
+      return { label: 'MD', accent: '#3680D7', titleColor: '#2F73C0' }
     case 'pdf':
-      return { label: 'PDF', color: '#C62828', textColor: '#fff' }
+      return { label: 'PDF', accent: '#D44B61', titleColor: '#BA4055' }
     case 'json':
-      return { label: '{}', color: '#E65100', textColor: '#fff' }
+      return { label: '{}', accent: '#CC8B2F', titleColor: '#B87722' }
     case 'html':
     case 'css':
     case 'scss':
     case 'sass':
-      return { label: '<>', color: '#BF360C', textColor: '#fff' }
+      return { label: '<>', accent: '#C0673D', titleColor: '#A95A37' }
     case 'txt':
     case 'log':
     case 'csv':
-      return { label: 'TXT', color: '#757575', textColor: '#fff' }
+      return { label: 'TXT', accent: '#8D8D93', titleColor: '#7E7E86' }
     default:
-      return { label: ext.toUpperCase().slice(0, 3) || 'FILE', color: '#616161', textColor: '#fff' }
+      return {
+        label: ext.toUpperCase().slice(0, 4) || 'FILE',
+        accent: '#9B7D8D',
+        titleColor: '#836875',
+      }
   }
 }
 
@@ -136,11 +152,17 @@ interface FileChipProps {
   onRemove?: () => void
   /** Gray out the chip (e.g. file no longer exists in history). */
   disabled?: boolean
+  tone?: ChipTone
 }
 
-export function FileChip({ path, onRemove, disabled }: FileChipProps): React.ReactElement {
+export function FileChip({
+  path,
+  onRemove,
+  disabled,
+  tone = 'default',
+}: FileChipProps): React.ReactElement {
   const filename = path.split('/').pop() ?? path
-  const { label, color, textColor } = getFileTypeInfo(filename)
+  const { label, accent, titleColor } = getFileTypeInfo(filename)
   const [exists, setExists] = useState<boolean | null>(null)
 
   useEffect(() => {
@@ -167,8 +189,20 @@ export function FileChip({ path, onRemove, disabled }: FileChipProps): React.Rea
   }, [path])
 
   const isDisabled = disabled || exists === false
-  const chipBg = isDisabled ? '#ececec' : '#f6f8ff'
-  const badgeBg = isDisabled ? '#9e9e9e' : color
+  const isUserTone = tone === 'user'
+  const chipBg = isDisabled
+    ? 'rgba(120, 128, 140, 0.12)'
+    : isUserTone
+      ? hexToRgba(accent, 0.09)
+      : hexToRgba(accent, 0.09)
+  const chipBorder = isDisabled
+    ? 'rgba(120, 128, 140, 0.18)'
+    : isUserTone
+      ? hexToRgba(accent, 0.16)
+      : hexToRgba(accent, 0.12)
+  const labelColor = isDisabled ? '#9ca3af' : accent
+  const filenameColor = isDisabled ? '#7d7d7d' : titleColor
+  const removeColor = isDisabled ? '#9ca3af' : accent
 
   return (
     <span
@@ -178,49 +212,46 @@ export function FileChip({ path, onRemove, disabled }: FileChipProps): React.Rea
         alignItems: 'center',
         gap: 5,
         background: chipBg,
-        borderRadius: 999,
-        padding: '2px 7px 2px 4px',
-        fontSize: 12,
+        borderRadius: 10,
+        padding: '0 7px',
+        fontSize: 11.5,
         lineHeight: '18px',
-        color: isDisabled ? '#7d7d7d' : '#2e3650',
+        color: filenameColor,
         verticalAlign: 'middle',
-        maxWidth: 260,
+        maxWidth: isUserTone ? 224 : 236,
         overflow: 'hidden',
         flexShrink: 0,
         userSelect: 'none',
         cursor: isDisabled ? 'default' : 'pointer',
         margin: '0 2px',
-        border: `1px solid ${isDisabled ? '#d6d6d6' : 'rgba(49, 120, 198, 0.18)'}`,
+        border: `1px solid ${chipBorder}`,
         pointerEvents: onRemove ? 'auto' : 'none',
       }}
     >
-      {/* File-type badge */}
       <span
         style={{
-          background: badgeBg,
-          color: textColor,
-          borderRadius: 4,
-          padding: '0 4px',
+          color: labelColor,
           fontSize: 10,
           fontWeight: 700,
           fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
           lineHeight: '16px',
           flexShrink: 0,
-          letterSpacing: '-0.3px',
+          letterSpacing: '-0.08px',
+          textTransform: 'lowercase',
         }}
       >
-        {label}
+        {label.toLowerCase()}
       </span>
 
-      {/* Filename */}
       <span
         style={{
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap',
-          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
           fontSize: 11.5,
           minWidth: 0,
+          fontWeight: 650,
+          letterSpacing: '-0.1px',
         }}
       >
         {filename}
@@ -236,21 +267,22 @@ export function FileChip({ path, onRemove, disabled }: FileChipProps): React.Rea
           }}
           title="移除"
           style={{
-            width: 14,
-            height: 14,
-            borderRadius: '50%',
+            width: 11,
+            height: 11,
+            borderRadius: 0,
             border: 'none',
-            background: isDisabled ? 'rgba(0,0,0,0.08)' : 'rgba(49, 120, 198, 0.12)',
-            color: isDisabled ? '#666' : '#31589a',
+            background: 'transparent',
+            color: removeColor,
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             padding: 0,
             flexShrink: 0,
-            fontSize: 10,
+            fontSize: 11,
             lineHeight: 1,
             marginLeft: 1,
+            opacity: 0.72,
           }}
         >
           ×
@@ -263,12 +295,12 @@ export function FileChip({ path, onRemove, disabled }: FileChipProps): React.Rea
 function SkillCubeIcon({ color }: { color: string }): React.ReactElement {
   return (
     <svg
-      width="14"
-      height="14"
+      width="12"
+      height="12"
       viewBox="0 0 24 24"
       fill="none"
       stroke={color}
-      strokeWidth="1.8"
+      strokeWidth="1.65"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
@@ -282,12 +314,20 @@ function SkillCubeIcon({ color }: { color: string }): React.ReactElement {
 interface SkillChipProps {
   name: string
   onRemove?: () => void
+  tone?: ChipTone
 }
 
-export function SkillChip({ name, onRemove }: SkillChipProps): React.ReactElement {
-  const accent = '#B83280'
-  const bg = '#FFF1F7'
-  const border = 'rgba(184, 50, 128, 0.18)'
+export function SkillChip({
+  name,
+  onRemove,
+  tone = 'default',
+}: SkillChipProps): React.ReactElement {
+  const accent = '#CF4580'
+  const titleColor = '#B63C74'
+  const bg = hexToRgba(accent, 0.09)
+  const border = hexToRgba(accent, tone === 'user' ? 0.16 : 0.12)
+  const text = titleColor
+  const icon = accent
 
   return (
     <span
@@ -295,15 +335,15 @@ export function SkillChip({ name, onRemove }: SkillChipProps): React.ReactElemen
       style={{
         display: 'inline-flex',
         alignItems: 'center',
-        gap: 6,
+        gap: 5,
         background: bg,
-        borderRadius: 999,
-        padding: '2px 8px 2px 6px',
-        fontSize: 12,
+        borderRadius: 10,
+        padding: '0 7px',
+        fontSize: 11.5,
         lineHeight: '18px',
-        color: accent,
+        color: text,
         verticalAlign: 'middle',
-        maxWidth: 240,
+        maxWidth: tone === 'user' ? 214 : 220,
         overflow: 'hidden',
         flexShrink: 0,
         userSelect: 'none',
@@ -312,14 +352,15 @@ export function SkillChip({ name, onRemove }: SkillChipProps): React.ReactElemen
         pointerEvents: onRemove ? 'auto' : 'none',
       }}
     >
-      <SkillCubeIcon color={accent} />
+      <SkillCubeIcon color={icon} />
       <span
         style={{
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap',
           minWidth: 0,
-          fontWeight: 600,
+          fontWeight: 650,
+          letterSpacing: '-0.1px',
         }}
       >
         {name}
@@ -333,11 +374,11 @@ export function SkillChip({ name, onRemove }: SkillChipProps): React.ReactElemen
           }}
           title="移除"
           style={{
-            width: 14,
-            height: 14,
-            borderRadius: '50%',
+            width: 11,
+            height: 11,
+            borderRadius: 0,
             border: 'none',
-            background: 'rgba(184, 50, 128, 0.12)',
+            background: 'transparent',
             color: accent,
             cursor: 'pointer',
             display: 'flex',
@@ -345,8 +386,9 @@ export function SkillChip({ name, onRemove }: SkillChipProps): React.ReactElemen
             justifyContent: 'center',
             padding: 0,
             flexShrink: 0,
-            fontSize: 10,
+            fontSize: 11,
             lineHeight: 1,
+            opacity: 0.72,
           }}
         >
           ×
@@ -360,13 +402,17 @@ export function SkillChip({ name, onRemove }: SkillChipProps): React.ReactElemen
 
 interface FileChipRendererProps {
   text: string
+  tone?: ChipTone
 }
 
 /**
  * Splits a message string into plain text segments and @file: chip segments,
  * rendering them inline. Used in message bubbles (read-only).
  */
-export function FileChipRenderer({ text }: FileChipRendererProps): React.ReactElement {
+export function FileChipRenderer({
+  text,
+  tone = 'default',
+}: FileChipRendererProps): React.ReactElement {
   const refs = parseInlineReferences(text)
   if (refs.length === 0) return <>{text}</>
 
@@ -378,9 +424,9 @@ export function FileChipRenderer({ text }: FileChipRendererProps): React.ReactEl
     }
     parts.push(
       ref.kind === 'file' ? (
-        <FileChip key={`f-${ref.start}`} path={ref.path} />
+        <FileChip key={`f-${ref.start}`} path={ref.path} tone={tone} />
       ) : (
-        <SkillChip key={`s-${ref.start}`} name={ref.name} />
+        <SkillChip key={`s-${ref.start}`} name={ref.name} tone={tone} />
       )
     )
     cursor = ref.end

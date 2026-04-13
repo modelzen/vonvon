@@ -341,13 +341,15 @@ function renderMessage(msg: AgentMessage, isLoading: boolean): React.ReactElemen
         <div
           style={{
             maxWidth: '80%',
-            padding: '8px 12px',
-            borderRadius: 12,
+            padding: '16px 18px',
+            borderRadius: 28,
             fontSize: 13,
-            background: 'linear-gradient(135deg, #FF69B4, #FF1493)',
-            color: '#fff',
+            background: 'linear-gradient(135deg, #fff4f8, #ffedf4 58%, #ffe7f1)',
+            border: '1px solid rgba(255, 132, 189, 0.42)',
+            boxShadow: '0 16px 28px rgba(255, 164, 205, 0.15)',
+            color: '#7c3156',
             whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word'
+            wordBreak: 'break-word',
           }}
         >
           {msg.attachments && msg.attachments.length > 0 && (
@@ -368,7 +370,7 @@ function renderMessage(msg: AgentMessage, isLoading: boolean): React.ReactElemen
               ))}
             </div>
           )}
-          <FileChipRenderer text={msg.content} />
+          <FileChipRenderer text={msg.content} tone="user" />
         </div>
       </div>
     )

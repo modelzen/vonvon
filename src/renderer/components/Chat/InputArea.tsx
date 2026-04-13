@@ -28,6 +28,16 @@ const MAX_IMAGE_BYTES = 5 * 1024 * 1024
 const MAX_ATTACHMENTS = 4
 const MAX_SKILL_SUGGESTIONS = 8
 
+const hexToRgba = (hex: string, alpha: number): string => {
+  const raw = hex.replace('#', '')
+  const full = raw.length === 3 ? raw.split('').map((char) => char + char).join('') : raw
+  const value = parseInt(full, 16)
+  const r = (value >> 16) & 255
+  const g = (value >> 8) & 255
+  const b = value & 255
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
+
 interface SlashState {
   start: number
   end: number
@@ -330,37 +340,36 @@ export function InputArea({
 
     const createFileChipNode = (path: string) => {
       const filename = path.split('/').pop() ?? path
-      const { label, color, textColor } = getFileTypeInfo(filename)
+      const { label, accent, titleColor } = getFileTypeInfo(filename)
       const chip = doc.createElement('span')
       chip.dataset.filePath = path
       chip.contentEditable = 'false'
       chip.style.display = 'inline-flex'
       chip.style.alignItems = 'center'
       chip.style.gap = '5px'
-      chip.style.background = '#f6f8ff'
-      chip.style.borderRadius = '999px'
-      chip.style.padding = '2px 7px 2px 4px'
-      chip.style.fontSize = '12px'
+      chip.style.background = hexToRgba(accent, 0.07)
+      chip.style.borderRadius = '10px'
+      chip.style.padding = '0 7px'
+      chip.style.fontSize = '11.5px'
       chip.style.lineHeight = '18px'
-      chip.style.color = '#2e3650'
+      chip.style.color = titleColor
       chip.style.verticalAlign = 'middle'
-      chip.style.maxWidth = '260px'
+      chip.style.maxWidth = '236px'
       chip.style.overflow = 'hidden'
       chip.style.userSelect = 'none'
       chip.style.margin = '0 2px'
-      chip.style.border = '1px solid rgba(49, 120, 198, 0.18)'
+      chip.style.border = `1px solid ${hexToRgba(accent, 0.1)}`
 
       const badge = doc.createElement('span')
-      badge.textContent = label
-      badge.style.background = color
-      badge.style.color = textColor
-      badge.style.borderRadius = '4px'
-      badge.style.padding = '0 4px'
+      badge.textContent = label.toLowerCase()
+      badge.style.color = accent
       badge.style.fontSize = '10px'
       badge.style.fontWeight = '700'
       badge.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, monospace'
       badge.style.lineHeight = '16px'
       badge.style.flexShrink = '0'
+      badge.style.letterSpacing = '-0.08px'
+      badge.style.textTransform = 'lowercase'
       chip.appendChild(badge)
 
       const name = doc.createElement('span')
@@ -368,29 +377,32 @@ export function InputArea({
       name.style.overflow = 'hidden'
       name.style.textOverflow = 'ellipsis'
       name.style.whiteSpace = 'nowrap'
-      name.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, monospace'
       name.style.fontSize = '11.5px'
+      name.style.fontWeight = '650'
+      name.style.letterSpacing = '-0.1px'
+      name.style.color = titleColor
       chip.appendChild(name)
 
       const removeBtn = doc.createElement('button')
       removeBtn.type = 'button'
       removeBtn.textContent = '×'
       removeBtn.title = '移除'
-      removeBtn.style.width = '14px'
-      removeBtn.style.height = '14px'
-      removeBtn.style.borderRadius = '50%'
+      removeBtn.style.width = '11px'
+      removeBtn.style.height = '11px'
+      removeBtn.style.borderRadius = '0'
       removeBtn.style.border = 'none'
-      removeBtn.style.background = 'rgba(49, 120, 198, 0.12)'
-      removeBtn.style.color = '#31589a'
+      removeBtn.style.background = 'transparent'
+      removeBtn.style.color = accent
       removeBtn.style.cursor = 'pointer'
       removeBtn.style.display = 'flex'
       removeBtn.style.alignItems = 'center'
       removeBtn.style.justifyContent = 'center'
       removeBtn.style.padding = '0'
       removeBtn.style.flexShrink = '0'
-      removeBtn.style.fontSize = '10px'
+      removeBtn.style.fontSize = '11px'
       removeBtn.style.lineHeight = '1'
       removeBtn.style.marginLeft = '1px'
+      removeBtn.style.opacity = '0.72'
       removeBtn.onclick = (event) => {
         event.preventDefault()
         event.stopPropagation()
@@ -402,33 +414,34 @@ export function InputArea({
     }
 
     const createSkillChipNode = (name: string) => {
-      const accent = '#B83280'
+      const accent = '#CF4580'
+      const titleColor = '#B63C74'
       const chip = doc.createElement('span')
       chip.dataset.skillName = name
       chip.contentEditable = 'false'
       chip.style.display = 'inline-flex'
       chip.style.alignItems = 'center'
-      chip.style.gap = '6px'
-      chip.style.background = '#FFF1F7'
-      chip.style.borderRadius = '999px'
-      chip.style.padding = '2px 8px 2px 6px'
-      chip.style.fontSize = '12px'
+      chip.style.gap = '5px'
+      chip.style.background = hexToRgba(accent, 0.07)
+      chip.style.borderRadius = '10px'
+      chip.style.padding = '0 7px'
+      chip.style.fontSize = '11.5px'
       chip.style.lineHeight = '18px'
-      chip.style.color = accent
+      chip.style.color = titleColor
       chip.style.verticalAlign = 'middle'
-      chip.style.maxWidth = '240px'
+      chip.style.maxWidth = '220px'
       chip.style.overflow = 'hidden'
       chip.style.userSelect = 'none'
       chip.style.margin = '0 2px'
-      chip.style.border = '1px solid rgba(184, 50, 128, 0.18)'
+      chip.style.border = `1px solid ${hexToRgba(accent, 0.1)}`
 
       const icon = doc.createElementNS('http://www.w3.org/2000/svg', 'svg')
-      icon.setAttribute('width', '14')
-      icon.setAttribute('height', '14')
+      icon.setAttribute('width', '12')
+      icon.setAttribute('height', '12')
       icon.setAttribute('viewBox', '0 0 24 24')
       icon.setAttribute('fill', 'none')
       icon.setAttribute('stroke', accent)
-      icon.setAttribute('stroke-width', '1.8')
+      icon.setAttribute('stroke-width', '1.65')
       icon.setAttribute('stroke-linecap', 'round')
       icon.setAttribute('stroke-linejoin', 'round')
       icon.setAttribute('aria-hidden', 'true')
@@ -448,18 +461,20 @@ export function InputArea({
       label.style.textOverflow = 'ellipsis'
       label.style.whiteSpace = 'nowrap'
       label.style.minWidth = '0'
-      label.style.fontWeight = '600'
+      label.style.fontWeight = '650'
+      label.style.letterSpacing = '-0.1px'
+      label.style.color = titleColor
       chip.appendChild(label)
 
       const removeBtn = doc.createElement('button')
       removeBtn.type = 'button'
       removeBtn.textContent = '×'
       removeBtn.title = '移除'
-      removeBtn.style.width = '14px'
-      removeBtn.style.height = '14px'
-      removeBtn.style.borderRadius = '50%'
+      removeBtn.style.width = '11px'
+      removeBtn.style.height = '11px'
+      removeBtn.style.borderRadius = '0'
       removeBtn.style.border = 'none'
-      removeBtn.style.background = 'rgba(184, 50, 128, 0.12)'
+      removeBtn.style.background = 'transparent'
       removeBtn.style.color = accent
       removeBtn.style.cursor = 'pointer'
       removeBtn.style.display = 'flex'
@@ -467,8 +482,9 @@ export function InputArea({
       removeBtn.style.justifyContent = 'center'
       removeBtn.style.padding = '0'
       removeBtn.style.flexShrink = '0'
-      removeBtn.style.fontSize = '10px'
+      removeBtn.style.fontSize = '11px'
       removeBtn.style.lineHeight = '1'
+      removeBtn.style.opacity = '0.72'
       removeBtn.onclick = (event) => {
         event.preventDefault()
         event.stopPropagation()
@@ -967,12 +983,12 @@ export function InputArea({
 
       <div
         style={{
-          background: '#fff',
-          border: `1px solid ${focused ? '#FF69B4' : '#fce4ec'}`,
-          borderRadius: 22,
+          background: 'linear-gradient(180deg, rgba(255,255,255,0.92), rgba(255,247,250,0.92))',
+          border: `2px solid ${focused ? 'rgba(255, 146, 197, 0.42)' : 'rgba(255, 146, 197, 0.28)'}`,
+          borderRadius: 26,
           boxShadow: focused
-            ? '0 0 0 3px rgba(255,105,180,0.12), 0 8px 28px -12px rgba(255,20,147,0.28)'
-            : '0 4px 16px -8px rgba(255,20,147,0.18)',
+            ? '0 0 0 3px rgba(255, 195, 221, 0.3), 0 18px 32px rgba(243, 184, 211, 0.16)'
+            : '0 18px 32px rgba(243, 184, 211, 0.12)',
           transition: 'border-color 0.18s, box-shadow 0.18s',
           overflow: 'hidden',
         }}
