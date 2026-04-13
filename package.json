@@ -1,6 +1,6 @@
 {
   "name": "vonvon",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "AI assistant floating window for macOS",
   "main": "out/main/index.js",
   "scripts": {

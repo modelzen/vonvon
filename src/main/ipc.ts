@@ -1,4 +1,5 @@
-import { ipcMain, dialog, shell } from 'electron'
+import { app, ipcMain, dialog, shell } from 'electron'
+import { existsSync } from 'fs'
 import { chatStore } from './store'
 import { registry } from './providers/registry'
 import { registerKirbyIpcHandlers } from './native/kirby'
@@ -103,6 +104,10 @@ export function registerIpcHandlers(): void {
     await chatStore.setBackendConfig(config)
   })
 
+  ipcMain.handle('app:getVersion', () => {
+    return app.getVersion()
+  })
+
   // Settings window — opened on right-click in chat sidebar header
   ipcMain.on('settings:open', () => {
     openSettingsWindow()
@@ -186,6 +191,15 @@ export function registerIpcHandlers(): void {
   // Shell: reveal path in Finder/Explorer (path comes from trusted backend state)
   ipcMain.handle('shell:showItemInFolder', (_event, path: string) => {
     shell.showItemInFolder(path)
+  })
+
+  ipcMain.handle('fs:exists', (_event, path: string) => {
+    if (typeof path !== 'string' || path.trim() === '') return false
+    try {
+      return existsSync(path)
+    } catch {
+      return false
+    }
   })
 
   // Kirby/native handlers — Stage 2

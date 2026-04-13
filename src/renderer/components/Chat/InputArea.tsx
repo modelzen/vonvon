@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect, KeyboardEvent, ClipboardEvent, DragEvent } from 'react'
+import React, { useEffect, useRef, useState, KeyboardEvent, ClipboardEvent, DragEvent } from 'react'
+import { FileChipRenderer, getFileTypeInfo, parseFileReferences } from './FileChip'
 
 interface ImageAttachment {
   type: 'image'
@@ -10,18 +11,14 @@ interface InputAreaProps {
   onSend: (message: string) => void
   isLoading: boolean
   onSendWithAttachments?: (text: string, atts: ImageAttachment[]) => void
-  /** Abort the in-flight streaming run. When provided, the send button
-   *  swaps to a stop icon while `isLoading` is true. */
   onStop?: () => void
-  /** Left-aligned content for the sub-toolbar beneath the textarea.
-   *  Typically the model picker. */
   toolbarLeft?: React.ReactNode
-  /** Right-aligned content for the sub-toolbar. Typically context usage. */
   toolbarRight?: React.ReactNode
 }
 
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024   // 5 MB per image
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024
 const MAX_ATTACHMENTS = 4
+const buildEditableFileReference = (absPath: string): string => `@file:"${absPath}"`
 
 export function InputArea({
   onSend,
@@ -34,13 +31,9 @@ export function InputArea({
   const [value, setValue] = useState('')
   const [attachments, setAttachments] = useState<ImageAttachment[]>([])
   const [isDragOver, setIsDragOver] = useState(false)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const [focused, setFocused] = useState(false)
+  const editorRef = useRef<HTMLDivElement>(null)
 
-  // Client-side message queue. The backend (`/api/chat/send`) holds an
-  // asyncio.Lock and rejects concurrent runs ("backend busy"), so we can't
-  // actually fire several requests in parallel. Instead, every time the user
-  // hits Enter while a run is streaming we push onto this FIFO and auto-fire
-  // the head item the moment isLoading flips back to false.
   interface QueuedMsg {
     id: string
     text: string
@@ -82,9 +75,6 @@ export function InputArea({
     }
   }
 
-  // Internal dispatch — fires the actual onSend / onSendWithAttachments call.
-  // Used by both the immediate path (handleSend when not loading) and the
-  // queue-drain effect below.
   const dispatch = (text: string, atts: ImageAttachment[]) => {
     if (atts.length > 0 && onSendWithAttachments) {
       onSendWithAttachments(text, atts)
@@ -93,15 +83,266 @@ export function InputArea({
     }
   }
 
+  const getChildRawLength = (node: ChildNode): number => {
+    if (node.nodeType === Node.TEXT_NODE) return node.textContent?.length ?? 0
+    if (node instanceof HTMLElement && node.dataset.filePath) {
+      return buildEditableFileReference(node.dataset.filePath).length
+    }
+    if (node.nodeName === 'BR') return 1
+    return node.textContent?.length ?? 0
+  }
+
+  const serializeEditor = (): string => {
+    const root = editorRef.current
+    if (!root) return value
+    return Array.from(root.childNodes)
+      .map((child) => {
+        if (child.nodeType === Node.TEXT_NODE) return child.textContent ?? ''
+        if (child instanceof HTMLElement && child.dataset.filePath) {
+          return buildEditableFileReference(child.dataset.filePath)
+        }
+        if (child.nodeName === 'BR') return '\n'
+        return child.textContent ?? ''
+      })
+      .join('')
+  }
+
+  const getSelectionOffsets = () => {
+    const root = editorRef.current
+    const sel = window.getSelection()
+    const end = serializeEditor().length
+    if (!root || !sel || sel.rangeCount === 0) return { start: end, end }
+    const range = sel.getRangeAt(0)
+    if (!root.contains(range.startContainer) || !root.contains(range.endContainer)) {
+      return { start: end, end }
+    }
+
+    const computeOffset = (node: Node, offset: number) => {
+      if (node === root) {
+        return Array.from(root.childNodes)
+          .slice(0, offset)
+          .reduce((sum, child) => sum + getChildRawLength(child), 0)
+      }
+      let total = 0
+      for (const child of Array.from(root.childNodes)) {
+        if (child === node) {
+          if (child.nodeType === Node.TEXT_NODE) {
+            return total + Math.min(offset, child.textContent?.length ?? 0)
+          }
+          if (child instanceof HTMLElement && child.dataset.filePath) {
+            return total + (offset > 0 ? getChildRawLength(child) : 0)
+          }
+        }
+        total += getChildRawLength(child)
+      }
+      return total
+    }
+
+    return {
+      start: computeOffset(range.startContainer, range.startOffset),
+      end: computeOffset(range.endContainer, range.endOffset),
+    }
+  }
+
+  const setSelectionOffsets = (start: number, end = start) => {
+    const root = editorRef.current
+    const sel = window.getSelection()
+    if (!root || !sel) return
+
+    const resolvePoint = (targetOffset: number) => {
+      let remaining = Math.max(0, targetOffset)
+      const children = Array.from(root.childNodes)
+      for (let i = 0; i < children.length; i += 1) {
+        const child = children[i]
+        const len = getChildRawLength(child)
+        if (remaining <= len) {
+          if (child.nodeType === Node.TEXT_NODE) {
+            return { node: child, offset: Math.min(remaining, child.textContent?.length ?? 0) }
+          }
+          return { node: root, offset: remaining === 0 ? i : i + 1 }
+        }
+        remaining -= len
+      }
+      return { node: root, offset: root.childNodes.length }
+    }
+
+    const startPoint = resolvePoint(start)
+    const endPoint = resolvePoint(end)
+    const range = document.createRange()
+    range.setStart(startPoint.node, startPoint.offset)
+    range.setEnd(endPoint.node, endPoint.offset)
+    sel.removeAllRanges()
+    sel.addRange(range)
+  }
+
+  const renderEditorValue = (rawValue: string) => {
+    const root = editorRef.current
+    if (!root) return
+    const doc = root.ownerDocument
+    const fragment = doc.createDocumentFragment()
+
+    const refs = parseFileReferences(rawValue)
+    let cursor = 0
+
+    const appendText = (text: string) => {
+      if (!text) return
+      fragment.appendChild(doc.createTextNode(text))
+    }
+
+    const removeChipNode = (chip: HTMLElement) => {
+      const chipIndex = Array.from(root.childNodes).indexOf(chip)
+      const offsetBefore = Array.from(root.childNodes)
+        .slice(0, chipIndex)
+        .reduce((sum, child) => sum + getChildRawLength(child), 0)
+
+      const prev = chip.previousSibling
+      const next = chip.nextSibling
+      root.removeChild(chip)
+
+      if (prev?.nodeType === Node.TEXT_NODE && next?.nodeType === Node.TEXT_NODE) {
+        const prevText = prev.textContent ?? ''
+        const nextText = next.textContent ?? ''
+        const beforeTrimmed = prevText.replace(/[ \t]+$/, '')
+        const afterTrimmed = nextText.replace(/^[ \t]+/, '')
+        const needsSpacer =
+          beforeTrimmed.length > 0 &&
+          afterTrimmed.length > 0 &&
+          !beforeTrimmed.endsWith('\n') &&
+          !afterTrimmed.startsWith('\n')
+        prev.textContent = `${beforeTrimmed}${needsSpacer ? ' ' : ''}${afterTrimmed}`
+        root.removeChild(next)
+      } else if (prev?.nodeType === Node.TEXT_NODE) {
+        prev.textContent = (prev.textContent ?? '').replace(/[ \t]+$/, '')
+      } else if (next?.nodeType === Node.TEXT_NODE) {
+        next.textContent = (next.textContent ?? '').replace(/^[ \t]+/, '')
+      }
+
+      const nextValue = serializeEditor()
+      setValue(nextValue)
+      root.focus()
+      setSelectionOffsets(Math.min(offsetBefore, nextValue.length))
+    }
+
+    const createChipNode = (path: string) => {
+      const filename = path.split('/').pop() ?? path
+      const { label, color, textColor } = getFileTypeInfo(filename)
+      const chip = doc.createElement('span')
+      chip.dataset.filePath = path
+      chip.contentEditable = 'false'
+      chip.style.display = 'inline-flex'
+      chip.style.alignItems = 'center'
+      chip.style.gap = '5px'
+      chip.style.background = '#f6f8ff'
+      chip.style.borderRadius = '999px'
+      chip.style.padding = '2px 7px 2px 4px'
+      chip.style.fontSize = '12px'
+      chip.style.lineHeight = '18px'
+      chip.style.color = '#2e3650'
+      chip.style.verticalAlign = 'middle'
+      chip.style.maxWidth = '260px'
+      chip.style.overflow = 'hidden'
+      chip.style.userSelect = 'none'
+      chip.style.margin = '0 2px'
+      chip.style.border = '1px solid rgba(49, 120, 198, 0.18)'
+
+      const badge = doc.createElement('span')
+      badge.textContent = label
+      badge.style.background = color
+      badge.style.color = textColor
+      badge.style.borderRadius = '4px'
+      badge.style.padding = '0 4px'
+      badge.style.fontSize = '10px'
+      badge.style.fontWeight = '700'
+      badge.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, monospace'
+      badge.style.lineHeight = '16px'
+      badge.style.flexShrink = '0'
+      chip.appendChild(badge)
+
+      const name = doc.createElement('span')
+      name.textContent = filename
+      name.style.overflow = 'hidden'
+      name.style.textOverflow = 'ellipsis'
+      name.style.whiteSpace = 'nowrap'
+      name.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, monospace'
+      name.style.fontSize = '11.5px'
+      chip.appendChild(name)
+
+      const removeBtn = doc.createElement('button')
+      removeBtn.type = 'button'
+      removeBtn.textContent = '×'
+      removeBtn.title = '移除'
+      removeBtn.style.width = '14px'
+      removeBtn.style.height = '14px'
+      removeBtn.style.borderRadius = '50%'
+      removeBtn.style.border = 'none'
+      removeBtn.style.background = 'rgba(49, 120, 198, 0.12)'
+      removeBtn.style.color = '#31589a'
+      removeBtn.style.cursor = 'pointer'
+      removeBtn.style.display = 'flex'
+      removeBtn.style.alignItems = 'center'
+      removeBtn.style.justifyContent = 'center'
+      removeBtn.style.padding = '0'
+      removeBtn.style.flexShrink = '0'
+      removeBtn.style.fontSize = '10px'
+      removeBtn.style.lineHeight = '1'
+      removeBtn.style.marginLeft = '1px'
+      removeBtn.onclick = (event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        removeChipNode(chip)
+      }
+      chip.appendChild(removeBtn)
+
+      return chip
+    }
+
+    for (const ref of refs) {
+      appendText(rawValue.slice(cursor, ref.start))
+      fragment.appendChild(createChipNode(ref.path))
+      cursor = ref.end
+    }
+    appendText(rawValue.slice(cursor))
+    root.replaceChildren(fragment)
+  }
+
+  const applyEditorValue = (nextValue: string, nextCursor: number, nextSelectionEnd = nextCursor) => {
+    setValue(nextValue)
+    renderEditorValue(nextValue)
+    const root = editorRef.current
+    if (!root) return
+    root.focus()
+    setSelectionOffsets(nextCursor, nextSelectionEnd)
+  }
+
+  const insertPlainText = (text: string) => {
+    const { start, end } = getSelectionOffsets()
+    const before = value.slice(0, start)
+    const after = value.slice(end)
+    const nextValue = `${before}${text}${after}`
+    const nextCursor = before.length + text.length
+    applyEditorValue(nextValue, nextCursor)
+  }
+
+  const insertFileReferences = (paths: string[]) => {
+    const validPaths = paths.filter(Boolean)
+    if (validPaths.length === 0) return
+    const { start, end } = getSelectionOffsets()
+    const before = value.slice(0, start)
+    const after = value.slice(end)
+    const prefix = before && !/\s$/.test(before) ? ' ' : ''
+    const suffix = after && !/^\s/.test(after) ? ' ' : ''
+    const inserted = validPaths.map(buildEditableFileReference).join(' ')
+    const nextValue = `${before}${prefix}${inserted}${suffix}${after}`
+    const nextCursor = (before + prefix + inserted + suffix).length
+    applyEditorValue(nextValue, nextCursor)
+  }
+
   const handleSend = () => {
     const trimmed = value.trim()
     const hasAttachments = attachments.length > 0
     if (!trimmed && !hasAttachments) return
 
     if (isLoading || queue.length > 0) {
-      // Queue the message instead of dropping it. We also enqueue when the
-      // queue is non-empty (even if isLoading momentarily flips to false
-      // between drains) so we strictly preserve send order.
       setQueue((prev) => [
         ...prev,
         {
@@ -114,23 +355,14 @@ export function InputArea({
       dispatch(trimmed, hasAttachments ? attachments : [])
     }
     setAttachments([])
-    setValue('')
-    if (textareaRef.current) textareaRef.current.style.height = 'auto'
+    applyEditorValue('', 0)
   }
 
-  // Drain the queue head once the in-flight run finishes. We only ever
-  // dispatch ONE message per isLoading→false transition: dispatching calls
-  // back into the parent which sets isLoading=true synchronously, blocking
-  // further drains until that next run completes. This keeps strict FIFO
-  // semantics even when several messages are queued.
   useEffect(() => {
     if (isLoading || queue.length === 0) return
     const [head, ...rest] = queue
     setQueue(rest)
     dispatch(head.text, head.attachments)
-    // dispatch only closes over prop callbacks, which are stable enough
-    // here; intentionally excluded from deps to avoid re-firing the queue
-    // on every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoading, queue])
 
@@ -138,54 +370,76 @@ export function InputArea({
     setQueue((prev) => prev.filter((q) => q.id !== id))
   }
 
-  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
+  const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSend()
+      return
+    }
+    if (e.key === 'Enter' && e.shiftKey) {
+      e.preventDefault()
+      insertPlainText('\n')
+    }
   }
 
-  const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setValue(e.target.value)
-    const el = e.target
-    el.style.height = 'auto'
-    el.style.height = `${Math.min(el.scrollHeight, 100)}px`
+  const handleEditorInput = () => {
+    setValue(serializeEditor())
   }
 
-  const handlePaste = (e: ClipboardEvent<HTMLTextAreaElement>) => {
-    if (!attachmentsEnabled) return
+  const handlePaste = (e: ClipboardEvent<HTMLDivElement>) => {
     const items = e.clipboardData?.items
-    if (!items) return
-    const files: File[] = []
-    for (let i = 0; i < items.length; i++) {
-      const it = items[i]
-      if (it.kind === 'file' && it.type.startsWith('image/')) {
-        const f = it.getAsFile()
-        if (f) files.push(f)
+    const text = e.clipboardData?.getData('text/plain') ?? ''
+    if (!items) {
+      if (text) {
+        e.preventDefault()
+        insertPlainText(text)
+      }
+      return
+    }
+
+    const imageFiles: File[] = []
+    for (let i = 0; i < items.length; i += 1) {
+      const item = items[i]
+      if (item.kind === 'file' && item.type.startsWith('image/')) {
+        const file = item.getAsFile()
+        if (file) imageFiles.push(file)
       }
     }
-    if (files.length > 0) {
+    if (imageFiles.length > 0) {
       e.preventDefault()
-      void addImageFiles(files)
+      void addImageFiles(imageFiles)
+      return
+    }
+    if (text) {
+      e.preventDefault()
+      insertPlainText(text)
     }
   }
 
   const handleDrop = (e: DragEvent<HTMLDivElement>) => {
-    if (!attachmentsEnabled) return
     e.preventDefault()
     setIsDragOver(false)
-    const files = Array.from(e.dataTransfer?.files || []).filter(f => f.type.startsWith('image/'))
-    if (files.length > 0) void addImageFiles(files)
+    const files = Array.from(e.dataTransfer?.files || [])
+    const imageFiles = files.filter((f) => f.type.startsWith('image/'))
+    const otherFilePaths = files
+      .filter((f) => !f.type.startsWith('image/'))
+      .map((f) => window.electron?.getPathForFile?.(f) ?? '')
+      .filter(Boolean)
+    if (imageFiles.length > 0 && attachmentsEnabled) void addImageFiles(imageFiles)
+    if (otherFilePaths.length > 0) insertFileReferences(otherFilePaths)
   }
 
   const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
-    if (!attachmentsEnabled) return
-    if (e.dataTransfer?.types?.includes('Files')) {
-      e.preventDefault()
-      setIsDragOver(true)
-    }
+    if (!e.dataTransfer?.types?.includes('Files')) return
+    const items = Array.from(e.dataTransfer.items || [])
+    const hasNonImageFile = items.some((item) => item.kind === 'file' && !item.type.startsWith('image/'))
+    const hasImageFile = items.some((item) => item.kind === 'file' && item.type.startsWith('image/'))
+    if (!hasNonImageFile && (!attachmentsEnabled || !hasImageFile)) return
+    e.preventDefault()
+    setIsDragOver(true)
   }
 
   const handleDragLeave = (e: DragEvent<HTMLDivElement>) => {
-    if (!attachmentsEnabled) return
-    // Only clear when leaving the wrapper itself, not children
     if (e.currentTarget === e.target) setIsDragOver(false)
   }
 
@@ -193,16 +447,16 @@ export function InputArea({
     setAttachments((prev) => prev.filter((_, i) => i !== idx))
   }
 
-  // Send/queue button enables whenever there's something to dispatch — we
-  // intentionally allow clicking while isLoading so the click queues.
   const hasInput = value.trim().length > 0 || attachments.length > 0
   const canSend = hasInput
   const isQueueing = isLoading && hasInput
 
-  // Whole input zone is ONE bubble: single pink border, rounded, with the
-  // textarea blending seamlessly into a bottom toolbar row that holds the
-  // model picker, usage ring, and send button. No inner borders.
-  const [focused, setFocused] = useState(false)
+  const placeholderText =
+    queue.length > 0
+      ? `已排队 ${queue.length} 条，回复结束后依次发送…`
+      : attachmentsEnabled
+        ? '输入消息... (Enter 发送，可粘贴图片 / 拖拽图片和文件)'
+        : '输入消息... (Enter 发送，可拖拽文件)'
 
   return (
     <div
@@ -217,10 +471,6 @@ export function InputArea({
       }}
     >
       {queue.length > 0 && (
-        // "Half bubble" sitting just above the input bubble: narrower
-        // (left/right inset by 14px), only the top corners are rounded,
-        // bottom border removed, and a -1px bottom margin so it merges
-        // visually into the main input bubble below.
         <div
           style={{
             margin: '0 14px -1px',
@@ -240,6 +490,7 @@ export function InputArea({
               q.text && q.attachments.length > 0
                 ? `  · 图片 × ${q.attachments.length}`
                 : ''
+            const previewContent = `${previewText}${suffix}`
             return (
               <div
                 key={q.id}
@@ -264,22 +515,21 @@ export function InputArea({
                 >
                   <path d="M5 3 v6 a3 3 0 0 0 3 3 h4" />
                 </svg>
-                <span
-                  title={previewText + suffix}
+                <div
+                  title={previewContent}
                   style={{
                     fontSize: 12,
                     color: '#5f4651',
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    lineHeight: 1.3,
+                    lineHeight: 1.4,
                     flex: 1,
                     minWidth: 0,
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                    overflowWrap: 'anywhere',
                   }}
                 >
-                  {previewText}
-                  {suffix}
-                </span>
+                  <FileChipRenderer text={previewContent} />
+                </div>
                 <button
                   type="button"
                   onClick={() => removeQueued(q.id)}
@@ -330,6 +580,7 @@ export function InputArea({
           })}
         </div>
       )}
+
       <div
         style={{
           background: '#fff',
@@ -397,46 +648,51 @@ export function InputArea({
           </div>
         )}
 
-        {/* Textarea — no own border/bg, blends into the bubble */}
         <div style={{ padding: '14px 16px 8px' }}>
-          <textarea
-            ref={textareaRef}
-            value={value}
-            onChange={handleInput}
-            onKeyDown={handleKeyDown}
-            onPaste={handlePaste}
-            onFocus={() => setFocused(true)}
-            onBlur={() => setFocused(false)}
-            placeholder={
-              queue.length > 0
-                ? `已排队 ${queue.length} 条，回复结束后依次发送…`
-                : attachmentsEnabled
-                  ? '输入消息... (Enter 发送，可粘贴/拖拽图片)'
-                  : '输入消息... (Enter 发送)'
-            }
-            rows={1}
-            style={{
-              width: '100%',
-              resize: 'none',
-              border: 'none',
-              outline: 'none',
-              background: 'transparent',
-              padding: 0,
-              fontSize: 13,
-              color: '#333',
-              minHeight: 24,
-              maxHeight: 140,
-              overflow: 'auto',
-              lineHeight: 1.5,
-              fontFamily: 'inherit',
-              display: 'block',
-              boxSizing: 'border-box',
-            }}
-          />
+          <div style={{ position: 'relative' }}>
+            {value.length === 0 && (
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  color: '#999',
+                  pointerEvents: 'none',
+                  lineHeight: 1.5,
+                  fontSize: 13,
+                  fontFamily: 'inherit',
+                }}
+              >
+                {placeholderText}
+              </div>
+            )}
+            <div
+              ref={editorRef}
+              contentEditable
+              suppressContentEditableWarning
+              spellCheck={false}
+              onInput={handleEditorInput}
+              onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
+              onFocus={() => setFocused(true)}
+              onBlur={() => setFocused(false)}
+              style={{
+                width: '100%',
+                minHeight: 24,
+                maxHeight: 140,
+                overflow: 'auto',
+                outline: 'none',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+                overflowWrap: 'anywhere',
+                lineHeight: 1.5,
+                fontSize: 13,
+                color: '#333',
+                fontFamily: 'inherit',
+              }}
+            />
+          </div>
         </div>
 
-        {/* Bottom row — model picker (left) + usage ring + send button (right),
-            all inside the same bubble. */}
         <div
           style={{
             display: 'flex',
@@ -451,9 +707,6 @@ export function InputArea({
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
             {toolbarRight}
             {isLoading && onStop ? (
-              // Stop button — abort the in-flight run AND drop any queued
-              // messages so the drain effect doesn't immediately fire the
-              // next one after the abort flips isLoading back to false.
               <button
                 type="button"
                 onClick={() => {
@@ -483,7 +736,6 @@ export function InputArea({
                   ;(e.currentTarget as HTMLButtonElement).style.transform = 'scale(1)'
                 }}
               >
-                {/* Filled square */}
                 <svg width="10" height="10" viewBox="0 0 10 10">
                   <rect x="0" y="0" width="10" height="10" rx="1.5" fill="currentColor" />
                 </svg>

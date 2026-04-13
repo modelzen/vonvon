@@ -2,6 +2,19 @@ import React from 'react'
 import { tokens } from './settingsStyles'
 
 export function AboutSection(): React.ReactElement {
+  const [version, setVersion] = React.useState('0.1.2')
+
+  React.useEffect(() => {
+    void window.electron
+      .getAppVersion()
+      .then((appVersion) => {
+        setVersion(appVersion)
+      })
+      .catch(() => {
+        // Keep the release version fallback when the preload bridge is unavailable.
+      })
+  }, [])
+
   return (
     <section
       style={{
@@ -24,7 +37,7 @@ export function AboutSection(): React.ReactElement {
         }}
       />
       <p style={{ fontSize: 13, fontWeight: 600, color: tokens.ink, margin: 0 }}>Vonvon</p>
-      <p style={{ fontSize: 11, color: tokens.inkMuted, marginTop: 4 }}>版本 0.1.0</p>
+      <p style={{ fontSize: 11, color: tokens.inkMuted, marginTop: 4 }}>版本 {version}</p>
       <p style={{ fontSize: 11, color: tokens.inkFaint, marginTop: 2 }}>macOS AI 助手</p>
     </section>
   )

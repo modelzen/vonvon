@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 
 contextBridge.exposeInMainWorld('electron', {
   // Chat — implemented by worker-3 (Stage 3)
@@ -27,6 +27,7 @@ contextBridge.exposeInMainWorld('electron', {
   getBackendConfig: () => ipcRenderer.invoke('backend:config:get'),
   setBackendConfig: (config: Partial<{ url: string; enabled: boolean }>) =>
     ipcRenderer.invoke('backend:config:set', config),
+  getAppVersion: (): Promise<string> => ipcRenderer.invoke('app:getVersion'),
 
   // Workspace directory picker
   pickWorkspaceDirectory: (): Promise<string | null> =>
@@ -37,6 +38,15 @@ contextBridge.exposeInMainWorld('electron', {
     ipcRenderer.invoke('shell:openExternal', url),
   showItemInFolder: (path: string): void => {
     ipcRenderer.invoke('shell:showItemInFolder', path)
+  },
+  fileExists: (path: string): Promise<boolean> =>
+    ipcRenderer.invoke('fs:exists', path),
+  getPathForFile: (file: File): string => {
+    try {
+      return webUtils.getPathForFile(file)
+    } catch {
+      return ''
+    }
   },
 
   // Kirby — Stage 2
@@ -84,9 +94,12 @@ declare global {
       listProviders(): Promise<Array<{ provider: string; model: string; configured: boolean }>>
       getBackendConfig(): Promise<{ url: string; enabled: boolean }>
       setBackendConfig(config: Partial<{ url: string; enabled: boolean }>): Promise<void>
+      getAppVersion(): Promise<string>
       pickWorkspaceDirectory(): Promise<string | null>
       openExternal(url: string): Promise<void>
       showItemInFolder(path: string): void
+      fileExists(path: string): Promise<boolean>
+      getPathForFile(file: File): string
       detachKirby(): void
       closeKirbySidebar(): void
       getKirbyState(): Promise<

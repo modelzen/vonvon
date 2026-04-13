@@ -103,6 +103,7 @@ async def send_message(req: ChatRequest):
             persisted_text = None
 
         async def run_agent():
+            nonlocal effective_message, persisted_text
             lock_held = False
             try:
                 # Acquire lock with 5s timeout so a stuck request can't freeze
@@ -120,6 +121,49 @@ async def send_message(req: ChatRequest):
                         "data": {"error": "backend busy: previous request still running"},
                     })
                     return
+
+                # Expand @file: references just before the run so the agent
+                # sees file contents, while SessionDB still stores the raw
+                # user-authored token for history/chip re-rendering.
+                if "@file:" in plain_text:
+                    try:
+                        from agent.context_references import preprocess_context_references_async
+
+                        msg_cwd = os.path.expanduser("~")
+                        ctx_result = await preprocess_context_references_async(
+                            plain_text,
+                            cwd=msg_cwd,
+                            context_length=agent_service.get_model_context_size(),
+                            allowed_root=msg_cwd,
+                        )
+                        if ctx_result.blocked:
+                            queue.put_nowait({
+                                "event": "run.failed",
+                                "data": {
+                                    "error": "\n".join(ctx_result.warnings) or "Context reference blocked."
+                                },
+                            })
+                            return
+                        if ctx_result.expanded:
+                            if isinstance(effective_message, str):
+                                effective_message = ctx_result.message
+                                persisted_text = plain_text
+                            elif isinstance(effective_message, list):
+                                replaced = False
+                                for part in effective_message:
+                                    if part.get("type") == "text":
+                                        part["text"] = ctx_result.message
+                                        replaced = True
+                                        break
+                                if not replaced:
+                                    effective_message.insert(0, {"type": "text", "text": ctx_result.message})
+                                persisted_text = (
+                                    f"{plain_text} {persisted_text}".strip()
+                                    if persisted_text and plain_text and not persisted_text.startswith(plain_text)
+                                    else persisted_text
+                                )
+                    except Exception:
+                        pass
 
                 agent = agent_service.create_agent(
                     session_id=req.session_id,

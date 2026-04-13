@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { AgentMessage } from '../../hooks/useAgentChat'
+import { FileChipRenderer } from './FileChip'
 
 interface Props {
   messages: AgentMessage[]
@@ -178,7 +179,7 @@ function renderMessage(msg: AgentMessage, isLoading: boolean): React.ReactElemen
               ))}
             </div>
           )}
-          {msg.content}
+          <FileChipRenderer text={msg.content} />
         </div>
       </div>
     )
