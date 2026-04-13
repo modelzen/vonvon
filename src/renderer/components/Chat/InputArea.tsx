@@ -1,5 +1,13 @@
 import React, { useEffect, useRef, useState, KeyboardEvent, ClipboardEvent, DragEvent } from 'react'
-import { FileChipRenderer, getFileTypeInfo, parseFileReferences } from './FileChip'
+import {
+  FileChipRenderer,
+  buildFileReference,
+  buildSkillReference,
+  getFileTypeInfo,
+  parseInlineReferences,
+  parseSkillReferences,
+} from './FileChip'
+import { useHermesConfig, type SkillView } from '../../hooks/useHermesConfig'
 
 interface ImageAttachment {
   type: 'image'
@@ -8,9 +16,9 @@ interface ImageAttachment {
 }
 
 interface InputAreaProps {
-  onSend: (message: string) => void
+  onSend: (message: string, skills?: string[]) => void
   isLoading: boolean
-  onSendWithAttachments?: (text: string, atts: ImageAttachment[]) => void
+  onSendWithAttachments?: (text: string, atts: ImageAttachment[], skills?: string[]) => void
   onStop?: () => void
   toolbarLeft?: React.ReactNode
   toolbarRight?: React.ReactNode
@@ -18,7 +26,55 @@ interface InputAreaProps {
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024
 const MAX_ATTACHMENTS = 4
-const buildEditableFileReference = (absPath: string): string => `@file:"${absPath}"`
+const MAX_SKILL_SUGGESTIONS = 8
+
+interface SlashState {
+  start: number
+  end: number
+  query: string
+}
+
+const skillSlug = (name: string): string =>
+  name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/-{2,}/g, '-')
+    .replace(/^-|-$/g, '')
+
+const getSkillSourceLabel = (skill: SkillView): string => {
+  const source = (skill.source || '').toLowerCase()
+  if (source === 'builtin') return 'vonvon'
+  if (source === 'official') return '官方'
+  if (source === 'community') return '社区'
+  if (source === 'local' || source === 'personal') return '个人'
+  return skill.source || 'skill'
+}
+
+const findSlashState = (text: string, cursor: number): SlashState | null => {
+  if (cursor < 0 || cursor > text.length) return null
+  const before = text.slice(0, cursor)
+  const match = /(^|[\s\n])\/([a-zA-Z0-9-]*)$/.exec(before)
+  if (!match) return null
+  const query = match[2] ?? ''
+  const start = cursor - query.length - 1
+  if (start < 0) return null
+  return { start, end: cursor, query }
+}
+
+const scoreSkillMatch = (skill: SkillView, query: string): number => {
+  if (!query) return 100
+  const lowered = query.toLowerCase()
+  const name = skill.name.toLowerCase()
+  const slug = skillSlug(skill.name)
+  const desc = (skill.description || '').toLowerCase()
+  if (slug === lowered || name === lowered) return 0
+  if (slug.startsWith(lowered)) return 1
+  if (name.startsWith(lowered)) return 2
+  if (slug.includes(lowered)) return 3
+  if (name.includes(lowered)) return 4
+  if (desc.includes(lowered)) return 5
+  return Number.POSITIVE_INFINITY
+}
 
 export function InputArea({
   onSend,
@@ -28,10 +84,16 @@ export function InputArea({
   toolbarLeft,
   toolbarRight,
 }: InputAreaProps): React.ReactElement {
+  const hermesConfig = useHermesConfig()
   const [value, setValue] = useState('')
   const [attachments, setAttachments] = useState<ImageAttachment[]>([])
   const [isDragOver, setIsDragOver] = useState(false)
   const [focused, setFocused] = useState(false)
+  const [availableSkills, setAvailableSkills] = useState<SkillView[]>([])
+  const [skillsLoading, setSkillsLoading] = useState(false)
+  const [slashState, setSlashState] = useState<SlashState | null>(null)
+  const [slashIndex, setSlashIndex] = useState(0)
+  const [skillsLoadedOnce, setSkillsLoadedOnce] = useState(false)
   const editorRef = useRef<HTMLDivElement>(null)
 
   interface QueuedMsg {
@@ -42,6 +104,28 @@ export function InputArea({
   const [queue, setQueue] = useState<QueuedMsg[]>([])
 
   const attachmentsEnabled = !!onSendWithAttachments
+
+  const refreshSkills = async () => {
+    setSkillsLoading(true)
+    try {
+      const skills = await hermesConfig.listSkills()
+      setAvailableSkills(
+        skills
+          .filter((skill) => skill.enabled_global && skill.enabled_vonvon)
+          .sort((a, b) => a.name.localeCompare(b.name))
+      )
+      setSkillsLoadedOnce(true)
+    } catch {
+      setAvailableSkills([])
+    } finally {
+      setSkillsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void refreshSkills()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const readFileAsDataURL = (file: File): Promise<string> =>
     new Promise((resolve, reject) => {
@@ -83,10 +167,24 @@ export function InputArea({
     }
   }
 
+  const syncSlashState = (rawValue: string, start: number, end = start) => {
+    if (start !== end) {
+      setSlashState(null)
+      setSlashIndex(0)
+      return
+    }
+    const nextSlash = findSlashState(rawValue, start)
+    setSlashState(nextSlash)
+    if (!nextSlash) setSlashIndex(0)
+  }
+
   const getChildRawLength = (node: ChildNode): number => {
     if (node.nodeType === Node.TEXT_NODE) return node.textContent?.length ?? 0
     if (node instanceof HTMLElement && node.dataset.filePath) {
-      return buildEditableFileReference(node.dataset.filePath).length
+      return buildFileReference(node.dataset.filePath).length
+    }
+    if (node instanceof HTMLElement && node.dataset.skillName) {
+      return buildSkillReference(node.dataset.skillName).length
     }
     if (node.nodeName === 'BR') return 1
     return node.textContent?.length ?? 0
@@ -99,7 +197,10 @@ export function InputArea({
       .map((child) => {
         if (child.nodeType === Node.TEXT_NODE) return child.textContent ?? ''
         if (child instanceof HTMLElement && child.dataset.filePath) {
-          return buildEditableFileReference(child.dataset.filePath)
+          return buildFileReference(child.dataset.filePath)
+        }
+        if (child instanceof HTMLElement && child.dataset.skillName) {
+          return buildSkillReference(child.dataset.skillName)
         }
         if (child.nodeName === 'BR') return '\n'
         return child.textContent ?? ''
@@ -129,7 +230,10 @@ export function InputArea({
           if (child.nodeType === Node.TEXT_NODE) {
             return total + Math.min(offset, child.textContent?.length ?? 0)
           }
-          if (child instanceof HTMLElement && child.dataset.filePath) {
+          if (
+            child instanceof HTMLElement &&
+            (child.dataset.filePath || child.dataset.skillName)
+          ) {
             return total + (offset > 0 ? getChildRawLength(child) : 0)
           }
         }
@@ -181,7 +285,7 @@ export function InputArea({
     const doc = root.ownerDocument
     const fragment = doc.createDocumentFragment()
 
-    const refs = parseFileReferences(rawValue)
+    const refs = parseInlineReferences(rawValue)
     let cursor = 0
 
     const appendText = (text: string) => {
@@ -219,11 +323,12 @@ export function InputArea({
 
       const nextValue = serializeEditor()
       setValue(nextValue)
+      syncSlashState(nextValue, Math.min(offsetBefore, nextValue.length))
       root.focus()
       setSelectionOffsets(Math.min(offsetBefore, nextValue.length))
     }
 
-    const createChipNode = (path: string) => {
+    const createFileChipNode = (path: string) => {
       const filename = path.split('/').pop() ?? path
       const { label, color, textColor } = getFileTypeInfo(filename)
       const chip = doc.createElement('span')
@@ -296,9 +401,91 @@ export function InputArea({
       return chip
     }
 
+    const createSkillChipNode = (name: string) => {
+      const accent = '#B83280'
+      const chip = doc.createElement('span')
+      chip.dataset.skillName = name
+      chip.contentEditable = 'false'
+      chip.style.display = 'inline-flex'
+      chip.style.alignItems = 'center'
+      chip.style.gap = '6px'
+      chip.style.background = '#FFF1F7'
+      chip.style.borderRadius = '999px'
+      chip.style.padding = '2px 8px 2px 6px'
+      chip.style.fontSize = '12px'
+      chip.style.lineHeight = '18px'
+      chip.style.color = accent
+      chip.style.verticalAlign = 'middle'
+      chip.style.maxWidth = '240px'
+      chip.style.overflow = 'hidden'
+      chip.style.userSelect = 'none'
+      chip.style.margin = '0 2px'
+      chip.style.border = '1px solid rgba(184, 50, 128, 0.18)'
+
+      const icon = doc.createElementNS('http://www.w3.org/2000/svg', 'svg')
+      icon.setAttribute('width', '14')
+      icon.setAttribute('height', '14')
+      icon.setAttribute('viewBox', '0 0 24 24')
+      icon.setAttribute('fill', 'none')
+      icon.setAttribute('stroke', accent)
+      icon.setAttribute('stroke-width', '1.8')
+      icon.setAttribute('stroke-linecap', 'round')
+      icon.setAttribute('stroke-linejoin', 'round')
+      icon.setAttribute('aria-hidden', 'true')
+      icon.style.flexShrink = '0'
+
+      const iconPath1 = doc.createElementNS('http://www.w3.org/2000/svg', 'path')
+      iconPath1.setAttribute('d', 'M12 3 5.5 6.75v10.5L12 21l6.5-3.75V6.75L12 3Z')
+      const iconPath2 = doc.createElementNS('http://www.w3.org/2000/svg', 'path')
+      iconPath2.setAttribute('d', 'M12 3v7.5m0 0 6.5-3.75M12 10.5 5.5 6.75')
+      icon.appendChild(iconPath1)
+      icon.appendChild(iconPath2)
+      chip.appendChild(icon)
+
+      const label = doc.createElement('span')
+      label.textContent = name
+      label.style.overflow = 'hidden'
+      label.style.textOverflow = 'ellipsis'
+      label.style.whiteSpace = 'nowrap'
+      label.style.minWidth = '0'
+      label.style.fontWeight = '600'
+      chip.appendChild(label)
+
+      const removeBtn = doc.createElement('button')
+      removeBtn.type = 'button'
+      removeBtn.textContent = '×'
+      removeBtn.title = '移除'
+      removeBtn.style.width = '14px'
+      removeBtn.style.height = '14px'
+      removeBtn.style.borderRadius = '50%'
+      removeBtn.style.border = 'none'
+      removeBtn.style.background = 'rgba(184, 50, 128, 0.12)'
+      removeBtn.style.color = accent
+      removeBtn.style.cursor = 'pointer'
+      removeBtn.style.display = 'flex'
+      removeBtn.style.alignItems = 'center'
+      removeBtn.style.justifyContent = 'center'
+      removeBtn.style.padding = '0'
+      removeBtn.style.flexShrink = '0'
+      removeBtn.style.fontSize = '10px'
+      removeBtn.style.lineHeight = '1'
+      removeBtn.onclick = (event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        removeChipNode(chip)
+      }
+      chip.appendChild(removeBtn)
+
+      return chip
+    }
+
     for (const ref of refs) {
       appendText(rawValue.slice(cursor, ref.start))
-      fragment.appendChild(createChipNode(ref.path))
+      if (ref.kind === 'file') {
+        fragment.appendChild(createFileChipNode(ref.path))
+      } else {
+        fragment.appendChild(createSkillChipNode(ref.name))
+      }
       cursor = ref.end
     }
     appendText(rawValue.slice(cursor))
@@ -308,6 +495,7 @@ export function InputArea({
   const applyEditorValue = (nextValue: string, nextCursor: number, nextSelectionEnd = nextCursor) => {
     setValue(nextValue)
     renderEditorValue(nextValue)
+    syncSlashState(nextValue, nextCursor, nextSelectionEnd)
     const root = editorRef.current
     if (!root) return
     root.focus()
@@ -331,11 +519,59 @@ export function InputArea({
     const after = value.slice(end)
     const prefix = before && !/\s$/.test(before) ? ' ' : ''
     const suffix = after && !/^\s/.test(after) ? ' ' : ''
-    const inserted = validPaths.map(buildEditableFileReference).join(' ')
+    const inserted = validPaths.map(buildFileReference).join(' ')
     const nextValue = `${before}${prefix}${inserted}${suffix}${after}`
     const nextCursor = (before + prefix + inserted + suffix).length
     applyEditorValue(nextValue, nextCursor)
   }
+
+  const insertSkillReference = (skill: SkillView) => {
+    const { start, end } = getSelectionOffsets()
+    const activeSlash = slashState ?? findSlashState(value, start)
+    const replaceStart = activeSlash?.start ?? start
+    const replaceEnd = activeSlash?.end ?? end
+    const before = value.slice(0, replaceStart)
+    const after = value.slice(replaceEnd)
+    const prefix = before && !/\s$/.test(before) ? ' ' : ''
+    const suffix = after && !/^\s/.test(after) ? ' ' : ''
+    const inserted = buildSkillReference(skill.name)
+    const nextValue = `${before}${prefix}${inserted}${suffix}${after}`
+    const nextCursor = (before + prefix + inserted + suffix).length
+    applyEditorValue(nextValue, nextCursor)
+  }
+
+  const inlineSkillNames = new Set(
+    parseSkillReferences(value).map((skill) => skill.name.trim().toLowerCase())
+  )
+
+  const slashSuggestions = (slashState ? availableSkills : [])
+    .filter((skill) => !inlineSkillNames.has(skill.name.trim().toLowerCase()))
+    .map((skill) => ({
+      skill,
+      score: scoreSkillMatch(skill, slashState?.query ?? ''),
+    }))
+    .filter((entry) => Number.isFinite(entry.score))
+    .sort((a, b) => {
+      if (a.score !== b.score) return a.score - b.score
+      return a.skill.name.localeCompare(b.skill.name)
+    })
+    .slice(0, MAX_SKILL_SUGGESTIONS)
+
+  useEffect(() => {
+    if (slashSuggestions.length === 0) {
+      setSlashIndex(0)
+      return
+    }
+    setSlashIndex((prev) => Math.min(prev, slashSuggestions.length - 1))
+  }, [slashSuggestions.length])
+
+  useEffect(() => {
+    if (!slashState) return
+    if (!skillsLoadedOnce || availableSkills.length === 0) {
+      void refreshSkills()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slashState, skillsLoadedOnce, availableSkills.length])
 
   const handleSend = () => {
     const trimmed = value.trim()
@@ -371,6 +607,34 @@ export function InputArea({
   }
 
   const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (slashState) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        if (slashSuggestions.length > 0) {
+          setSlashIndex((prev) => (prev + 1) % slashSuggestions.length)
+        }
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        if (slashSuggestions.length > 0) {
+          setSlashIndex((prev) => (prev - 1 + slashSuggestions.length) % slashSuggestions.length)
+        }
+        return
+      }
+      if ((e.key === 'Enter' || e.key === 'Tab') && slashSuggestions.length > 0) {
+        e.preventDefault()
+        insertSkillReference(slashSuggestions[slashIndex]?.skill ?? slashSuggestions[0].skill)
+        return
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setSlashState(null)
+        setSlashIndex(0)
+        return
+      }
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       handleSend()
@@ -383,7 +647,16 @@ export function InputArea({
   }
 
   const handleEditorInput = () => {
-    setValue(serializeEditor())
+    const nextValue = serializeEditor()
+    setValue(nextValue)
+    const { start, end } = getSelectionOffsets()
+    syncSlashState(nextValue, start, end)
+  }
+
+  const handleSelectionChange = () => {
+    const nextValue = serializeEditor()
+    const { start, end } = getSelectionOffsets()
+    syncSlashState(nextValue, start, end)
   }
 
   const handlePaste = (e: ClipboardEvent<HTMLDivElement>) => {
@@ -450,13 +723,14 @@ export function InputArea({
   const hasInput = value.trim().length > 0 || attachments.length > 0
   const canSend = hasInput
   const isQueueing = isLoading && hasInput
+  const showSlashMenu = focused && slashState !== null
 
   const placeholderText =
     queue.length > 0
       ? `已排队 ${queue.length} 条，回复结束后依次发送…`
       : attachmentsEnabled
-        ? '输入消息... (Enter 发送，可粘贴图片 / 拖拽图片和文件)'
-        : '输入消息... (Enter 发送，可拖拽文件)'
+        ? '输入消息... (输入 / 选择 skill，Enter 发送，可粘贴图片 / 拖拽图片和文件)'
+        : '输入消息... (输入 / 选择 skill，Enter 发送，可拖拽文件)'
 
   return (
     <div
@@ -468,6 +742,7 @@ export function InputArea({
         background: isDragOver ? 'rgba(255,228,240,0.95)' : 'transparent',
         flexShrink: 0,
         transition: 'background 0.15s',
+        position: 'relative',
       }}
     >
       {queue.length > 0 && (
@@ -581,6 +856,115 @@ export function InputArea({
         </div>
       )}
 
+      {showSlashMenu && (
+        <div
+          style={{
+            margin: queue.length > 0 ? '0 14px 8px' : '0 14px 8px',
+            border: '1px solid #f2e6ec',
+            borderRadius: 22,
+            background: 'rgba(255,255,255,0.98)',
+            boxShadow: '0 18px 40px -28px rgba(42, 16, 29, 0.35)',
+            overflow: 'hidden',
+          }}
+        >
+          <div
+            style={{
+              padding: '12px 16px 8px',
+              fontSize: 12,
+              fontWeight: 600,
+              color: '#8E6C79',
+              letterSpacing: '0.02em',
+            }}
+          >
+            技能
+          </div>
+          {skillsLoading ? (
+            <div style={{ padding: '0 16px 16px', fontSize: 12, color: '#A1A1AA' }}>加载中…</div>
+          ) : slashSuggestions.length > 0 ? (
+            <div style={{ padding: '0 8px 8px' }}>
+              {slashSuggestions.map(({ skill }, index) => {
+                const active = index === slashIndex
+                return (
+                  <button
+                    key={skill.name}
+                    type="button"
+                    onMouseEnter={() => setSlashIndex(index)}
+                    onMouseDown={(e) => {
+                      e.preventDefault()
+                      insertSkillReference(skill)
+                    }}
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 10,
+                      border: 'none',
+                      background: active ? '#F6F5F7' : 'transparent',
+                      borderRadius: 16,
+                      padding: '10px 12px',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'background 0.15s ease, color 0.15s ease',
+                    }}
+                  >
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke={active ? '#202127' : '#6C6C73'}
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      style={{ flexShrink: 0 }}
+                    >
+                      <path d="M12 3 5.5 6.75v10.5L12 21l6.5-3.75V6.75L12 3Z" />
+                      <path d="M12 3v7.5m0 0 6.5-3.75M12 10.5 5.5 6.75" />
+                    </svg>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div
+                        style={{
+                          fontSize: 13,
+                          fontWeight: 600,
+                          color: active ? '#202127' : '#35353A',
+                          marginBottom: 2,
+                        }}
+                      >
+                        {skill.name}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 12,
+                          color: '#9A98A1',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                        }}
+                      >
+                        {skill.description || '已安装 skill'}
+                      </div>
+                    </div>
+                    <div
+                      style={{
+                        flexShrink: 0,
+                        fontSize: 12,
+                        color: '#A1A1AA',
+                      }}
+                    >
+                      {getSkillSourceLabel(skill)}
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          ) : (
+            <div style={{ padding: '0 16px 16px', fontSize: 12, color: '#A1A1AA' }}>
+              {skillsLoadedOnce ? '没有匹配的 skill' : '暂无可用 skill'}
+            </div>
+          )}
+        </div>
+      )}
+
       <div
         style={{
           background: '#fff',
@@ -672,9 +1056,18 @@ export function InputArea({
               spellCheck={false}
               onInput={handleEditorInput}
               onKeyDown={handleKeyDown}
+              onKeyUp={handleSelectionChange}
+              onMouseUp={handleSelectionChange}
               onPaste={handlePaste}
-              onFocus={() => setFocused(true)}
-              onBlur={() => setFocused(false)}
+              onFocus={() => {
+                setFocused(true)
+                handleSelectionChange()
+              }}
+              onBlur={() => {
+                setFocused(false)
+                setSlashState(null)
+                setSlashIndex(0)
+              }}
               style={{
                 width: '100%',
                 minHeight: 24,
