@@ -34,6 +34,8 @@ static const CGFloat kKirbyBallRadius = 40.0;  // visual circular hit radius
 - (void)loadContentFromURL:(NSString *)urlString;
 - (void)setVisible:(BOOL)visible;
 - (void)evaluateJS:(NSString *)js;
+- (void)syncWindowLevelForState;
+- (void)orderAboveWindowNumber:(NSInteger)windowNumber;
 
 /**
  * Switch the SVG form displayed by the embedded WKWebView. Valid values

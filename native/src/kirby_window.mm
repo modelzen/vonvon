@@ -50,6 +50,29 @@
     });
 }
 
+- (void)setState:(KirbyState)state {
+    _state = state;
+    [self syncWindowLevelForState];
+}
+
+- (void)syncWindowLevelForState {
+    if (!self.panel) return;
+
+    // Floating/snapping should stay visible above other apps. Once docked,
+    // vonvon should live on the same window layer as Feishu instead of
+    // pinning itself above unrelated windows.
+    self.panel.level = KirbyStateIsDocked(self.state)
+        ? NSNormalWindowLevel
+        : NSFloatingWindowLevel;
+}
+
+- (void)orderAboveWindowNumber:(NSInteger)windowNumber {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (!self.panel || windowNumber <= 0) return;
+        [self.panel orderWindow:NSWindowAbove relativeTo:windowNumber];
+    });
+}
+
 - (void)destroy {
     dispatch_async(dispatch_get_main_queue(), ^{
         [self.panel orderOut:nil];

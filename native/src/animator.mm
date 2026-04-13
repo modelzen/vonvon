@@ -37,6 +37,9 @@
             // BrowserWindow in response to notifySnapComplete.
             kirby.state = KirbyStateDockedExpanded;
             [kirby setForm:@"dockedExpanded"];
+            if ([SnapEngine shared].lastFeishuWindowID != kCGNullWindowID) {
+                [kirby orderAboveWindowNumber:(NSInteger)[SnapEngine shared].lastFeishuWindowID];
+            }
 
             [[SnapEngine shared] notifySnapComplete];
             [[SnapEngine shared] startTrackingTimer];

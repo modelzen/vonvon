@@ -7,7 +7,13 @@ import {
   isFloatingChatWindowOpen,
 } from '../windows'
 
-type FeishuBounds = { x: number; y: number; width: number; height: number }
+type FeishuBounds = {
+  x: number
+  y: number
+  width: number
+  height: number
+  windowId: number
+}
 
 type KirbyForm = 'floating' | 'snapping' | 'dockedExpanded' | 'dockedCollapsed'
 
@@ -37,10 +43,41 @@ type KirbyNative = {
 let native: KirbyNative | null = null
 let _mainWin: BrowserWindow | null = null
 let _kirbyUrl = ''
+let _sidebarZOrderTimer: NodeJS.Timeout | null = null
 // Latest known Feishu bounds, kept in sync via onSnapComplete /
 // onDockedClick callbacks. Used when the user hides→shows the sidebar via
 // the ✕ button and we need to re-position on the current Feishu window.
 let _lastFeishuBounds: FeishuBounds | null = null
+
+function feishuMediaSourceId(feishu: FeishuBounds): string | null {
+  return feishu.windowId > 0 ? `window:${Math.trunc(feishu.windowId)}:0` : null
+}
+
+function syncSidebarAboveFeishu(feishu: FeishuBounds | null): void {
+  if (!_mainWin || !_mainWin.isVisible() || !feishu) return
+  const sourceId = feishuMediaSourceId(feishu)
+  if (!sourceId) return
+
+  try {
+    _mainWin.moveAbove(sourceId)
+  } catch (err) {
+    console.warn('[kirby] failed to move sidebar above Feishu window:', sourceId, err)
+  }
+}
+
+function startSidebarZOrderSync(): void {
+  if (_sidebarZOrderTimer) return
+  _sidebarZOrderTimer = setInterval(() => {
+    syncSidebarAboveFeishu(_lastFeishuBounds)
+  }, 120)
+}
+
+function stopSidebarZOrderSync(): void {
+  if (_sidebarZOrderTimer) {
+    clearInterval(_sidebarZOrderTimer)
+    _sidebarZOrderTimer = null
+  }
+}
 
 /**
  * Apply the given Feishu bounds to the main BrowserWindow sidebar:
@@ -69,7 +106,8 @@ function applySidebarBounds(feishu: FeishuBounds): void {
   // which is what we want for an unbounded width ceiling.
   _mainWin.setMinimumSize(280, sidebarH)
   _mainWin.setMaximumSize(900, sidebarH)
-  _mainWin.setAlwaysOnTop(true, 'floating')
+  _mainWin.setAlwaysOnTop(false)
+  syncSidebarAboveFeishu(feishu)
 }
 
 /**
@@ -83,6 +121,7 @@ function applySidebarBounds(feishu: FeishuBounds): void {
  */
 function releaseSidebar(animate: boolean = false): void {
   if (!_mainWin) return
+  stopSidebarZOrderSync()
   _mainWin.setAlwaysOnTop(false)
   _mainWin.setMinimumSize(0, 0)
   _mainWin.setMaximumSize(0, 0)
@@ -170,6 +209,8 @@ export function initKirby(mainWindow: BrowserWindow): void {
     if (_mainWin) {
       applySidebarBounds(feishuBounds)
       _mainWin.show()
+      syncSidebarAboveFeishu(feishuBounds)
+      startSidebarZOrderSync()
       // Notify renderer so it can play the entry animation.
       _mainWin.webContents.send('kirby:sidebar-show')
     }
@@ -197,6 +238,8 @@ export function initKirby(mainWindow: BrowserWindow): void {
       if (_mainWin) {
         applySidebarBounds(feishuBounds)
         _mainWin.show()
+        syncSidebarAboveFeishu(feishuBounds)
+        startSidebarZOrderSync()
         _mainWin.webContents.send('kirby:sidebar-show')
       }
     })
@@ -218,6 +261,7 @@ export function initKirby(mainWindow: BrowserWindow): void {
     addon.onFeishuMoved((feishuBounds: FeishuBounds) => {
       _lastFeishuBounds = feishuBounds
       applySidebarBounds(feishuBounds)
+      syncSidebarAboveFeishu(feishuBounds)
     })
   }
 

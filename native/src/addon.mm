@@ -43,6 +43,7 @@ static void CallNoArgs(napi_env env, napi_value jsCb,
 // Struct to pass feishu bounds from native to JS
 struct FeishuBounds {
     double x, y, width, height;
+    double windowId;
 };
 
 // CallJs: snap-complete with feishu bounds
@@ -63,6 +64,8 @@ static void CallSnapCompleteWithBounds(napi_env env, napi_value jsCb,
     napi_set_named_property(env, obj, "width", val);
     napi_create_double(env, b->height, &val);
     napi_set_named_property(env, obj, "height", val);
+    napi_create_double(env, b->windowId, &val);
+    napi_set_named_property(env, obj, "windowId", val);
 
     delete b;
 
@@ -169,7 +172,9 @@ Napi::Value OnSnapComplete(const Napi::CallbackInfo& info) {
     [SnapEngine shared].onSnapComplete = ^{
         if (g_completeFn) {
             CGRect fb = [SnapEngine shared].targetFeishuBounds;
-            FeishuBounds *b = new FeishuBounds{fb.origin.x, fb.origin.y, fb.size.width, fb.size.height};
+            FeishuBounds *b = new FeishuBounds{
+                fb.origin.x, fb.origin.y, fb.size.width, fb.size.height,
+                (double)[SnapEngine shared].lastFeishuWindowID};
             napi_call_threadsafe_function(g_completeFn, b, napi_tsfn_nonblocking);
         }
     };
@@ -232,7 +237,8 @@ Napi::Value OnDockedClick(const Napi::CallbackInfo& info) {
         if (g_dockedClickFn) {
             CGRect fb = [SnapEngine shared].targetFeishuBounds;
             FeishuBounds *b = new FeishuBounds{
-                fb.origin.x, fb.origin.y, fb.size.width, fb.size.height};
+                fb.origin.x, fb.origin.y, fb.size.width, fb.size.height,
+                (double)[SnapEngine shared].lastFeishuWindowID};
             napi_call_threadsafe_function(g_dockedClickFn, b, napi_tsfn_nonblocking);
         }
     };
@@ -288,7 +294,8 @@ Napi::Value OnFeishuMoved(const Napi::CallbackInfo& info) {
         if (g_feishuMovedFn) {
             FeishuBounds *b = new FeishuBounds{
                 newBounds.origin.x, newBounds.origin.y,
-                newBounds.size.width, newBounds.size.height};
+                newBounds.size.width, newBounds.size.height,
+                (double)[SnapEngine shared].lastFeishuWindowID};
             napi_call_threadsafe_function(g_feishuMovedFn, b, napi_tsfn_nonblocking);
         }
     };

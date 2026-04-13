@@ -8,7 +8,7 @@
 
 1. **原生层状态机改造**(已编译通过)
    - `native/src/kirby_window.{h,mm}`:NSPanel 改 **120×120**,取消圆形 cornerRadius 裁剪,新增 `setForm:` 方法,枚举新增 `KirbyStateDockedExpanded` / `KirbyStateDockedCollapsed`
-   - `native/src/snap_engine.{h,mm}`:新增 `dockedTopRightOriginForFeishuBounds:` 坐标换算,tracking timer 从 0.5s → 33ms,`_tick` 改为"飞书移动 → 关 sidebar + 球跟随",飞书消失才 detach
+   - `native/src/snap_engine.{h,mm}`:新增 `dockedTopRightOriginForFeishuBounds:` 坐标换算,tracking timer 从 0.5s → 33ms,`_tick` 改为"飞书移动/被遮挡 → 保持吸附跟随",飞书消失才 detach
    - `native/src/animator.mm`:吸附目标改为飞书右上角锚点,完成后不再 hide panel,状态置 dockedExpanded
    - `native/src/drag_handler.{h,mm}`:**圆形命中检测**(center 60,60 / r 40),**8px drag 阈值**区分 click vs drag,新增 `onDockedClick` / `onDragLeave` callback
    - `native/src/addon.mm` + `native/index.d.ts`:新增 N-API 导出 `onDockedClick` / `onDragLeave` / `onCollapseSidebar` / `setKirbyForm` / `collapseSidebar`
@@ -100,8 +100,9 @@
   3. 点 sidebar ✕ → sidebar 缩回 vonvon + 球变缺角圆(dockedCollapsed)
   4. 点缺角圆 vonvon → sidebar 从球里长出 + 球变 D 形
   5. 从 docked 拖球走 → sidebar 收回 + 球变粘性拉丝形态 → 继续拖变 floating
-  6. 移动飞书窗口 → sidebar 消失 + 球跟随右上角
-  7. 最小化飞书 → 球动画飞回屏幕中心 floating
+  6. 移动飞书窗口 → 球和 sidebar 一起跟随右上角
+  7. 用其它窗口遮住飞书右上角 → 仍保持吸附,sidebar 不收起
+  8. 最小化飞书 → 球动画飞回屏幕中心 floating
 
 ## 关键约束(实现时容易踩坑)
 

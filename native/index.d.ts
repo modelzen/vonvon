@@ -16,6 +16,7 @@ declare module 'vonvon-native' {
     y: number
     width: number
     height: number
+    windowId: number
   }
 
   /** Create the Kirby floating NSPanel at screen position (x, y). */
@@ -54,10 +55,13 @@ declare module 'vonvon-native' {
    *  floating and switched the SVG form; JS hides the sidebar. */
   export function onDragLeave(callback: () => void): void
 
-  /** Register a callback fired when the Feishu window moves while
-   *  dockedExpanded. Native has already moved the ball to the new corner
-   *  and transitioned to dockedCollapsed; JS hides the sidebar. */
+  /** Legacy callback kept for compatibility with older integrations.
+   *  Current behavior keeps the sidebar attached while Feishu remains visible. */
   export function onCollapseSidebar(callback: () => void): void
+
+  /** Register a callback fired while the docked ball tracks Feishu so JS can
+   *  keep the sidebar aligned and ordered relative to the current Feishu window. */
+  export function onFeishuMoved(callback: (bounds: FeishuBounds) => void): void
 
   /** Trigger the detach animation (docked → floating). */
   export function detachToFloating(): void
