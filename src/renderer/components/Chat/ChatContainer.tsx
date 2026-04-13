@@ -29,7 +29,7 @@ export function ChatContainer({ defaultModel = 'gpt-4o' }: ChatContainerProps): 
       <div style={{ flex: 1, overflow: 'hidden', minHeight: 0 }}>
         <MessageList messages={messages} isLoading={isLoading} />
       </div>
-      <InputArea onSend={sendMessage} isLoading={isLoading} />
+      <InputArea onSend={(msg) => sendMessage(msg)} isLoading={isLoading} />
     </div>
   )
 }

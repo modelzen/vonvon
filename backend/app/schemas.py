@@ -13,6 +13,7 @@ class ChatRequest(BaseModel):
     session_id: str
     message: str
     attachments: List[ChatAttachment] = Field(default_factory=list)
+    skills: List[str] = Field(default_factory=list)
 
 
 class CompressRequest(BaseModel):

@@ -44,6 +44,30 @@ def test_send_message_sse(client, mock_agent):
     assert "final_response" in body or "output" in body
 
 
+def test_send_message_expands_inline_skills_before_agent_run(client, mock_agent):
+    with patch(
+        "app.routes.chat.skills_service.extract_inline_skills",
+        return_value=(["Checkpoint"], "save current state"),
+    ), patch(
+        "app.routes.chat.skills_service.build_skill_turn_message",
+        return_value=("skill prompt + user instruction", ["Checkpoint"], []),
+    ):
+        resp = client.post(
+            "/api/chat/send",
+            json={
+                "session_id": "test-session-123",
+                "message": '@skill:checkpoint save current state',
+            },
+            headers={"Accept": "text/event-stream"},
+        )
+
+    assert resp.status_code == 200
+    assert mock_agent.run_conversation.called
+    kwargs = mock_agent.run_conversation.call_args.kwargs
+    assert kwargs["user_message"] == "skill prompt + user instruction"
+    assert kwargs["persist_user_message"] == '@skill:checkpoint save current state'
+
+
 def test_compress_context(client, mock_session_db):
     """Test /api/chat/compress returns usage after compression."""
     import sys

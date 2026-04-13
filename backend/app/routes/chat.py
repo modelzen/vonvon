@@ -10,7 +10,7 @@ from agent.context_compressor import ContextCompressor
 import os
 
 from app.schemas import ChatRequest, CompressRequest
-from app.services import agent_service, session_service, workspace_service
+from app.services import agent_service, session_service, skills_service, workspace_service
 
 router = APIRouter()
 
@@ -76,7 +76,13 @@ async def send_message(req: ChatRequest):
         # SessionDB transcript (which stores ``messages.content`` as TEXT)
         # never has to serialize a list. Multimodal data only lives in the
         # current turn's API payload, not in history.
-        plain_text = (req.message or "").strip()
+        raw_plain_text = (req.message or "").strip()
+        requested_skills = [str(skill).strip() for skill in (req.skills or []) if str(skill).strip()]
+        if requested_skills:
+            active_skills = requested_skills
+            plain_text = raw_plain_text
+        else:
+            active_skills, plain_text = skills_service.extract_inline_skills(raw_plain_text)
         image_count = sum(1 for a in (req.attachments or []) if a.type == "image")
         if image_count:
             # Build OpenAI chat.completions multimodal content list.
@@ -97,10 +103,12 @@ async def send_message(req: ChatRequest):
                 placeholder_tail = " ".join(f"[图片:{n}]" for n in image_names)
             else:
                 placeholder_tail = " ".join(["[图片]"] * image_count)
-            persisted_text = (f"{plain_text} {placeholder_tail}" if plain_text else placeholder_tail).strip()
+            persisted_text = (
+                f"{raw_plain_text} {placeholder_tail}" if raw_plain_text else placeholder_tail
+            ).strip()
         else:
             effective_message = plain_text
-            persisted_text = None
+            persisted_text = raw_plain_text if active_skills else None
 
         async def run_agent():
             nonlocal effective_message, persisted_text
@@ -122,16 +130,18 @@ async def send_message(req: ChatRequest):
                     })
                     return
 
+                text_for_agent = plain_text
+
                 # Expand @file: references just before the run so the agent
                 # sees file contents, while SessionDB still stores the raw
                 # user-authored token for history/chip re-rendering.
-                if "@file:" in plain_text:
+                if "@file:" in text_for_agent:
                     try:
                         from agent.context_references import preprocess_context_references_async
 
                         msg_cwd = os.path.expanduser("~")
                         ctx_result = await preprocess_context_references_async(
-                            plain_text,
+                            text_for_agent,
                             cwd=msg_cwd,
                             context_length=agent_service.get_model_context_size(),
                             allowed_root=msg_cwd,
@@ -145,25 +155,34 @@ async def send_message(req: ChatRequest):
                             })
                             return
                         if ctx_result.expanded:
-                            if isinstance(effective_message, str):
-                                effective_message = ctx_result.message
-                                persisted_text = plain_text
-                            elif isinstance(effective_message, list):
-                                replaced = False
-                                for part in effective_message:
-                                    if part.get("type") == "text":
-                                        part["text"] = ctx_result.message
-                                        replaced = True
-                                        break
-                                if not replaced:
-                                    effective_message.insert(0, {"type": "text", "text": ctx_result.message})
-                                persisted_text = (
-                                    f"{plain_text} {persisted_text}".strip()
-                                    if persisted_text and plain_text and not persisted_text.startswith(plain_text)
-                                    else persisted_text
-                                )
+                            text_for_agent = ctx_result.message
                     except Exception:
                         pass
+
+                if active_skills:
+                    built_message, loaded_skills, _missing = skills_service.build_skill_turn_message(
+                        active_skills,
+                        user_instruction=text_for_agent,
+                        task_id=req.session_id,
+                        runtime_note="These skills were selected from the Vonvon composer.",
+                    )
+                    if loaded_skills and built_message:
+                        text_for_agent = built_message
+
+                if isinstance(effective_message, str):
+                    effective_message = text_for_agent
+                elif isinstance(effective_message, list):
+                    text_idx = next(
+                        (idx for idx, part in enumerate(effective_message) if part.get("type") == "text"),
+                        None,
+                    )
+                    if text_idx is None:
+                        if text_for_agent:
+                            effective_message.insert(0, {"type": "text", "text": text_for_agent})
+                    elif text_for_agent:
+                        effective_message[text_idx]["text"] = text_for_agent
+                    else:
+                        effective_message.pop(text_idx)
 
                 agent = agent_service.create_agent(
                     session_id=req.session_id,

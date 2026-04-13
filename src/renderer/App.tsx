@@ -194,8 +194,8 @@ function App(): React.ReactElement {
             <CompressHint percent={displayPercent} sessionId={activeSession.id} onCompressed={setDisplayPercent} />
           )}
           <InputArea
-            onSend={(msg) => { if (activeSession) sendMessage(msg, activeSession.id) }}
-            onSendWithAttachments={(msg, atts) => { if (activeSession) sendMessage(msg, activeSession.id, atts) }}
+            onSend={(msg, skills) => { if (activeSession) sendMessage(msg, activeSession.id, undefined, skills) }}
+            onSendWithAttachments={(msg, atts, skills) => { if (activeSession) sendMessage(msg, activeSession.id, atts, skills) }}
             isLoading={isLoading}
             onStop={stop}
             toolbarLeft={<AgentModelSelector />}

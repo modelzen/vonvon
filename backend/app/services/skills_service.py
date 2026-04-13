@@ -6,6 +6,7 @@ job API. Jobs are in-memory (same semantics as OAuth flows)."""
 
 import asyncio
 import logging
+import re
 import shutil
 import time
 import uuid
@@ -46,6 +47,7 @@ _jobs_lock = asyncio.Lock()
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 _VENDORED_SKILLS_DIR = Path(__file__).resolve().parents[2] / "hermes-agent" / "skills"
+_INLINE_SKILL_RE = re.compile(r'@skill:(?:"([^"]+)"|(\S+))')
 
 
 def _find_installed_skills() -> List[Dict[str, Any]]:
@@ -186,6 +188,117 @@ def _job_to_dict(job: SkillJob) -> Dict[str, Any]:
         "started_at": job.started_at,
         "updated_at": job.updated_at,
     }
+
+
+def extract_inline_skills(text: str) -> tuple[List[str], str]:
+    """Return (skill_names, text_without_skill_tokens) from an inline message.
+
+    The renderer stores selected skill chips as raw ``@skill:...`` tokens so
+    chat history can round-trip through SessionDB. Right before dispatching to
+    hermes we strip those tokens back out and load the corresponding skills.
+    """
+    if not text:
+        return [], ""
+
+    found: List[str] = []
+    seen: set[str] = set()
+    parts: List[str] = []
+    cursor = 0
+
+    for match in _INLINE_SKILL_RE.finditer(text):
+        parts.append(text[cursor:match.start()])
+        cursor = match.end()
+        name = (match.group(1) or match.group(2) or "").strip().lstrip("/")
+        if not name:
+            continue
+        key = name.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        found.append(name)
+
+    if cursor == 0:
+        return [], text
+
+    parts.append(text[cursor:])
+    stripped = "".join(parts)
+    stripped = re.sub(r"[ \t]+\n", "\n", stripped)
+    stripped = re.sub(r"\n[ \t]+", "\n", stripped)
+    stripped = re.sub(r"[ \t]{2,}", " ", stripped).strip()
+    return found, stripped
+
+
+def build_skill_turn_message(
+    skill_identifiers: List[str],
+    *,
+    user_instruction: str = "",
+    task_id: str | None = None,
+    runtime_note: str = "",
+) -> tuple[str, List[str], List[str]]:
+    """Load one or more skills and build a per-turn hermes invocation prompt."""
+    cleaned_instruction = (user_instruction or "").strip()
+    if not skill_identifiers:
+        return cleaned_instruction, [], []
+
+    try:
+        from agent.skill_commands import _build_skill_message, _load_skill_payload
+    except Exception as exc:
+        logger.warning("build_skill_turn_message: skill helpers unavailable: %s", exc)
+        return cleaned_instruction, [], list(skill_identifiers)
+
+    prompt_parts: List[str] = []
+    loaded_names: List[str] = []
+    missing: List[str] = []
+    seen: set[str] = set()
+
+    for raw_identifier in skill_identifiers:
+        identifier = (raw_identifier or "").strip()
+        if not identifier:
+            continue
+        dedupe_key = identifier.casefold()
+        if dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
+
+        loaded = _load_skill_payload(identifier, task_id=task_id)
+        if not loaded:
+            missing.append(identifier)
+            continue
+
+        loaded_skill, skill_dir, skill_name = loaded
+        activation_note = (
+            f'[SYSTEM: The user has activated the "{skill_name}" skill for this message. '
+            "Follow its instructions while completing this turn.]"
+        )
+        prompt_parts.append(
+            _build_skill_message(
+                loaded_skill,
+                skill_dir,
+                activation_note,
+            )
+        )
+        loaded_names.append(skill_name)
+
+    if not loaded_names:
+        return cleaned_instruction, [], missing
+
+    if missing:
+        prompt_parts.append(
+            "[Skill load note: Unable to load these requested skills. Continue with "
+            f"the loaded skills only: {', '.join(missing)}.]"
+        )
+
+    if runtime_note:
+        prompt_parts.append(f"[Runtime note: {runtime_note}]")
+
+    if cleaned_instruction:
+        suffix = "s" if len(loaded_names) > 1 else ""
+        prompt_parts.append(
+            "The user has provided the following instruction alongside the "
+            f"activated skill{suffix}: {cleaned_instruction}"
+        )
+
+    return "\n\n".join(part for part in prompt_parts if part.strip()), loaded_names, missing
 
 
 # ── Public service functions ────────────────────────────────────────────────────

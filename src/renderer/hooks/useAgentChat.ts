@@ -274,9 +274,15 @@ export function useAgentChat(sessionId: string | null | undefined, opts?: UseAge
   }, [sessionId, apiFetch])
 
   const sendMessage = useCallback(
-    async (content: string, sessionId: string, attachments?: AgentAttachment[]) => {
+    async (
+      content: string,
+      sessionId: string,
+      attachments?: AgentAttachment[],
+      skills?: string[],
+    ) => {
       const hasAttachments = !!(attachments && attachments.length > 0)
-      if ((!content.trim() && !hasAttachments) || isLoading) return
+      const hasSkills = !!(skills && skills.length > 0)
+      if ((!content.trim() && !hasAttachments && !hasSkills) || isLoading) return
 
       const userMsg: AgentMessage = {
         id: Date.now().toString(),
@@ -327,6 +333,7 @@ export function useAgentChat(sessionId: string | null | undefined, opts?: UseAge
           body: JSON.stringify({
             session_id: sessionId,
             message: content,
+            skills: skills || [],
             attachments: (attachments || []).map((a) => ({
               type: a.type,
               data_url: a.dataUrl,

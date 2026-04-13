@@ -82,6 +82,52 @@ export function buildFileReference(absPath: string): string {
     : `@file:${absPath}`
 }
 
+// ── @skill: reference parser ──────────────────────────────────────────────────
+
+export interface SkillReference {
+  raw: string
+  name: string
+  start: number
+  end: number
+}
+
+/** Parse all @skill: tokens from a message string.
+ *  Supports:
+ *    @skill:checkpoint
+ *    @skill:"Claude to Im"
+ */
+export function parseSkillReferences(text: string): SkillReference[] {
+  const re = /@skill:(?:"([^"]+)"|(\S+))/g
+  const refs: SkillReference[] = []
+  let m: RegExpExecArray | null
+  while ((m = re.exec(text)) !== null) {
+    const name = (m[1] ?? m[2]).trim()
+    refs.push({
+      raw: m[0],
+      name,
+      start: m.index,
+      end: m.index + m[0].length,
+    })
+  }
+  return refs
+}
+
+/** Build a @skill: token string from a skill name. */
+export function buildSkillReference(name: string): string {
+  return name.includes(' ') ? `@skill:"${name}"` : `@skill:${name}`
+}
+
+export type InlineReference =
+  | ({ kind: 'file' } & FileReference)
+  | ({ kind: 'skill' } & SkillReference)
+
+export function parseInlineReferences(text: string): InlineReference[] {
+  return [
+    ...parseFileReferences(text).map((ref) => ({ ...ref, kind: 'file' as const })),
+    ...parseSkillReferences(text).map((ref) => ({ ...ref, kind: 'skill' as const })),
+  ].sort((a, b) => a.start - b.start)
+}
+
 // ── FileChip component ────────────────────────────────────────────────────────
 
 interface FileChipProps {
@@ -214,6 +260,102 @@ export function FileChip({ path, onRemove, disabled }: FileChipProps): React.Rea
   )
 }
 
+function SkillCubeIcon({ color }: { color: string }): React.ReactElement {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={color}
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 3 5.5 6.75v10.5L12 21l6.5-3.75V6.75L12 3Z" />
+      <path d="M12 3v7.5m0 0 6.5-3.75M12 10.5 5.5 6.75" />
+    </svg>
+  )
+}
+
+interface SkillChipProps {
+  name: string
+  onRemove?: () => void
+}
+
+export function SkillChip({ name, onRemove }: SkillChipProps): React.ReactElement {
+  const accent = '#B83280'
+  const bg = '#FFF1F7'
+  const border = 'rgba(184, 50, 128, 0.18)'
+
+  return (
+    <span
+      title={name}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        background: bg,
+        borderRadius: 999,
+        padding: '2px 8px 2px 6px',
+        fontSize: 12,
+        lineHeight: '18px',
+        color: accent,
+        verticalAlign: 'middle',
+        maxWidth: 240,
+        overflow: 'hidden',
+        flexShrink: 0,
+        userSelect: 'none',
+        margin: '0 2px',
+        border: `1px solid ${border}`,
+        pointerEvents: onRemove ? 'auto' : 'none',
+      }}
+    >
+      <SkillCubeIcon color={accent} />
+      <span
+        style={{
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          minWidth: 0,
+          fontWeight: 600,
+        }}
+      >
+        {name}
+      </span>
+      {onRemove && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            onRemove()
+          }}
+          title="移除"
+          style={{
+            width: 14,
+            height: 14,
+            borderRadius: '50%',
+            border: 'none',
+            background: 'rgba(184, 50, 128, 0.12)',
+            color: accent,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 0,
+            flexShrink: 0,
+            fontSize: 10,
+            lineHeight: 1,
+          }}
+        >
+          ×
+        </button>
+      )}
+    </span>
+  )
+}
+
 // ── FileChipRenderer ──────────────────────────────────────────────────────────
 
 interface FileChipRendererProps {
@@ -225,7 +367,7 @@ interface FileChipRendererProps {
  * rendering them inline. Used in message bubbles (read-only).
  */
 export function FileChipRenderer({ text }: FileChipRendererProps): React.ReactElement {
-  const refs = parseFileReferences(text)
+  const refs = parseInlineReferences(text)
   if (refs.length === 0) return <>{text}</>
 
   const parts: React.ReactNode[] = []
@@ -234,7 +376,13 @@ export function FileChipRenderer({ text }: FileChipRendererProps): React.ReactEl
     if (ref.start > cursor) {
       parts.push(<span key={`t-${cursor}`}>{text.slice(cursor, ref.start)}</span>)
     }
-    parts.push(<FileChip key={`f-${ref.start}`} path={ref.path} />)
+    parts.push(
+      ref.kind === 'file' ? (
+        <FileChip key={`f-${ref.start}`} path={ref.path} />
+      ) : (
+        <SkillChip key={`s-${ref.start}`} name={ref.name} />
+      )
+    )
     cursor = ref.end
   }
   if (cursor < text.length) {

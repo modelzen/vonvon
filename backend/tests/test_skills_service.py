@@ -2,6 +2,7 @@
 import asyncio
 import sys
 import time
+import types
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -73,6 +74,44 @@ def test_find_installed_skills_catches_exception():
     with patch("tools.skills_tool._find_all_skills", side_effect=RuntimeError("disk")):
         result = skills_service._find_installed_skills()
     assert result == []
+
+
+def test_extract_inline_skills_strips_tokens_and_dedupes():
+    skills, stripped = skills_service.extract_inline_skills(
+        'before @skill:"Checkpoint" after @skill:checkpoint'
+    )
+    assert skills == ["Checkpoint"]
+    assert stripped == "before after"
+
+
+def test_build_skill_turn_message_combines_loaded_skills():
+    fake_skill_commands = types.SimpleNamespace()
+    fake_skill_commands._load_skill_payload = MagicMock(
+        side_effect=[
+            ({"content": "checkpoint body"}, None, "Checkpoint"),
+            ({"content": "browse body"}, None, "Browse"),
+        ]
+    )
+    fake_skill_commands._build_skill_message = MagicMock(
+        side_effect=lambda loaded_skill, _skill_dir, activation_note, runtime_note="": (
+            f"{activation_note}\n{loaded_skill['content']}\n{runtime_note}"
+        ).strip()
+    )
+
+    with patch.dict(sys.modules, {"agent.skill_commands": fake_skill_commands}):
+        prompt, loaded, missing = skills_service.build_skill_turn_message(
+            ["checkpoint", "browse"],
+            user_instruction="save current state",
+            task_id="session-1",
+            runtime_note="Selected from composer.",
+        )
+
+    assert loaded == ["Checkpoint", "Browse"]
+    assert missing == []
+    assert "Checkpoint" in prompt
+    assert "browse body" in prompt
+    assert "save current state" in prompt
+    assert "Selected from composer." in prompt
 
 
 # ── toggle_skill ───────────────────────────────────────────────────────────────
