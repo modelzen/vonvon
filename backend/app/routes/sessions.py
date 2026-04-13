@@ -20,8 +20,14 @@ router = APIRouter()
 
 
 @router.get("/api/sessions")
-async def list_sessions():
-    return session_service.list_sessions()
+async def list_sessions(
+    include_archived: bool = False,
+    archived_only: bool = False,
+):
+    return session_service.list_sessions(
+        include_archived=include_archived,
+        archived_only=archived_only,
+    )
 
 
 @router.post("/api/sessions", status_code=201)
@@ -36,6 +42,22 @@ async def delete_session(session_id: str):
     ok = session_service.delete_session(session_id)
     if not ok:
         raise HTTPException(status_code=404, detail="Session not found")
+
+
+@router.post("/api/sessions/{session_id}/archive")
+async def archive_session(session_id: str):
+    archived_at = session_service.archive_session(session_id)
+    if archived_at is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {"id": session_id, "archived": True, "archived_at": archived_at}
+
+
+@router.post("/api/sessions/{session_id}/restore")
+async def restore_session(session_id: str):
+    ok = session_service.restore_session(session_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {"id": session_id, "archived": False}
 
 
 @router.post("/api/sessions/{session_id}/reset")

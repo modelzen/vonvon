@@ -139,6 +139,8 @@ def mock_session_db():
     db.set_session_title.return_value = True
     db.clear_messages.return_value = None
     db.delete_session.return_value = True
+    db.archive_session.return_value = 1700000100.0
+    db.restore_session.return_value = True
     db.replace_messages.return_value = None
     agent_service._session_db = db
     return db

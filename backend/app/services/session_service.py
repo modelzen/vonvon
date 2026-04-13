@@ -1,6 +1,6 @@
 """Session management via hermes SessionDB."""
 import uuid
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 from app.services import agent_service
 
@@ -9,9 +9,17 @@ def get_session_db():
     return agent_service.get_session_db()
 
 
-def list_sessions() -> List[Dict[str, Any]]:
+def list_sessions(
+    *,
+    include_archived: bool = False,
+    archived_only: bool = False,
+) -> List[Dict[str, Any]]:
     db = get_session_db()
-    return db.list_sessions_rich(source="vonvon")
+    return db.list_sessions_rich(
+        source="vonvon",
+        include_archived=include_archived or archived_only,
+        archived_only=archived_only,
+    )
 
 
 def create_session(name: str) -> Dict[str, Any]:
@@ -38,6 +46,16 @@ def reset_session(session_id: str) -> None:
 def delete_session(session_id: str) -> bool:
     db = get_session_db()
     return db.delete_session(session_id)
+
+
+def archive_session(session_id: str) -> Optional[float]:
+    db = get_session_db()
+    return db.archive_session(session_id)
+
+
+def restore_session(session_id: str) -> bool:
+    db = get_session_db()
+    return db.restore_session(session_id)
 
 
 def get_usage(session_id: str) -> Dict[str, Any]:

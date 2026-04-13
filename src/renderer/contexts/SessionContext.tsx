@@ -1,20 +1,27 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import { useBackend } from '../hooks/useBackend'
 
+const INITIAL_LOAD_RETRY_BASE_MS = 300
+const INITIAL_LOAD_RETRY_MAX_MS = 5000
+
 export interface Session {
   id: string
   name: string
   title?: string
   last_active?: number
+  archived_at?: number | null
 }
 
 interface SessionContextValue {
   sessions: Session[]
+  archivedSessions: Session[]
   activeSession: Session | null
   loadSessions: () => Promise<void>
   createSession: (name: string) => Promise<Session | null>
   switchSession: (session: Session) => void
   deleteSession: (id: string) => Promise<void>
+  archiveSession: (id: string) => Promise<void>
+  restoreSession: (id: string) => Promise<void>
   resetSession: (id: string) => Promise<void>
   updateSessionName: (id: string, name: string) => void
   touchSession: (id: string) => void
@@ -42,29 +49,73 @@ const SessionContext = createContext<SessionContextValue | null>(null)
 export function SessionProvider({ children }: { children: React.ReactNode }): React.ReactElement {
   const { apiFetch } = useBackend()
   const [sessions, setSessions] = useState<Session[]>([])
+  const [archivedSessions, setArchivedSessions] = useState<Session[]>([])
   const [activeSession, setActiveSession] = useState<Session | null>(null)
   const [openTabs, setOpenTabs] = useState<string[]>([])
   const [activeTabId, setActiveTabIdState] = useState<string | null>(null)
   const [hydrated, setHydrated] = useState(false)
+  const [sessionsLoaded, setSessionsLoaded] = useState(false)
 
-  const loadSessions = useCallback(async () => {
+  const fetchSessions = useCallback(async (): Promise<boolean> => {
     try {
-      const res = await apiFetch('/api/sessions')
-      if (!res.ok) return
-      const data = (await res.json()) as Session[]
-      setSessions(data)
+      const res = await apiFetch('/api/sessions?include_archived=true')
+      if (!res.ok) return false
+      const data = ((await res.json()) as Session[]).map((session) => ({
+        ...session,
+        name: session.name || session.title || '未命名会话',
+      }))
+      setSessions(data.filter((session) => !session.archived_at))
+      setArchivedSessions(data.filter((session) => !!session.archived_at))
+      return true
     } catch {
-      // backend not reachable
+      return false
     }
   }, [apiFetch])
 
+  const loadSessions = useCallback(async () => {
+    const ok = await fetchSessions()
+    if (ok) {
+      setSessionsLoaded(true)
+    }
+  }, [fetchSessions])
+
   useEffect(() => {
-    loadSessions()
-  }, [loadSessions])
+    if (sessionsLoaded) return
+
+    let cancelled = false
+    let retryTimer: ReturnType<typeof setTimeout> | null = null
+
+    // Electron shows the renderer before uvicorn is always ready, so an
+    // initial connection-refused here should retry instead of freezing the
+    // session list into an empty state for the whole app lifetime.
+    const attemptLoad = async (attempt: number) => {
+      const ok = await fetchSessions()
+      if (cancelled) return
+      if (ok) {
+        setSessionsLoaded(true)
+        return
+      }
+
+      const delay = Math.min(
+        INITIAL_LOAD_RETRY_BASE_MS * 2 ** attempt,
+        INITIAL_LOAD_RETRY_MAX_MS
+      )
+      retryTimer = setTimeout(() => {
+        void attemptLoad(attempt + 1)
+      }, delay)
+    }
+
+    void attemptLoad(0)
+
+    return () => {
+      cancelled = true
+      if (retryTimer) clearTimeout(retryTimer)
+    }
+  }, [fetchSessions, sessionsLoaded])
 
   // Hydration: runs once after sessions load
   useEffect(() => {
-    if (hydrated || sessions.length === 0) return
+    if (hydrated || !sessionsLoaded) return
     ;(async () => {
       let stored = (await window.electron?.storeGet?.('openTabs')) as string[] | null
       let storedActive = (await window.electron?.storeGet?.('activeTabId')) as string | null
@@ -83,7 +134,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }): Re
       }
       setHydrated(true)
     })()
-  }, [sessions, hydrated])
+  }, [sessions, hydrated, sessionsLoaded])
 
   // Debounced write-back to electron-store
   useEffect(() => {
@@ -170,32 +221,100 @@ export function SessionProvider({ children }: { children: React.ReactNode }): Re
     }
   }, [createSession])
 
+  const removeSessionFromActiveView = useCallback((id: string) => {
+    const remaining = sessions.filter((session) => session.id !== id)
+    const nextTabsWithoutRemoved = openTabs.filter((tabId) => tabId !== id)
+
+    let nextTabs = nextTabsWithoutRemoved
+    let nextActiveTabId = activeTabId
+    let nextActiveSession = activeSession
+
+    if (activeSession?.id === id || activeTabId === id) {
+      const fallbackFromOpenTabs = nextTabsWithoutRemoved[0]
+      const fallbackFromRecent = [...remaining].sort(
+        (a, b) => (b.last_active ?? 0) - (a.last_active ?? 0)
+      )[0]?.id ?? null
+      const fallbackId = fallbackFromOpenTabs ?? fallbackFromRecent ?? null
+      if (fallbackId && !nextTabsWithoutRemoved.includes(fallbackId)) {
+        nextTabs = [...nextTabsWithoutRemoved, fallbackId]
+      }
+      nextActiveTabId = fallbackId
+      nextActiveSession = fallbackId
+        ? remaining.find((session) => session.id === fallbackId) ?? null
+        : null
+    }
+
+    setSessions(remaining)
+    setOpenTabs(nextTabs)
+    setActiveTabIdState(nextActiveTabId)
+    setActiveSession(nextActiveSession)
+  }, [sessions, openTabs, activeTabId, activeSession])
+
   const deleteSession = useCallback(
     async (id: string) => {
       try {
         await apiFetch(`/api/sessions/${id}`, { method: 'DELETE' })
-        setSessions((prev) => {
-          const remaining = prev.filter((s) => s.id !== id)
-          if (activeSession?.id === id) {
-            setActiveSession(remaining.length > 0 ? remaining[0] : null)
-          }
-          return remaining
-        })
+        removeSessionFromActiveView(id)
+        setArchivedSessions((prev) => prev.filter((session) => session.id !== id))
       } catch {
         // ignore
       }
     },
-    [apiFetch, activeSession]
+    [apiFetch, removeSessionFromActiveView]
+  )
+
+  const archiveSession = useCallback(
+    async (id: string) => {
+      try {
+        const res = await apiFetch(`/api/sessions/${id}/archive`, { method: 'POST' })
+        if (!res.ok) return
+        const payload = (await res.json()) as { archived_at?: number }
+        const target = sessions.find((session) => session.id === id)
+        removeSessionFromActiveView(id)
+        if (target) {
+          setArchivedSessions((prev) => [
+            { ...target, archived_at: payload.archived_at ?? Date.now() / 1000 },
+            ...prev.filter((session) => session.id !== id),
+          ])
+        } else {
+          await loadSessions()
+        }
+      } catch {
+        // ignore
+      }
+    },
+    [apiFetch, sessions, removeSessionFromActiveView, loadSessions]
+  )
+
+  const restoreSession = useCallback(
+    async (id: string) => {
+      try {
+        const res = await apiFetch(`/api/sessions/${id}/restore`, { method: 'POST' })
+        if (!res.ok) return
+        const target = archivedSessions.find((session) => session.id === id)
+        setArchivedSessions((prev) => prev.filter((session) => session.id !== id))
+        if (target) {
+          setSessions((prev) => [{ ...target, archived_at: null }, ...prev.filter((session) => session.id !== id)])
+        } else {
+          await loadSessions()
+        }
+      } catch {
+        // ignore
+      }
+    },
+    [apiFetch, archivedSessions, loadSessions]
   )
 
   const updateSessionName = useCallback((id: string, name: string) => {
     setSessions(prev => prev.map(s => s.id === id ? { ...s, name } : s))
+    setArchivedSessions(prev => prev.map(s => s.id === id ? { ...s, name } : s))
     setActiveSession(prev => prev?.id === id ? { ...prev, name } : prev)
   }, [])
 
   const touchSession = useCallback((id: string) => {
     const now = Date.now() / 1000
     setSessions(prev => prev.map(s => s.id === id ? { ...s, last_active: now } : s))
+    setArchivedSessions(prev => prev.map(s => s.id === id ? { ...s, last_active: now } : s))
   }, [])
 
   const resetSession = useCallback(
@@ -211,11 +330,14 @@ export function SessionProvider({ children }: { children: React.ReactNode }): Re
 
   const value: SessionContextValue = {
     sessions,
+    archivedSessions,
     activeSession,
     loadSessions,
     createSession,
     switchSession,
     deleteSession,
+    archiveSession,
+    restoreSession,
     resetSession,
     updateSessionName,
     touchSession,

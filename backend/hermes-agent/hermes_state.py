@@ -31,7 +31,7 @@ T = TypeVar("T")
 
 DEFAULT_DB_PATH = get_hermes_home() / "state.db"
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -65,6 +65,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     cost_source TEXT,
     pricing_version TEXT,
     title TEXT,
+    archived_at REAL,
     FOREIGN KEY (parent_session_id) REFERENCES sessions(id)
 );
 
@@ -329,6 +330,12 @@ class SessionDB:
                     except sqlite3.OperationalError:
                         pass  # Column already exists
                 cursor.execute("UPDATE schema_version SET version = 6")
+            if current_version < 7:
+                try:
+                    cursor.execute("ALTER TABLE sessions ADD COLUMN archived_at REAL")
+                except sqlite3.OperationalError:
+                    pass  # Column already exists
+                cursor.execute("UPDATE schema_version SET version = 7")
 
         # Unique title index — always ensure it exists (safe to run after migrations
         # since the title column is guaranteed to exist at this point)
@@ -336,6 +343,13 @@ class SessionDB:
             cursor.execute(
                 "CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_title_unique "
                 "ON sessions(title) WHERE title IS NOT NULL"
+            )
+        except sqlite3.OperationalError:
+            pass  # Index already exists
+        try:
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_sessions_archived "
+                "ON sessions(archived_at, started_at DESC)"
             )
         except sqlite3.OperationalError:
             pass  # Index already exists
@@ -716,6 +730,35 @@ class SessionDB:
             row = cursor.fetchone()
         return dict(row) if row else None
 
+    def archive_session(self, session_id: str) -> Optional[float]:
+        """Soft-archive a session without deleting any messages.
+
+        Returns the archive timestamp when the session exists, else None.
+        """
+        archived_at = time.time()
+
+        def _do(conn):
+            cursor = conn.execute(
+                "UPDATE sessions SET archived_at = ? WHERE id = ?",
+                (archived_at, session_id),
+            )
+            return cursor.rowcount
+
+        rowcount = self._execute_write(_do)
+        return archived_at if rowcount > 0 else None
+
+    def restore_session(self, session_id: str) -> bool:
+        """Remove the archived marker from a session."""
+        def _do(conn):
+            cursor = conn.execute(
+                "UPDATE sessions SET archived_at = NULL WHERE id = ?",
+                (session_id,),
+            )
+            return cursor.rowcount
+
+        rowcount = self._execute_write(_do)
+        return rowcount > 0
+
     def resolve_session_by_title(self, title: str) -> Optional[str]:
         """Resolve a title to a session ID, preferring the latest in a lineage.
 
@@ -787,6 +830,8 @@ class SessionDB:
         limit: int = 20,
         offset: int = 0,
         include_children: bool = False,
+        include_archived: bool = True,
+        archived_only: bool = False,
     ) -> List[Dict[str, Any]]:
         """List sessions with preview (first user message) and last active timestamp.
 
@@ -804,6 +849,11 @@ class SessionDB:
 
         if not include_children:
             where_clauses.append("s.parent_session_id IS NULL")
+
+        if archived_only:
+            where_clauses.append("s.archived_at IS NOT NULL")
+        elif not include_archived:
+            where_clauses.append("s.archived_at IS NULL")
 
         if source:
             where_clauses.append("s.source = ?")

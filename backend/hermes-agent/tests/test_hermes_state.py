@@ -550,6 +550,25 @@ class TestCounts:
 # =========================================================================
 
 class TestDeleteAndExport:
+    def test_archive_and_restore_session(self, db):
+        db.create_session(session_id="s1", source="cli")
+        db.append_message("s1", role="user", content="keep me")
+
+        archived_at = db.archive_session("s1")
+        assert isinstance(archived_at, float)
+        assert db.get_session("s1")["archived_at"] == archived_at
+        assert db.message_count(session_id="s1") == 1
+
+        assert db.restore_session("s1") is True
+        assert db.get_session("s1")["archived_at"] is None
+        assert db.message_count(session_id="s1") == 1
+
+    def test_archive_nonexistent_session(self, db):
+        assert db.archive_session("nope") is None
+
+    def test_restore_nonexistent_session(self, db):
+        assert db.restore_session("nope") is False
+
     def test_delete_session(self, db):
         db.create_session(session_id="s1", source="cli")
         db.append_message("s1", role="user", content="Hello")
@@ -857,13 +876,14 @@ class TestSchemaInit:
     def test_schema_version(self, db):
         cursor = db._conn.execute("SELECT version FROM schema_version")
         version = cursor.fetchone()[0]
-        assert version == 6
+        assert version == 7
 
     def test_title_column_exists(self, db):
         """Verify the title column was created in the sessions table."""
         cursor = db._conn.execute("PRAGMA table_info(sessions)")
         columns = {row[1] for row in cursor.fetchall()}
         assert "title" in columns
+        assert "archived_at" in columns
 
     def test_migration_from_v2(self, tmp_path):
         """Simulate a v2 database and verify migration adds title column."""
@@ -913,17 +933,18 @@ class TestSchemaInit:
         conn.commit()
         conn.close()
 
-        # Open with SessionDB — should migrate to v6
+        # Open with SessionDB — should migrate to v7
         migrated_db = SessionDB(db_path=db_path)
 
         # Verify migration
         cursor = migrated_db._conn.execute("SELECT version FROM schema_version")
-        assert cursor.fetchone()[0] == 6
+        assert cursor.fetchone()[0] == 7
 
-        # Verify title column exists and is NULL for existing sessions
+        # Verify migrated columns exist and default to NULL for existing sessions
         session = migrated_db.get_session("existing")
         assert session is not None
         assert session["title"] is None
+        assert session["archived_at"] is None
 
         # Verify we can set title on migrated session
         assert migrated_db.set_session_title("existing", "Migrated Title") is True
@@ -1128,6 +1149,25 @@ class TestListSessionsRich:
         sessions = db.list_sessions_rich(source="cli")
         assert len(sessions) == 1
         assert sessions[0]["id"] == "s1"
+
+    def test_rich_list_excludes_archived_when_requested(self, db):
+        db.create_session("s1", "cli")
+        db.create_session("s2", "cli")
+        archived_at = db.archive_session("s2")
+
+        sessions = db.list_sessions_rich(include_archived=False)
+        ids = [s["id"] for s in sessions]
+        assert ids == ["s1"]
+        assert db.get_session("s2")["archived_at"] == archived_at
+
+    def test_rich_list_archived_only(self, db):
+        db.create_session("s1", "cli")
+        db.create_session("s2", "cli")
+        archived_at = db.archive_session("s2")
+
+        sessions = db.list_sessions_rich(archived_only=True)
+        assert [s["id"] for s in sessions] == ["s2"]
+        assert sessions[0]["archived_at"] == archived_at
 
     def test_preview_newlines_collapsed(self, db):
         db.create_session("s1", "cli")
