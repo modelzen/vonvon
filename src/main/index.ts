@@ -14,6 +14,7 @@ function createMainWindow(): BrowserWindow {
     height: 600,
     show: false,          // Hidden at startup! Only shown when Kirby snaps.
     frame: false,         // Frameless sidebar
+    hasShadow: false,     // Avoid a native window halo flickering near Kirby while z-order sync runs.
     // Resizable so the docked sidebar can be widened by dragging its left
     // edge. The height is locked to Feishu's height via setMinimumSize /
     // setMaximumSize applied on snap (see kirby.ts onSnapComplete), so in
