@@ -8,6 +8,7 @@ interface Props {
   messages: AgentMessage[]
   isLoading: boolean
   thinking?: string
+  bottomInset?: number
 }
 
 interface TodoItem {
@@ -27,8 +28,18 @@ interface TodoPayload {
   }
 }
 
+function hasActiveTodoItems(payload: TodoPayload): boolean {
+  return payload.todos.some(
+    (item) => item.status === 'pending' || item.status === 'in_progress'
+  )
+}
+
 function flattenContent(content: string): string {
   return content.replace(/\s*\n+\s*/g, ' ').trim()
+}
+
+export function isTodoToolMessage(msg: Pick<AgentMessage, 'role' | 'toolName'>): boolean {
+  return msg.role === 'tool' && msg.toolName === 'todo'
 }
 
 function parseTodoPayload(preview: string): TodoPayload | null {
@@ -237,17 +248,76 @@ function TodoStatusGlyph({
   )
 }
 
-function TodoPanel({ msg }: { msg: AgentMessage }): React.ReactElement | null {
-  const payload = parseTodoPayload(msg.toolPreview || '')
-  if (!payload || payload.todos.length === 0) return null
+function TodoToggleIcon({ collapsed }: { collapsed: boolean }): React.ReactElement {
+  if (collapsed) {
+    return (
+      <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+        <path
+          d="M8.6 5.4 12.1 1.9M9.5 1.9h2.6v2.6M5.4 8.6 1.9 12.1M1.9 9.5v2.6h2.6"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.15"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    )
+  }
+
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+      <path
+        d="M12.1 1.9 8.6 5.4M8.6 2.8v2.6h2.6M1.9 12.1 5.4 8.6M2.8 8.6h2.6v2.6"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.15"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function getTodoPayload(msg: AgentMessage): TodoPayload | null {
+  if (!isTodoToolMessage(msg)) return null
+  return parseTodoPayload(msg.toolPreview || '')
+}
+
+export function getLatestTodoMessage(messages: AgentMessage[]): AgentMessage | null {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const msg = messages[index]
+    if (!isTodoToolMessage(msg)) continue
+    const payload = getTodoPayload(msg)
+    if (!payload) continue
+    return hasActiveTodoItems(payload) ? msg : null
+  }
+  return null
+}
+
+export function TodoPanel({
+  msg,
+  floating = false,
+  collapsed = false,
+  onToggleCollapse
+}: {
+  msg: AgentMessage
+  floating?: boolean
+  collapsed?: boolean
+  onToggleCollapse?: () => void
+}): React.ReactElement | null {
+  const payload = getTodoPayload(msg)
+  if (!payload || payload.todos.length === 0 || !hasActiveTodoItems(payload)) return null
 
   const total = payload.summary?.total ?? payload.todos.length
   const completedCount =
     payload.summary?.completed ?? payload.todos.filter((item) => item.status === 'completed').length
   const activeItem = payload.todos.find((item) => item.status === 'in_progress')
+  const canCollapse = typeof onToggleCollapse === 'function'
 
   return (
-    <div className="vonvon-todo-card">
+    <div
+      className={`vonvon-todo-card${floating ? ' is-floating' : ''}${collapsed ? ' is-collapsed' : ''}`}
+    >
       <div className="vonvon-todo-header">
         <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
           <path
@@ -270,59 +340,75 @@ function TodoPanel({ msg }: { msg: AgentMessage }): React.ReactElement | null {
           <span className="vonvon-todo-title">
             共 {total} 个任务，已经完成 {completedCount} 个
           </span>
-          {msg.toolStatus === 'running' && (
+          {!collapsed && msg.toolStatus === 'running' && (
             <span className="vonvon-todo-subtitle">正在生成任务清单</span>
           )}
         </div>
-        <span className="vonvon-todo-expand" aria-hidden="true">
-          <svg width="14" height="14" viewBox="0 0 14 14">
-            <path
-              d="M4.5 9.5 9.6 4.4M6.4 4.4h3.2v3.2"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </span>
+        {canCollapse ? (
+          <button
+            type="button"
+            className="vonvon-todo-toggle"
+            onClick={onToggleCollapse}
+            aria-label={collapsed ? '展开任务清单' : '收起任务清单'}
+            title={collapsed ? '展开任务清单' : '收起任务清单'}
+          >
+            <TodoToggleIcon collapsed={collapsed} />
+          </button>
+        ) : (
+          <span className="vonvon-todo-expand" aria-hidden="true">
+            <svg width="14" height="14" viewBox="0 0 14 14">
+              <path
+                d="M4.5 9.5 9.6 4.4M6.4 4.4h3.2v3.2"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </span>
+        )}
       </div>
 
-      <div className="vonvon-todo-list">
-        {payload.todos.map((item, index) => {
-          const contentClass = [
-            'vonvon-todo-content',
-            item.status === 'completed' ? 'is-completed' : '',
-            item.status === 'in_progress' ? 'is-active' : ''
-          ]
-            .filter(Boolean)
-            .join(' ')
+      {!collapsed && (
+        <>
+          <div className="vonvon-todo-list">
+            {payload.todos.map((item, index) => {
+              const contentClass = [
+                'vonvon-todo-content',
+                item.status === 'completed' ? 'is-completed' : '',
+                item.status === 'in_progress' ? 'is-active' : ''
+              ]
+                .filter(Boolean)
+                .join(' ')
 
-          return (
-            <div key={`${item.id || 'todo'}-${index}`} className="vonvon-todo-row">
-              <span className="vonvon-todo-bullet">
-                <TodoStatusGlyph status={item.status} />
-              </span>
-              <span className="vonvon-todo-order">{index + 1}.</span>
-              <div>
-                <div className={contentClass}>{item.content}</div>
-                {item.status === 'in_progress' && (
-                  <div className="vonvon-todo-status-note">当前进行中</div>
-                )}
-                {item.status === 'cancelled' && (
-                  <div className="vonvon-todo-status-note">已取消</div>
-                )}
-              </div>
-            </div>
-          )
-        })}
-      </div>
+              return (
+                <div key={`${item.id || 'todo'}-${index}`} className="vonvon-todo-row">
+                  <span className="vonvon-todo-bullet">
+                    <TodoStatusGlyph status={item.status} />
+                  </span>
+                  <span className="vonvon-todo-order">{index + 1}.</span>
+                  <div>
+                    <div className={contentClass}>{item.content}</div>
+                    {item.status === 'in_progress' && (
+                      <div className="vonvon-todo-status-note">当前进行中</div>
+                    )}
+                    {item.status === 'cancelled' && (
+                      <div className="vonvon-todo-status-note">已取消</div>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
 
-      <div className="vonvon-todo-meta">
-        <span>{msg.toolName || 'todo'}</span>
-        {msg.toolDuration && msg.toolDuration > 0 && <span>· {msg.toolDuration}s</span>}
-        {activeItem && <span>· 正在推进第 {payload.todos.indexOf(activeItem) + 1} 项</span>}
-      </div>
+          <div className="vonvon-todo-meta">
+            <span>{msg.toolName || 'todo'}</span>
+            {msg.toolDuration && msg.toolDuration > 0 && <span>· {msg.toolDuration}s</span>}
+            {activeItem && <span>· 正在推进第 {payload.todos.indexOf(activeItem) + 1} 项</span>}
+          </div>
+        </>
+      )}
     </div>
   )
 }
@@ -426,7 +512,10 @@ function renderMessage(
   // Tool cards live in their own component because they need per-row
   // React hooks (expanded state + status transition effect). They can't
   // be declared inside the plain `renderMessage` helper.
-  if (msg.role === 'tool') return <ToolCard key={msg.id} msg={msg} />
+  if (msg.role === 'tool') {
+    if (isTodoToolMessage(msg)) return null
+    return <ToolCard key={msg.id} msg={msg} />
+  }
 
   return null
 }
@@ -440,11 +529,6 @@ function renderMessage(
 // These behaviours mirror the reference OpenAI/Claude tool UX the user
 // pointed at.
 function ToolCard({ msg }: { msg: AgentMessage }): React.ReactElement {
-  if (msg.toolName === 'todo') {
-    const todoPanel = <TodoPanel msg={msg} />
-    if (todoPanel) return todoPanel
-  }
-
   const isFailed = msg.toolStatus === 'failed'
   const isRunning = msg.toolStatus === 'running'
   const preview = msg.toolPreview && msg.toolPreview.trim() ? msg.toolPreview : ''
@@ -589,25 +673,60 @@ function ThinkingIndicator({ text }: { text: string }): React.ReactElement | nul
   )
 }
 
-export function AgentMessageList({ messages, isLoading, thinking }: Props): React.ReactElement {
-  const endRef = useRef<HTMLDivElement>(null)
+export function AgentMessageList({
+  messages,
+  isLoading,
+  thinking,
+  bottomInset = 0
+}: Props): React.ReactElement {
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const shouldStickToBottomRef = useRef(true)
+  const visibleMessages = messages.filter((msg) => !isTodoToolMessage(msg))
   const activePlaceholderId = isLoading
-    ? [...messages]
+    ? [...visibleMessages]
         .reverse()
         .find((msg) => msg.role === 'assistant' && !msg.content.trim())?.id
     : undefined
   // Auto-scroll when message count changes OR when the thinking indicator
   // first appears/disappears, so the footer stays in view during a run.
   const hasThinking = !!(isLoading && thinking && thinking.trim())
+  const lastVisibleMessage = visibleMessages[visibleMessages.length - 1]
+  const scrollKey = [
+    visibleMessages.length,
+    lastVisibleMessage?.id ?? '',
+    lastVisibleMessage?.content.length ?? 0,
+    lastVisibleMessage?.toolStatus ?? '',
+    lastVisibleMessage?.toolPreview?.length ?? 0,
+    hasThinking ? flattenContent(thinking as string).length : 0,
+    bottomInset
+  ].join(':')
+
+  const updateStickiness = () => {
+    const el = scrollRef.current
+    if (!el) return
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+    shouldStickToBottomRef.current = distanceFromBottom < 48
+  }
+
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages.length, hasThinking])
+    const el = scrollRef.current
+    if (!el || !shouldStickToBottomRef.current) return
+    el.scrollTo({ top: el.scrollHeight, behavior: 'auto' })
+  }, [scrollKey])
 
   return (
-    <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px', minHeight: 0 }}>
-      {messages.map((msg) => renderMessage(msg, isLoading, activePlaceholderId))}
+    <div
+      ref={scrollRef}
+      onScroll={updateStickiness}
+      style={{
+        flex: 1,
+        overflowY: 'auto',
+        padding: `12px 14px ${12 + bottomInset}px`,
+        minHeight: 0
+      }}
+    >
+      {visibleMessages.map((msg) => renderMessage(msg, isLoading, activePlaceholderId))}
       {hasThinking && <ThinkingIndicator text={thinking as string} />}
-      <div ref={endRef} />
     </div>
   )
 }

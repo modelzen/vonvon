@@ -72,15 +72,29 @@ body {
 .vonvon-todo-card {
   position: relative;
   margin: 8px 0 14px;
-  padding: 16px 18px 14px;
+  padding: 16px 18px 24px;
   border-radius: 22px;
-  border: 1px solid rgba(16, 24, 40, 0.08);
+  border: 1px solid rgba(255, 180, 212, 0.46);
   background:
-    linear-gradient(180deg, rgba(255,255,255,0.98), rgba(251,252,253,0.96)),
-    radial-gradient(circle at top right, rgba(255, 20, 147, 0.05), transparent 34%);
+    linear-gradient(180deg, rgba(255,255,255,0.96), rgba(255,246,250,0.96)),
+    radial-gradient(circle at top right, rgba(255, 156, 204, 0.12), transparent 34%);
   box-shadow:
-    0 12px 30px rgba(16, 24, 40, 0.06),
+    0 18px 30px rgba(243, 184, 211, 0.16),
+    0 10px 18px rgba(255, 209, 228, 0.18),
     inset 0 1px 0 rgba(255,255,255,0.9);
+}
+
+.vonvon-todo-card.is-floating {
+  margin: 0;
+  backdrop-filter: blur(18px);
+}
+
+.vonvon-todo-card.is-collapsed {
+  padding-bottom: 18px;
+}
+
+.vonvon-todo-card.is-collapsed .vonvon-todo-header {
+  margin-bottom: 0;
 }
 
 .vonvon-todo-card::before {
@@ -101,7 +115,7 @@ body {
   align-items: center;
   gap: 10px;
   margin-bottom: 16px;
-  color: #7c8592;
+  color: #ab8a99;
 }
 
 .vonvon-todo-header-copy {
@@ -115,20 +129,41 @@ body {
   font-size: 14px;
   font-weight: 600;
   letter-spacing: -0.02em;
-  color: #7c8592;
+  color: #9b7788;
 }
 
 .vonvon-todo-subtitle {
   font-size: 12px;
-  color: #a0a7b0;
+  color: #c09aaa;
 }
 
 .vonvon-todo-expand {
   margin-left: auto;
-  color: #a3acb7;
+  color: #c09aaa;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+.vonvon-todo-toggle {
+  margin-left: auto;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(255, 245, 249, 0.94);
+  color: #c093a6;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, transform 120ms ease;
+}
+
+.vonvon-todo-toggle:hover {
+  background: rgba(255, 239, 246, 0.98);
+  color: #a36f84;
+  transform: translateY(-0.5px);
 }
 
 .vonvon-todo-list {
@@ -144,7 +179,7 @@ body {
   grid-template-columns: auto auto 1fr;
   gap: 10px;
   align-items: start;
-  color: #1f2430;
+  color: #4e3c44;
 }
 
 .vonvon-todo-bullet {
@@ -161,7 +196,7 @@ body {
   margin-top: 1px;
   font-size: 12px;
   font-weight: 600;
-  color: #9aa3ad;
+  color: #b59aa8;
 }
 
 .vonvon-todo-content {
@@ -171,20 +206,20 @@ body {
 }
 
 .vonvon-todo-content.is-completed {
-  color: #8f98a3;
+  color: #b89dad;
   text-decoration: line-through;
-  text-decoration-color: rgba(143, 152, 163, 0.5);
+  text-decoration-color: rgba(184, 157, 173, 0.58);
 }
 
 .vonvon-todo-content.is-active {
-  color: #141922;
+  color: #5a3f49;
   font-weight: 600;
 }
 
 .vonvon-todo-status-note {
   margin-top: 3px;
   font-size: 11px;
-  color: #a0a7b0;
+  color: #c09aaa;
 }
 
 .vonvon-todo-meta {
@@ -195,7 +230,7 @@ body {
   gap: 8px;
   margin-top: 16px;
   padding-top: 12px;
-  border-top: 1px solid rgba(16, 24, 40, 0.06);
+  border-top: 1px solid rgba(255, 195, 221, 0.58);
   font-size: 11px;
-  color: #a0a7b0;
+  color: #c09aaa;
 }

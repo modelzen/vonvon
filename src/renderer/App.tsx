@@ -5,7 +5,11 @@ import { useAgentChat } from './hooks/useAgentChat'
 import { useSession } from './hooks/useSession'
 import { CompressHint } from './components/Chat/CompressHint'
 import { InputArea } from './components/Chat/InputArea'
-import { AgentMessageList } from './components/Chat/AgentMessageList'
+import {
+  AgentMessageList,
+  getLatestTodoMessage,
+  TodoPanel
+} from './components/Chat/AgentMessageList'
 import { UsageRing } from './components/Chat/UsageRing'
 import { AgentModelSelector } from './components/Chat/AgentModelSelector'
 
@@ -13,6 +17,10 @@ import { AgentModelSelector } from './components/Chat/AgentModelSelector'
 // we use it to (a) leave room for macOS traffic lights in the header and
 // (b) hide the ✕ detach button, which is meaningless in standalone mode.
 const isFloatingWindow = window.location.hash === '#floating'
+const TODO_COLLAPSED_OVERLAP_PX = 32
+const TODO_EXPANDED_OVERLAP_PX = 12
+const TODO_VISIBLE_GAP_PX = 14
+const TODO_SIDE_INSET_PX = 28
 
 function App(): React.ReactElement {
   const { activeSession, newTab, updateSessionName, touchSession } = useSession()
@@ -35,6 +43,11 @@ function App(): React.ReactElement {
   // ~240ms before actually hiding the BrowserWindow, giving us time to play
   // a scaleX(1→0) collapse anchored at top-left.
   const [sidebarHideTick, setSidebarHideTick] = useState(0)
+  const [todoBottomInset, setTodoBottomInset] = useState(0)
+  const [todoCollapsed, setTodoCollapsed] = useState(false)
+  const todoOverlayRef = useRef<HTMLDivElement>(null)
+  const latestTodoMessage = getLatestTodoMessage(agentMessages)
+  const todoOverlapPx = todoCollapsed ? TODO_COLLAPSED_OVERLAP_PX : TODO_EXPANDED_OVERLAP_PX
 
   useEffect(() => { setDisplayPercent(usagePercent) }, [usagePercent])
 
@@ -83,6 +96,44 @@ function App(): React.ReactElement {
     void el.offsetWidth
     el.classList.add('kirby-sidebar-exit')
   }, [sidebarHideTick])
+
+  useEffect(() => {
+    setTodoCollapsed(false)
+  }, [latestTodoMessage?.id, activeSession?.id])
+
+  useEffect(() => {
+    if (!latestTodoMessage) {
+      setTodoBottomInset(0)
+      return
+    }
+
+    const el = todoOverlayRef.current
+    if (!el) return
+
+    const updateInset = () => {
+      const height = Math.ceil(el.getBoundingClientRect().height)
+      const visibleHeight = Math.max(0, height - todoOverlapPx)
+      setTodoBottomInset(visibleHeight + TODO_VISIBLE_GAP_PX)
+    }
+
+    updateInset()
+    const observer = new ResizeObserver(() => {
+      updateInset()
+    })
+    observer.observe(el)
+    window.addEventListener('resize', updateInset)
+
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', updateInset)
+    }
+  }, [
+    latestTodoMessage?.id,
+    latestTodoMessage?.toolPreview,
+    latestTodoMessage?.toolStatus,
+    latestTodoMessage?.toolDuration,
+    todoOverlapPx
+  ])
 
   return (
     <div
@@ -189,18 +240,48 @@ function App(): React.ReactElement {
           flex: 1, display: 'flex', flexDirection: 'column',
           overflow: 'hidden', minHeight: 0, position: 'relative'
         }}>
-          <AgentMessageList messages={agentMessages} isLoading={isLoading} thinking={thinking} />
+          <AgentMessageList
+            messages={agentMessages}
+            isLoading={isLoading}
+            thinking={thinking}
+            bottomInset={todoBottomInset}
+          />
           {activeSession && (
             <CompressHint percent={displayPercent} sessionId={activeSession.id} onCompressed={setDisplayPercent} />
           )}
-          <InputArea
-            onSend={(msg, skills) => { if (activeSession) sendMessage(msg, activeSession.id, undefined, skills) }}
-            onSendWithAttachments={(msg, atts, skills) => { if (activeSession) sendMessage(msg, activeSession.id, atts, skills) }}
-            isLoading={isLoading}
-            onStop={stop}
-            toolbarLeft={<AgentModelSelector />}
-            toolbarRight={<UsageRing percent={displayPercent} />}
-          />
+          <div style={{ position: 'relative', zIndex: 2, flexShrink: 0 }}>
+            {latestTodoMessage && (
+              <div
+                style={{
+                  position: 'absolute',
+                  left: TODO_SIDE_INSET_PX,
+                  right: TODO_SIDE_INSET_PX,
+                  bottom: `calc(100% - ${todoOverlapPx}px)`,
+                  zIndex: 0,
+                  pointerEvents: 'none'
+                }}
+              >
+                <div ref={todoOverlayRef} style={{ pointerEvents: 'auto' }}>
+                  <TodoPanel
+                    msg={latestTodoMessage}
+                    floating
+                    collapsed={todoCollapsed}
+                    onToggleCollapse={() => setTodoCollapsed((prev) => !prev)}
+                  />
+                </div>
+              </div>
+            )}
+            <div style={{ position: 'relative', zIndex: 1 }}>
+              <InputArea
+                onSend={(msg, skills) => { if (activeSession) sendMessage(msg, activeSession.id, undefined, skills) }}
+                onSendWithAttachments={(msg, atts, skills) => { if (activeSession) sendMessage(msg, activeSession.id, atts, skills) }}
+                isLoading={isLoading}
+                onStop={stop}
+                toolbarLeft={<AgentModelSelector />}
+                toolbarRight={<UsageRing percent={displayPercent} />}
+              />
+            </div>
+          </div>
         </div>
       </div>
     </div>
