@@ -327,7 +327,11 @@ function TodoPanel({ msg }: { msg: AgentMessage }): React.ReactElement | null {
   )
 }
 
-function renderMessage(msg: AgentMessage, isLoading: boolean): React.ReactElement | null {
+function renderMessage(
+  msg: AgentMessage,
+  isLoading: boolean,
+  activePlaceholderId?: string
+): React.ReactElement | null {
   if (msg.role === 'user') {
     const isLongform =
       !!msg.attachments?.length ||
@@ -385,7 +389,9 @@ function renderMessage(msg: AgentMessage, isLoading: boolean): React.ReactElemen
   }
 
   if (msg.role === 'assistant') {
-    const showPlaceholder = !msg.content && isLoading
+    const isEmptyAssistant = !msg.content.trim()
+    const showPlaceholder = isEmptyAssistant && isLoading && msg.id === activePlaceholderId
+    if (isEmptyAssistant && !showPlaceholder) return null
     // Flat prose layout (inspired by the ChatGPT side-panel): no bubble,
     // no border, no background — the assistant's reply reads as body
     // copy that sits directly on the canvas. Only user messages keep
@@ -585,6 +591,11 @@ function ThinkingIndicator({ text }: { text: string }): React.ReactElement | nul
 
 export function AgentMessageList({ messages, isLoading, thinking }: Props): React.ReactElement {
   const endRef = useRef<HTMLDivElement>(null)
+  const activePlaceholderId = isLoading
+    ? [...messages]
+        .reverse()
+        .find((msg) => msg.role === 'assistant' && !msg.content.trim())?.id
+    : undefined
   // Auto-scroll when message count changes OR when the thinking indicator
   // first appears/disappears, so the footer stays in view during a run.
   const hasThinking = !!(isLoading && thinking && thinking.trim())
@@ -594,7 +605,7 @@ export function AgentMessageList({ messages, isLoading, thinking }: Props): Reac
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px', minHeight: 0 }}>
-      {messages.map((msg) => renderMessage(msg, isLoading))}
+      {messages.map((msg) => renderMessage(msg, isLoading, activePlaceholderId))}
       {hasThinking && <ThinkingIndicator text={thinking as string} />}
       <div ref={endRef} />
     </div>
