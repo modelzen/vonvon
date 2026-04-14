@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vonvon User Message Balance Options</title>
+    <style>
+      * { box-sizing: border-box; }
+      html, body { margin: 0; min-height: 100%; }
+
+      body {
+        font-family: "Avenir Next", "SF Pro Text", "PingFang SC", sans-serif;
+        background:
+          radial-gradient(circle at top left, rgba(255, 138, 191, 0.12), transparent 22%),
+          radial-gradient(circle at top right, rgba(255, 210, 229, 0.18), transparent 28%),
+          linear-gradient(180deg, #fff9fc, #fff4f9);
+        color: #2b222b;
+      }
+
+      .page {
+        width: min(1440px, calc(100vw - 48px));
+        margin: 0 auto;
+        padding: 42px 0 84px;
+      }
+
+      .hero {
+        display: grid;
+        gap: 14px;
+        margin-bottom: 30px;
+      }
+
+      .eyebrow {
+        font-size: 12px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: #cc4c84;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(34px, 5vw, 62px);
+        line-height: 0.95;
+        letter-spacing: -0.06em;
+        font-weight: 700;
+      }
+
+      .hero p {
+        margin: 0;
+        max-width: 820px;
+        font-size: 16px;
+        line-height: 1.65;
+        color: #756978;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 22px;
+      }
+
+      .option {
+        position: relative;
+        overflow: hidden;
+        border-radius: 30px;
+        padding: 20px;
+        background: rgba(255, 255, 255, 0.82);
+        border: 1px solid rgba(227, 191, 209, 0.42);
+        box-shadow:
+          0 28px 62px rgba(140, 80, 107, 0.1),
+          inset 0 1px 0 rgba(255,255,255,0.92);
+      }
+
+      .option::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+          radial-gradient(circle at top right, rgba(255, 174, 208, 0.16), transparent 33%),
+          linear-gradient(180deg, rgba(255,255,255,0.24), transparent 28%);
+        pointer-events: none;
+      }
+
+      .option > * { position: relative; z-index: 1; }
+
+      .meta {
+        display: grid;
+        gap: 8px;
+        margin-bottom: 16px;
+      }
+
+      .meta-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .id {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.18em;
+        color: var(--accent);
+      }
+
+      .tag {
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: rgba(25, 16, 22, 0.05);
+        color: #6e6270;
+        font-size: 12px;
+      }
+
+      h2 {
+        margin: 0;
+        font-size: 28px;
+        line-height: 1;
+        letter-spacing: -0.06em;
+      }
+
+      .meta p {
+        margin: 0;
+        font-size: 14px;
+        line-height: 1.6;
+        color: #776a78;
+      }
+
+      .canvas {
+        min-height: 560px;
+        border-radius: 26px;
+        padding: 22px 22px 18px;
+        background:
+          linear-gradient(180deg, rgba(255,255,255,0.9), rgba(255,248,252,0.88));
+        border: 1px solid rgba(255,255,255,0.82);
+      }
+
+      .message-row {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 14px;
+      }
+
+      .assistant {
+        margin: 18px 0 0;
+        max-width: 76%;
+        color: var(--assistant-color);
+        font-size: var(--assistant-size);
+        line-height: var(--assistant-line);
+      }
+
+      .assistant p {
+        margin: 0 0 14px;
+      }
+
+      .bubble {
+        max-width: min(74%, 440px);
+        padding: var(--bubble-padding);
+        border-radius: var(--bubble-radius);
+        background: var(--bubble-bg);
+        border: var(--bubble-border);
+        box-shadow: var(--bubble-shadow);
+        color: var(--bubble-text);
+        font-size: var(--bubble-size);
+        line-height: 1.45;
+        letter-spacing: var(--bubble-letter, normal);
+      }
+
+      .composer {
+        margin-top: 28px;
+        border-radius: 28px;
+        padding: 18px 18px 16px;
+        background:
+          linear-gradient(180deg, rgba(255,255,255,0.92), rgba(255,247,251,0.92));
+        border: 2px solid rgba(255, 146, 197, 0.28);
+        box-shadow: 0 18px 34px rgba(243, 184, 211, 0.12);
+      }
+
+      .placeholder {
+        min-height: 94px;
+        color: #aaa1aa;
+        font-size: 16px;
+        line-height: 1.7;
+      }
+
+      .composer-bottom {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 18px;
+      }
+
+      .model {
+        min-width: 220px;
+        height: 42px;
+        padding: 0 18px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: space-between;
+        border-radius: 999px;
+        border: 2px solid rgba(255, 146, 197, 0.28);
+        color: #d93b81;
+        background: rgba(255, 248, 252, 0.92);
+        font-size: 16px;
+        font-weight: 600;
+      }
+
+      .caret {
+        width: 0;
+        height: 0;
+        border-left: 7px solid transparent;
+        border-right: 7px solid transparent;
+        border-top: 8px solid currentColor;
+      }
+
+      .send {
+        width: 52px;
+        height: 52px;
+        border-radius: 999px;
+        display: grid;
+        place-items: center;
+        background: linear-gradient(180deg, #ff70b2, #ee4a93);
+        color: #fff;
+        box-shadow: 0 16px 24px rgba(240, 120, 175, 0.18);
+        font-size: 26px;
+      }
+
+      .option-a {
+        --accent: #d93b81;
+        --assistant-color: #3f3342;
+        --assistant-size: 17px;
+        --assistant-line: 1.62;
+        --bubble-padding: 10px 14px;
+        --bubble-radius: 18px 18px 8px 18px;
+        --bubble-bg: linear-gradient(135deg, #ff67ad, #ff378f 58%, #ff1d84);
+        --bubble-border: 1px solid rgba(168, 22, 88, 0.16);
+        --bubble-shadow: 0 12px 18px rgba(255, 72, 152, 0.16);
+        --bubble-text: #fffafc;
+        --bubble-size: 15px;
+        --bubble-letter: -0.01em;
+      }
+
+      .option-b {
+        --accent: #d93b81;
+        --assistant-color: #403242;
+        --assistant-size: 18px;
+        --assistant-line: 1.66;
+        --bubble-padding: 11px 15px;
+        --bubble-radius: 16px 16px 6px 16px;
+        --bubble-bg: linear-gradient(135deg, #ff78b8, #ff5aa2 58%, #ff3d92);
+        --bubble-border: 1px solid rgba(183, 36, 100, 0.12);
+        --bubble-shadow: 0 10px 16px rgba(255, 95, 165, 0.12);
+        --bubble-text: #fffafc;
+        --bubble-size: 14px;
+        --bubble-letter: -0.01em;
+      }
+
+      .option-c {
+        --accent: #d93b81;
+        --assistant-color: #403242;
+        --assistant-size: 17px;
+        --assistant-line: 1.62;
+        --bubble-padding: 10px 14px;
+        --bubble-radius: 16px 16px 6px 16px;
+        --bubble-bg: linear-gradient(135deg, #fff4f8, #ffedf4 58%, #ffe7f1);
+        --bubble-border: 1px solid rgba(255, 132, 189, 0.36);
+        --bubble-shadow: 0 12px 22px rgba(255, 164, 205, 0.12);
+        --bubble-text: #7c3156;
+        --bubble-size: 14px;
+      }
+
+      .option-d {
+        --accent: #d93b81;
+        --assistant-color: #453645;
+        --assistant-size: 18px;
+        --assistant-line: 1.68;
+        --bubble-padding: 9px 13px;
+        --bubble-radius: 14px 14px 5px 14px;
+        --bubble-bg: linear-gradient(135deg, #ff69ae, #ff3f96 60%, #ff2489);
+        --bubble-border: 1px solid rgba(168, 22, 88, 0.14);
+        --bubble-shadow: 0 10px 14px rgba(255, 72, 152, 0.14);
+        --bubble-text: #fffafc;
+        --bubble-size: 13.5px;
+        --bubble-letter: -0.01em;
+      }
+
+      @media (max-width: 1180px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <section class="hero">
+        <div class="eyebrow">Bubble Balance Study</div>
+        <h1>用户消息和助手消息，先把体量关系调顺</h1>
+        <p>
+          这页只比较一件事：用户消息是不是显得比助手消息“大一号”。我把变量压缩成 4 套，
+          你可以直接选你最舒服的一种比例关系。
+        </p>
+      </section>
+
+      <section class="grid">
+        <article class="option option-a">
+          <div class="meta">
+            <div class="meta-top">
+              <div class="id">Option A</div>
+              <div class="tag">利落实心 · 我推荐先看</div>
+            </div>
+            <h2>Compact Pop</h2>
+            <p>用户消息依然是实心粉泡，但明显缩小；助手正文抬高一级，整体更像成熟聊天界面。</p>
+          </div>
+          <div class="canvas">
+            <div class="message-row"><div class="bubble">对对对</div></div>
+            <div class="message-row"><div class="bubble">啊</div></div>
+            <div class="assistant">
+              <p>哈哈收到 😊</p>
+              <p>我在这儿，您继续说～</p>
+            </div>
+            <div class="composer">
+              <div class="placeholder">输入消息...（输入 / 选择 skill，Enter 发送，可粘贴图片 / 拖拽图片和文件）</div>
+              <div class="composer-bottom">
+                <div class="model"><span>gpt-5.3-codex</span><span class="caret"></span></div>
+                <div class="send">↑</div>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="option option-b">
+          <div class="meta">
+            <div class="meta-top">
+              <div class="id">Option B</div>
+              <div class="tag">更轻更薄</div>
+            </div>
+            <h2>Soft Pop</h2>
+            <p>比 A 更轻一点，适合想保留粉色品牌感，但不想让用户消息太跳的人。</p>
+          </div>
+          <div class="canvas">
+            <div class="message-row"><div class="bubble">对对对</div></div>
+            <div class="message-row"><div class="bubble">啊</div></div>
+            <div class="assistant">
+              <p>哈哈收到 😊</p>
+              <p>我在这儿，您继续说～</p>
+            </div>
+            <div class="composer">
+              <div class="placeholder">输入消息...（输入 / 选择 skill，Enter 发送，可粘贴图片 / 拖拽图片和文件）</div>
+              <div class="composer-bottom">
+                <div class="model"><span>gpt-5.3-codex</span><span class="caret"></span></div>
+                <div class="send">↑</div>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="option option-c">
+          <div class="meta">
+            <div class="meta-top">
+              <div class="id">Option C</div>
+              <div class="tag">浅粉卡片</div>
+            </div>
+            <h2>Ribbon Lite</h2>
+            <p>如果你仍然想保留浅粉卡片路线，这版比现在克制，但它仍然不是典型聊天泡。</p>
+          </div>
+          <div class="canvas">
+            <div class="message-row"><div class="bubble">对对对</div></div>
+            <div class="message-row"><div class="bubble">啊</div></div>
+            <div class="assistant">
+              <p>哈哈收到 😊</p>
+              <p>我在这儿，您继续说～</p>
+            </div>
+            <div class="composer">
+              <div class="placeholder">输入消息...（输入 / 选择 skill，Enter 发送，可粘贴图片 / 拖拽图片和文件）</div>
+              <div class="composer-bottom">
+                <div class="model"><span>gpt-5.3-codex</span><span class="caret"></span></div>
+                <div class="send">↑</div>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="option option-d">
+          <div class="meta">
+            <div class="meta-top">
+              <div class="id">Option D</div>
+              <div class="tag">最像标准聊天 app</div>
+            </div>
+            <h2>Mini Bubble</h2>
+            <p>把用户消息收得最狠，助手正文也最大。最不会有“我发的消息特别大”的感觉。</p>
+          </div>
+          <div class="canvas">
+            <div class="message-row"><div class="bubble">对对对</div></div>
+            <div class="message-row"><div class="bubble">啊</div></div>
+            <div class="assistant">
+              <p>哈哈收到 😊</p>
+              <p>我在这儿，您继续说～</p>
+            </div>
+            <div class="composer">
+              <div class="placeholder">输入消息...（输入 / 选择 skill，Enter 发送，可粘贴图片 / 拖拽图片和文件）</div>
+              <div class="composer-bottom">
+                <div class="model"><span>gpt-5.3-codex</span><span class="caret"></span></div>
+                <div class="send">↑</div>
+              </div>
+            </div>
+          </div>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>

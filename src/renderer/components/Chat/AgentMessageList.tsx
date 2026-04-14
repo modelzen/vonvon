@@ -329,6 +329,12 @@ function TodoPanel({ msg }: { msg: AgentMessage }): React.ReactElement | null {
 
 function renderMessage(msg: AgentMessage, isLoading: boolean): React.ReactElement | null {
   if (msg.role === 'user') {
+    const isLongform =
+      !!msg.attachments?.length ||
+      msg.content.includes('```') ||
+      msg.content.length > 160 ||
+      msg.content.split('\n').length > 4
+
     return (
       <div
         key={msg.id}
@@ -340,16 +346,18 @@ function renderMessage(msg: AgentMessage, isLoading: boolean): React.ReactElemen
       >
         <div
           style={{
-            maxWidth: '80%',
-            padding: '16px 18px',
-            borderRadius: 28,
+            maxWidth: isLongform ? '78%' : 'fit-content',
+            minWidth: isLongform ? undefined : 72,
+            padding: isLongform ? '14px 16px' : '10px 15px',
+            borderRadius: isLongform ? 20 : 18,
             fontSize: 13,
             background: 'linear-gradient(135deg, #fff4f8, #ffedf4 58%, #ffe7f1)',
             border: '1px solid rgba(255, 132, 189, 0.42)',
-            boxShadow: '0 16px 28px rgba(255, 164, 205, 0.15)',
+            boxShadow: '0 12px 22px rgba(255, 164, 205, 0.12)',
             color: '#7c3156',
             whiteSpace: 'pre-wrap',
             wordBreak: 'break-word',
+            letterSpacing: 'normal',
           }}
         >
           {msg.attachments && msg.attachments.length > 0 && (
