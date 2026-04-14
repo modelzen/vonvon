@@ -6,6 +6,7 @@ import {
   closeFloatingChatWindow,
   isFloatingChatWindowOpen,
 } from '../windows'
+import { resolveKirbyAssetPack } from './kirbyAssetPack'
 
 type FeishuBounds = {
   x: number
@@ -36,6 +37,7 @@ type KirbyNative = {
   onFeishuMoved?(cb: (feishuBounds: FeishuBounds) => void): void
   detachToFloating(): void
   setKirbyForm?(form: KirbyForm): void
+  playKirbyTransition?(transitionName: 'detach'): void
   collapseSidebar?(): void
   onRightClick?(cb: () => void): void
 }
@@ -188,8 +190,13 @@ export function initKirby(mainWindow: BrowserWindow): void {
     const unpackedPath = appPath.replace(/app\.asar$/, 'app.asar.unpacked')
     _kirbyUrl = `file://${join(unpackedPath, 'out/renderer/components/Kirby/kirby.html')}`
   }
-  console.log('[kirby] loading url:', _kirbyUrl)
-  addon.loadContent(_kirbyUrl)
+  const pack = resolveKirbyAssetPack(_kirbyUrl)
+  const kirbyUrl = new URL(_kirbyUrl)
+  kirbyUrl.searchParams.set('pack', pack.packId)
+  kirbyUrl.searchParams.set('assetBase', pack.assetBase)
+  kirbyUrl.searchParams.set('packData', pack.packData)
+  console.log('[kirby] loading url:', kirbyUrl.toString(), 'pack:', pack.packId)
+  addon.loadContent(kirbyUrl.toString())
 
   // Bridge native callbacks → Electron main window management
   addon.onSnapProximity((distance) => {
@@ -250,6 +257,7 @@ export function initKirby(mainWindow: BrowserWindow): void {
   // Animate the sidebar collapse so it visually retracts toward the ball.
   if (typeof addon.onDragLeave === 'function') {
     addon.onDragLeave(() => {
+      addon.playKirbyTransition?.('detach')
       releaseSidebar(true)
       _mainWin?.webContents.send('kirby:detach')
     })

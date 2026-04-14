@@ -1,0 +1,43 @@
+<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="snapping-body" cx="30%" cy="40%" r="72%" fx="30%" fy="40%">
+      <stop offset="0%" stop-color="#ffe2ee"/>
+      <stop offset="30%" stop-color="#ffb6da"/>
+      <stop offset="70%" stop-color="#ff6fb4"/>
+      <stop offset="100%" stop-color="#e11f85"/>
+    </radialGradient>
+    <radialGradient id="snapping-spec" cx="30%" cy="35%" r="42%">
+      <stop offset="0%" stop-color="rgba(255,255,255,0.72)"/>
+      <stop offset="60%" stop-color="rgba(255,255,255,0.10)"/>
+      <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+    </radialGradient>
+    <filter id="snapping-blush" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2"/>
+    </filter>
+  </defs>
+  <g>
+    <path d="
+      M 10 60
+      C 10 32 28 18 50 20
+      C 72 22 90 38 92 56
+      C 94 72 86 84 72 90
+      C 56 98 38 98 24 88
+      C 14 80 10 72 10 60 Z
+    " fill="url(#snapping-body)"/>
+    <path d="
+      M 10 60
+      C 10 32 28 18 50 20
+      C 72 22 90 38 92 56
+      C 94 72 86 84 72 90
+      C 56 98 38 98 24 88
+      C 14 80 10 72 10 60 Z
+    " fill="url(#snapping-spec)"/>
+    <circle cx="36" cy="50" r="5" fill="#1a1230"/>
+    <circle cx="34.5" cy="48" r="1.7" fill="#fff"/>
+    <circle cx="58" cy="52" r="5" fill="#1a1230"/>
+    <circle cx="56.5" cy="50" r="1.7" fill="#fff"/>
+    <ellipse cx="46" cy="64" rx="3" ry="3.5" fill="#c2185b"/>
+    <ellipse cx="26" cy="66" rx="5" ry="3" fill="rgba(255,90,150,0.38)" filter="url(#snapping-blush)"/>
+    <ellipse cx="66" cy="66" rx="5" ry="3" fill="rgba(255,90,150,0.38)" filter="url(#snapping-blush)"/>
+  </g>
+</svg>

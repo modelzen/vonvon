@@ -1,0 +1,30 @@
+<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="floating-body" cx="38%" cy="30%" r="68%" fx="38%" fy="30%">
+      <stop offset="0%" stop-color="#ffe2ee"/>
+      <stop offset="30%" stop-color="#ffb6da"/>
+      <stop offset="70%" stop-color="#ff6fb4"/>
+      <stop offset="100%" stop-color="#e11f85"/>
+    </radialGradient>
+    <radialGradient id="floating-spec" cx="36%" cy="26%" r="42%">
+      <stop offset="0%" stop-color="rgba(255,255,255,0.75)"/>
+      <stop offset="60%" stop-color="rgba(255,255,255,0.12)"/>
+      <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+    </radialGradient>
+    <filter id="floating-blush" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2"/>
+    </filter>
+  </defs>
+  <g>
+    <circle cx="60" cy="60" r="38" fill="url(#floating-body)"/>
+    <circle cx="60" cy="60" r="38" fill="url(#floating-spec)"/>
+    <ellipse cx="46" cy="40" rx="6" ry="4" fill="rgba(255,255,255,0.55)" transform="rotate(-25 46 40)"/>
+    <ellipse cx="43" cy="68" rx="7.5" ry="4.5" fill="rgba(255,90,150,0.38)" filter="url(#floating-blush)"/>
+    <ellipse cx="77" cy="68" rx="7.5" ry="4.5" fill="rgba(255,90,150,0.38)" filter="url(#floating-blush)"/>
+    <circle cx="49" cy="56" r="5.5" fill="#1a1230"/>
+    <circle cx="47.5" cy="54" r="1.8" fill="#fff"/>
+    <circle cx="71" cy="56" r="5.5" fill="#1a1230"/>
+    <circle cx="69.5" cy="54" r="1.8" fill="#fff"/>
+    <path d="M 55 66 Q 60 71 65 66" stroke="#c2185b" stroke-width="2" fill="none" stroke-linecap="round"/>
+  </g>
+</svg>

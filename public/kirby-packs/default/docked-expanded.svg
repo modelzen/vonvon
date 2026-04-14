@@ -1,0 +1,44 @@
+<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="docked-expanded-body" cx="38%" cy="22%" r="75%" fx="38%" fy="22%">
+      <stop offset="0%" stop-color="#ffe2ee"/>
+      <stop offset="30%" stop-color="#ffb6da"/>
+      <stop offset="70%" stop-color="#ff6fb4"/>
+      <stop offset="100%" stop-color="#e11f85"/>
+    </radialGradient>
+    <radialGradient id="docked-expanded-spec" cx="38%" cy="18%" r="46%">
+      <stop offset="0%" stop-color="rgba(255,255,255,0.72)"/>
+      <stop offset="60%" stop-color="rgba(255,255,255,0.10)"/>
+      <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+    </radialGradient>
+    <filter id="docked-expanded-blush" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2"/>
+    </filter>
+  </defs>
+  <g>
+    <path d="
+      M 22 38
+      C 22 8 38 0 60 0
+      C 82 0 98 8 98 38
+      L 98 60
+      L 22 60
+      Z
+    " fill="url(#docked-expanded-body)"/>
+    <path d="
+      M 22 38
+      C 22 8 38 0 60 0
+      C 82 0 98 8 98 38
+      L 98 60
+      L 22 60
+      Z
+    " fill="url(#docked-expanded-spec)"/>
+    <ellipse cx="60" cy="62" rx="30" ry="1.4" fill="rgba(0,0,0,0.18)"/>
+    <circle cx="47" cy="28" r="5.5" fill="#1a1230"/>
+    <circle cx="45.5" cy="26" r="1.8" fill="#fff"/>
+    <circle cx="73" cy="28" r="5.5" fill="#1a1230"/>
+    <circle cx="71.5" cy="26" r="1.8" fill="#fff"/>
+    <path d="M 54 38 Q 60 44 66 38" stroke="#c2185b" stroke-width="2" fill="none" stroke-linecap="round"/>
+    <ellipse cx="36" cy="38" rx="6" ry="3.5" fill="rgba(255,90,150,0.38)" filter="url(#docked-expanded-blush)"/>
+    <ellipse cx="84" cy="38" rx="6" ry="3.5" fill="rgba(255,90,150,0.38)" filter="url(#docked-expanded-blush)"/>
+  </g>
+</svg>

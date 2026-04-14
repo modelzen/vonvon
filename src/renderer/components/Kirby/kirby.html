@@ -4,6 +4,15 @@
     <meta charset="UTF-8" />
     <title>Vonvon</title>
     <style>
+      :root {
+        --kirby-panel-width: 120px;
+        --kirby-panel-height: 120px;
+        --kirby-form-transition-duration: 200ms;
+        --kirby-form-scale-from: 0.9;
+        --kirby-form-scale-to: 1;
+        --kirby-form-transition-easing: ease;
+      }
+
       * {
         margin: 0;
         padding: 0;
@@ -22,24 +31,17 @@
       }
 
       #root {
-        width: 120px;
-        height: 120px;
+        width: var(--kirby-panel-width);
+        height: var(--kirby-panel-height);
         position: relative;
       }
 
       /*
-       * Four visual forms (synced from docs/vonvon-forms-prototype.html v4):
-       *   .floating         – free-floating pink ball (default)
-       *   .snapping         – pear-shaped, body pulled toward Feishu's right edge
-       *   .docked-expanded  – D-shape sitting on Feishu's top-right corner with
-       *                       sidebar open. Body center x=60 = Feishu right edge,
-       *                       bottom y=60 = Feishu top edge. Strict flat bottom.
-       *   .docked-collapsed – near-circle with a 90° bite cut out of the
-       *                       lower-left. Bite tip exactly at (60, 60).
-       *                       Two straight cuts along y=60 and x=60 — must
-       *                       be lines, NOT curves, otherwise Q3 is invaded.
-       *
-       * Forms swap via opacity crossfade so they don't pop.
+       * The HTML no longer hardcodes a specific pink-ball drawing.
+       * Instead, it renders a manifest-driven asset pack. The native layer
+       * still switches between the same 4 abstract forms, but the actual art
+       * now lives in /kirby-packs/<pack-id>/ and can be replaced without
+       * touching this file.
        */
       .kirby-form {
         position: absolute;
@@ -47,273 +49,466 @@
         width: 100%;
         height: 100%;
         opacity: 0;
-        transform: scale(0.9);
-        transition: opacity 200ms ease, transform 200ms ease;
+        transform: scale(var(--kirby-form-scale-from));
+        transition:
+          opacity var(--kirby-form-transition-duration) var(--kirby-form-transition-easing),
+          transform var(--kirby-form-transition-duration) var(--kirby-form-transition-easing);
         pointer-events: none;
       }
 
       .kirby-form.active {
         opacity: 1;
-        transform: scale(1);
+        transform: scale(var(--kirby-form-scale-to));
         pointer-events: auto;
       }
 
-      .kirby-form svg {
-        width: 120px;
-        height: 120px;
+      .kirby-form img {
+        width: 100%;
+        height: 100%;
         display: block;
-        /* Don't clip arms/feet that poke outside the nominal ball bbox. */
-        overflow: visible;
+        user-select: none;
+        -webkit-user-drag: none;
+        pointer-events: none;
+      }
+
+      .kirby-form.transition-layer {
+        z-index: 12;
       }
     </style>
   </head>
   <body>
-    <div id="root">
-
-      <!-- ============ FORM 1: FLOATING ============ -->
-      <div class="kirby-form floating active" data-skin="default">
-        <svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <radialGradient id="f1-body" cx="38%" cy="30%" r="68%" fx="38%" fy="30%">
-              <stop offset="0%"   stop-color="#ffe2ee"/>
-              <stop offset="30%"  stop-color="#ffb6da"/>
-              <stop offset="70%"  stop-color="#ff6fb4"/>
-              <stop offset="100%" stop-color="#e11f85"/>
-            </radialGradient>
-            <radialGradient id="f1-spec" cx="36%" cy="26%" r="42%">
-              <stop offset="0%"   stop-color="rgba(255,255,255,0.75)"/>
-              <stop offset="60%"  stop-color="rgba(255,255,255,0.12)"/>
-              <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
-            </radialGradient>
-            <filter id="f1-blush" x="-50%" y="-50%" width="200%" height="200%">
-              <feGaussianBlur stdDeviation="2"/>
-            </filter>
-          </defs>
-          <g>
-            <circle cx="60" cy="60" r="38" fill="url(#f1-body)"/>
-            <circle cx="60" cy="60" r="38" fill="url(#f1-spec)"/>
-            <ellipse cx="46" cy="40" rx="6" ry="4" fill="rgba(255,255,255,0.55)" transform="rotate(-25 46 40)"/>
-            <ellipse cx="43" cy="68" rx="7.5" ry="4.5" fill="rgba(255,90,150,0.38)" filter="url(#f1-blush)"/>
-            <ellipse cx="77" cy="68" rx="7.5" ry="4.5" fill="rgba(255,90,150,0.38)" filter="url(#f1-blush)"/>
-            <circle cx="49" cy="56" r="5.5" fill="#1a1230"/>
-            <circle cx="47.5" cy="54" r="1.8" fill="#fff"/>
-            <circle cx="71" cy="56" r="5.5" fill="#1a1230"/>
-            <circle cx="69.5" cy="54" r="1.8" fill="#fff"/>
-            <path d="M 55 66 Q 60 71 65 66" stroke="#c2185b" stroke-width="2" fill="none" stroke-linecap="round"/>
-          </g>
-        </svg>
-      </div>
-
-      <!--
-        ============ FORM 2: SNAPPING ============
-        Pear-shaped body pulled toward Feishu's right edge (to the left of
-        the panel). Eyes look left toward Feishu, surprised "o" mouth.
-        Used during the snap proximity zone, before the user releases.
-      -->
-      <div class="kirby-form snapping" data-skin="default">
-        <svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <radialGradient id="sn-body" cx="30%" cy="40%" r="72%" fx="30%" fy="40%">
-              <stop offset="0%"   stop-color="#ffe2ee"/>
-              <stop offset="30%"  stop-color="#ffb6da"/>
-              <stop offset="70%"  stop-color="#ff6fb4"/>
-              <stop offset="100%" stop-color="#e11f85"/>
-            </radialGradient>
-            <radialGradient id="sn-spec" cx="30%" cy="35%" r="42%">
-              <stop offset="0%"   stop-color="rgba(255,255,255,0.72)"/>
-              <stop offset="60%"  stop-color="rgba(255,255,255,0.10)"/>
-              <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
-            </radialGradient>
-            <filter id="sn-blush" x="-50%" y="-50%" width="200%" height="200%">
-              <feGaussianBlur stdDeviation="2"/>
-            </filter>
-          </defs>
-          <g>
-            <path d="
-              M 10 60
-              C 10 32 28 18 50 20
-              C 72 22 90 38 92 56
-              C 94 72 86 84 72 90
-              C 56 98 38 98 24 88
-              C 14 80 10 72 10 60 Z
-            " fill="url(#sn-body)"/>
-            <path d="
-              M 10 60
-              C 10 32 28 18 50 20
-              C 72 22 90 38 92 56
-              C 94 72 86 84 72 90
-              C 56 98 38 98 24 88
-              C 14 80 10 72 10 60 Z
-            " fill="url(#sn-spec)"/>
-            <!-- eyes look left toward Feishu's right edge -->
-            <circle cx="36" cy="50" r="5" fill="#1a1230"/>
-            <circle cx="34.5" cy="48" r="1.7" fill="#fff"/>
-            <circle cx="58" cy="52" r="5" fill="#1a1230"/>
-            <circle cx="56.5" cy="50" r="1.7" fill="#fff"/>
-            <!-- surprised "o" mouth -->
-            <ellipse cx="46" cy="64" rx="3" ry="3.5" fill="#c2185b"/>
-            <!-- blush -->
-            <ellipse cx="26" cy="66" rx="5" ry="3" fill="rgba(255,90,150,0.38)" filter="url(#sn-blush)"/>
-            <ellipse cx="66" cy="66" rx="5" ry="3" fill="rgba(255,90,150,0.38)" filter="url(#sn-blush)"/>
-          </g>
-        </svg>
-      </div>
-
-      <!--
-        ============ FORM 3: DOCKED EXPANDED ============
-        D shape: top semicircle + strict flat bottom y=60.
-        Center x=60 = Feishu right edge, bottom y=60 = Feishu top edge.
-        Left half (x<60) sits in air above Feishu's top edge,
-        right half (x>60) sits in air above the sidebar's top edge.
-        IMPORTANT: bottom is L 98 60 L 22 60 (real flat line), NOT a bezier
-        — beziers tend to dip below y=60 and invade Feishu.
-      -->
-      <div class="kirby-form docked-expanded" data-skin="default">
-        <svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <radialGradient id="ds-body" cx="38%" cy="22%" r="75%" fx="38%" fy="22%">
-              <stop offset="0%"   stop-color="#ffe2ee"/>
-              <stop offset="30%"  stop-color="#ffb6da"/>
-              <stop offset="70%"  stop-color="#ff6fb4"/>
-              <stop offset="100%" stop-color="#e11f85"/>
-            </radialGradient>
-            <radialGradient id="ds-spec" cx="38%" cy="18%" r="46%">
-              <stop offset="0%"   stop-color="rgba(255,255,255,0.72)"/>
-              <stop offset="60%"  stop-color="rgba(255,255,255,0.10)"/>
-              <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
-            </radialGradient>
-            <filter id="ds-blush" x="-50%" y="-50%" width="200%" height="200%">
-              <feGaussianBlur stdDeviation="2"/>
-            </filter>
-          </defs>
-          <g>
-            <path d="
-              M 22 38
-              C 22 8 38 0 60 0
-              C 82 0 98 8 98 38
-              L 98 60
-              L 22 60
-              Z
-            " fill="url(#ds-body)"/>
-            <path d="
-              M 22 38
-              C 22 8 38 0 60 0
-              C 82 0 98 8 98 38
-              L 98 60
-              L 22 60
-              Z
-            " fill="url(#ds-spec)"/>
-            <!-- contact shadow on Feishu top edge -->
-            <ellipse cx="60" cy="62" rx="30" ry="1.4" fill="rgba(0,0,0,0.18)"/>
-            <!-- symmetric eyes facing forward -->
-            <circle cx="47" cy="28" r="5.5" fill="#1a1230"/>
-            <circle cx="45.5" cy="26" r="1.8" fill="#fff"/>
-            <circle cx="73" cy="28" r="5.5" fill="#1a1230"/>
-            <circle cx="71.5" cy="26" r="1.8" fill="#fff"/>
-            <!-- relaxed mouth -->
-            <path d="M 54 38 Q 60 44 66 38" stroke="#c2185b" stroke-width="2" fill="none" stroke-linecap="round"/>
-            <!-- blush -->
-            <ellipse cx="36" cy="38" rx="6" ry="3.5" fill="rgba(255,90,150,0.38)" filter="url(#ds-blush)"/>
-            <ellipse cx="84" cy="38" rx="6" ry="3.5" fill="rgba(255,90,150,0.38)" filter="url(#ds-blush)"/>
-          </g>
-        </svg>
-      </div>
-
-      <!--
-        ============ FORM 4: DOCKED COLLAPSED ============
-        Near-perfect circle with a 90° bite cut out of the lower-left corner.
-        Bite tip exactly at (60, 60) = Feishu's top-right corner.
-        Two straight cuts: one along y=60 (from circle's left arc point to
-        the tip) and one along x=60 (from the tip to the circle's bottom arc
-        point). The big arc is ~282°, the bite is ~78°.
-        IMPORTANT: the L 20 60 + Z (closing back to x=60) MUST be straight
-        lines. Do not replace them with curves — curves dip into Q3 and
-        invade Feishu's window content.
-      -->
-      <div class="kirby-form docked-collapsed" data-skin="default">
-        <svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <radialGradient id="dc-body" cx="45%" cy="32%" r="72%" fx="45%" fy="32%">
-              <stop offset="0%"   stop-color="#ffe2ee"/>
-              <stop offset="30%"  stop-color="#ffb6da"/>
-              <stop offset="70%"  stop-color="#ff6fb4"/>
-              <stop offset="100%" stop-color="#d8167f"/>
-            </radialGradient>
-            <radialGradient id="dc-spec" cx="45%" cy="28%" r="46%">
-              <stop offset="0%"   stop-color="rgba(255,255,255,0.70)"/>
-              <stop offset="65%"  stop-color="rgba(255,255,255,0.08)"/>
-              <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
-            </radialGradient>
-            <filter id="dc-blush" x="-50%" y="-50%" width="200%" height="200%">
-              <feGaussianBlur stdDeviation="2"/>
-            </filter>
-          </defs>
-          <g>
-            <!--
-              Path geometry:
-              - M 60 60: start at the bite tip = Feishu top-right corner
-              - L 20 60: straight line LEFT along y=60 (Feishu top edge)
-              - A 45 45 0 1 1 60 100: ~282° clockwise arc, radius 45,
-                from (20, 60) over the top → right → bottom to (60, 100)
-              - Z: straight line UP along x=60 back to (60, 60) = Feishu right edge
-
-              All arc points lie outside Q3 (x<60 && y>60). The bite is a
-              right triangle with the right angle at (60, 60).
-            -->
-            <path d="
-              M 60 60
-              L 20 60
-              A 45 45 0 1 1 60 100
-              Z
-            " fill="url(#dc-body)"/>
-            <path d="
-              M 60 60
-              L 20 60
-              A 45 45 0 1 1 60 100
-              Z
-            " fill="url(#dc-spec)"/>
-
-            <!-- face above the bite, away from the corner -->
-            <ellipse cx="47" cy="50" rx="6" ry="3.5" fill="rgba(255,90,150,0.38)" filter="url(#dc-blush)"/>
-            <ellipse cx="83" cy="50" rx="6" ry="3.5" fill="rgba(255,90,150,0.38)" filter="url(#dc-blush)"/>
-            <circle cx="55" cy="42" r="5" fill="#1a1230"/>
-            <circle cx="53.5" cy="40" r="1.7" fill="#fff"/>
-            <circle cx="75" cy="42" r="5" fill="#1a1230"/>
-            <circle cx="73.5" cy="40" r="1.7" fill="#fff"/>
-            <path d="M 60 52 Q 65 57 70 52" stroke="#c2185b" stroke-width="1.8" fill="none" stroke-linecap="round"/>
-          </g>
-        </svg>
-      </div>
-
-    </div>
+    <div id="root" aria-label="kirby-ball"></div>
 
     <script>
-      // Switch visual form. Called by the native layer via evaluateJS.
-      //
-      // Accepted values:
-      //   'floating'        – free-floating pink ball (default)
-      //   'snapping'        – pear shape, used while in the snap proximity zone
-      //   'dockedExpanded'  – D shape, perched on Feishu corner with sidebar open
-      //   'dockedCollapsed' – near-circle with a 90° bite at lower-left corner
-      window.__setKirbyForm = function (form) {
-        var target
-        switch (form) {
-          case 'snapping':        target = 'snapping';         break
-          case 'dockedExpanded':  target = 'docked-expanded';  break
-          case 'dockedCollapsed': target = 'docked-collapsed'; break
-          case 'floating':
-          default:                target = 'floating';         break
+      ;(function () {
+        var FORM_ORDER = ['floating', 'snapping', 'dockedExpanded', 'dockedCollapsed']
+        var FORM_CLASS = {
+          floating: 'floating',
+          snapping: 'snapping',
+          dockedExpanded: 'docked-expanded',
+          dockedCollapsed: 'docked-collapsed'
         }
-        var nodes = document.querySelectorAll('.kirby-form')
-        for (var i = 0; i < nodes.length; i++) {
-          var el = nodes[i]
-          if (el.classList.contains(target)) {
-            el.classList.add('active')
-          } else {
-            el.classList.remove('active')
+        var DEFAULT_PACK_ID = 'default'
+        var root = document.getElementById('root')
+        var activeForm = 'floating'
+        var runtime = {
+          manifest: null,
+          assetBase: '',
+          nodes: {},
+          transitionLayer: null,
+          assetCache: {},
+          stateTimer: 0,
+          transitionTimer: 0,
+          stateAnimationToken: 0,
+          transitionToken: 0,
+          transitionPlaying: false
+        }
+
+        function decodeBase64Url(input) {
+          var base64 = String(input || '').replace(/-/g, '+').replace(/_/g, '/')
+          while (base64.length % 4) base64 += '='
+          var binary = atob(base64)
+          var bytes = new Uint8Array(binary.length)
+          for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+          return new TextDecoder().decode(bytes)
+        }
+
+        function fallbackManifest(packId) {
+          return {
+            meta: {
+              id: packId || DEFAULT_PACK_ID,
+              name: 'Fallback Pink Ball',
+              version: 1,
+              specVersion: 1
+            },
+            layout: {
+              panel: { width: 120, height: 120 },
+              anchor: { x: 60, y: 60 },
+              hitArea: { type: 'circle', cx: 60, cy: 60, r: 40 }
+            },
+            transitions: {
+              formSwitch: { durationMs: 200, scaleFrom: 0.9, scaleTo: 1, easing: 'ease' }
+            },
+            states: {
+              floating: { kind: 'single', src: 'floating.svg' },
+              snapping: { kind: 'single', src: 'snapping.svg' },
+              dockedExpanded: { kind: 'single', src: 'docked-expanded.svg' },
+              dockedCollapsed: { kind: 'single', src: 'docked-collapsed.svg' }
+            }
           }
         }
-      }
+
+        function normalizeManifest(manifest, packId) {
+          var base = fallbackManifest(packId)
+          var normalized = {
+            meta: Object.assign({}, base.meta, manifest && manifest.meta),
+            layout: {
+              panel: Object.assign({}, base.layout.panel, manifest && manifest.layout && manifest.layout.panel),
+              anchor: Object.assign({}, base.layout.anchor, manifest && manifest.layout && manifest.layout.anchor),
+              hitArea: Object.assign({}, base.layout.hitArea, manifest && manifest.layout && manifest.layout.hitArea)
+            },
+            transitions: {
+              formSwitch: Object.assign(
+                {},
+                base.transitions.formSwitch,
+                manifest && manifest.transitions && manifest.transitions.formSwitch
+              ),
+              detach: Object.assign(
+                {},
+                manifest && manifest.transitions && manifest.transitions.detach
+              ),
+              panelMove: Object.assign(
+                {},
+                manifest && manifest.transitions && manifest.transitions.panelMove
+              ),
+              sidebarEnter: Object.assign(
+                {},
+                manifest && manifest.transitions && manifest.transitions.sidebarEnter
+              ),
+              sidebarExit: Object.assign(
+                {},
+                manifest && manifest.transitions && manifest.transitions.sidebarExit
+              )
+            },
+            states: {}
+          }
+
+          for (var i = 0; i < FORM_ORDER.length; i++) {
+            var form = FORM_ORDER[i]
+            normalized.states[form] = Object.assign(
+              {},
+              base.states[form],
+              manifest && manifest.states && manifest.states[form]
+            )
+          }
+
+          return normalized
+        }
+
+        function resolvePackConfig() {
+          var params = new URLSearchParams(window.location.search)
+          var packId = params.get('pack') || DEFAULT_PACK_ID
+          var assetBase =
+            params.get('assetBase') ||
+            new URL('../../kirby-packs/' + packId + '/', window.location.href).toString()
+          var manifest = fallbackManifest(packId)
+          var encodedManifest = params.get('packData')
+
+          if (encodedManifest) {
+            try {
+              manifest = normalizeManifest(
+                JSON.parse(decodeBase64Url(encodedManifest)),
+                packId
+              )
+            } catch (err) {
+              console.warn('[kirby] failed to parse pack manifest from URL, falling back to defaults', err)
+            }
+          }
+
+          return {
+            packId: packId,
+            assetBase: assetBase,
+            manifest: manifest
+          }
+        }
+
+        function applyManifestCss(manifest) {
+          var panel = manifest.layout && manifest.layout.panel ? manifest.layout.panel : {}
+          var formSwitch = manifest.transitions && manifest.transitions.formSwitch
+            ? manifest.transitions.formSwitch
+            : {}
+          document.documentElement.style.setProperty(
+            '--kirby-panel-width',
+            (panel.width || 120) + 'px'
+          )
+          document.documentElement.style.setProperty(
+            '--kirby-panel-height',
+            (panel.height || 120) + 'px'
+          )
+          document.documentElement.style.setProperty(
+            '--kirby-form-transition-duration',
+            (formSwitch.durationMs || 200) + 'ms'
+          )
+          document.documentElement.style.setProperty(
+            '--kirby-form-scale-from',
+            String(formSwitch.scaleFrom == null ? 0.9 : formSwitch.scaleFrom)
+          )
+          document.documentElement.style.setProperty(
+            '--kirby-form-scale-to',
+            String(formSwitch.scaleTo == null ? 1 : formSwitch.scaleTo)
+          )
+          document.documentElement.style.setProperty(
+            '--kirby-form-transition-easing',
+            formSwitch.easing || 'ease'
+          )
+        }
+
+        function normalizeFrames(stateDef) {
+          if (!stateDef) return []
+          if (Array.isArray(stateDef.frames) && stateDef.frames.length > 0) {
+            return stateDef.frames.map(function (frame) {
+              if (typeof frame === 'string') {
+                return {
+                  src: frame,
+                  durationMs: stateDef.frameDurationMs || 100
+                }
+              }
+              return {
+                src: frame.src,
+                durationMs: frame.durationMs || stateDef.frameDurationMs || 100
+              }
+            })
+          }
+          if (typeof stateDef.src === 'string' && stateDef.src.length > 0) {
+            return [{
+              src: stateDef.src,
+              durationMs: stateDef.frameDurationMs || 100
+            }]
+          }
+          return []
+        }
+
+        function resolveFrameUrl(src) {
+          return new URL(src, runtime.assetBase).toString()
+        }
+
+        function preloadUrl(url) {
+          if (!url || runtime.assetCache[url]) return
+          var img = new Image()
+          img.decoding = 'async'
+          img.src = url
+          runtime.assetCache[url] = img
+        }
+
+        function preloadFrames(frames) {
+          for (var i = 0; i < frames.length; i++) {
+            var frame = frames[i]
+            if (!frame || !frame.src) continue
+            preloadUrl(resolveFrameUrl(frame.src))
+          }
+        }
+
+        function preloadManifestAssets(manifest) {
+          if (!manifest) return
+
+          for (var i = 0; i < FORM_ORDER.length; i++) {
+            var form = FORM_ORDER[i]
+            preloadFrames(normalizeFrames(manifest.states && manifest.states[form]))
+          }
+
+          if (manifest.transitions && typeof manifest.transitions === 'object') {
+            var names = Object.keys(manifest.transitions)
+            for (var j = 0; j < names.length; j++) {
+              preloadFrames(normalizeFrames(manifest.transitions[names[j]]))
+            }
+          }
+        }
+
+        function showFrame(node, index) {
+          if (!node || !node.frames.length) return
+          var frame = node.frames[index]
+          if (!frame || !frame.src) return
+          node.img.src = resolveFrameUrl(frame.src)
+        }
+
+        function stopStateAnimation() {
+          if (runtime.stateTimer) {
+            clearTimeout(runtime.stateTimer)
+            runtime.stateTimer = 0
+          }
+          runtime.stateAnimationToken += 1
+        }
+
+        function stopTransitionAnimation() {
+          if (runtime.transitionTimer) {
+            clearTimeout(runtime.transitionTimer)
+            runtime.transitionTimer = 0
+          }
+          runtime.transitionToken += 1
+          runtime.transitionPlaying = false
+          if (runtime.transitionLayer) {
+            runtime.transitionLayer.wrapper.classList.remove('active')
+            runtime.transitionLayer.img.removeAttribute('src')
+          }
+        }
+
+        function scheduleNextFrame(form) {
+          var node = runtime.nodes[form]
+          var stateDef = runtime.manifest.states[form]
+          if (!node || !node.frames || node.frames.length <= 1) return
+
+          var token = runtime.stateAnimationToken
+          var frame = node.frames[node.frameIndex]
+          runtime.stateTimer = window.setTimeout(function () {
+            if (token !== runtime.stateAnimationToken || activeForm !== form) return
+
+            var nextIndex = node.frameIndex + 1
+            if (nextIndex >= node.frames.length) {
+              if (stateDef.loop === false) {
+                return
+              }
+              nextIndex = 0
+            }
+
+            node.frameIndex = nextIndex
+            showFrame(node, node.frameIndex)
+            scheduleNextFrame(form)
+          }, frame.durationMs || 100)
+        }
+
+        function playForm(form) {
+          stopStateAnimation()
+          var node = runtime.nodes[form]
+          if (!node) return
+          node.frameIndex = 0
+          showFrame(node, 0)
+          scheduleNextFrame(form)
+        }
+
+        function renderPack(config) {
+          runtime.manifest = config.manifest
+          runtime.assetBase = config.assetBase
+          runtime.nodes = {}
+          runtime.assetCache = {}
+
+          applyManifestCss(config.manifest)
+          root.innerHTML = ''
+
+          for (var i = 0; i < FORM_ORDER.length; i++) {
+            var form = FORM_ORDER[i]
+            var stateDef = config.manifest.states[form]
+            var wrapper = document.createElement('div')
+            wrapper.className = 'kirby-form ' + FORM_CLASS[form]
+            wrapper.setAttribute('data-form', form)
+
+            var img = document.createElement('img')
+            img.alt = stateDef.displayName || form
+            img.draggable = false
+            wrapper.appendChild(img)
+            root.appendChild(wrapper)
+
+            runtime.nodes[form] = {
+              wrapper: wrapper,
+              img: img,
+              frames: normalizeFrames(stateDef),
+              frameIndex: 0
+            }
+          }
+
+          var transitionWrapper = document.createElement('div')
+          transitionWrapper.className = 'kirby-form transition-layer'
+          var transitionImg = document.createElement('img')
+          transitionImg.alt = 'kirby transition'
+          transitionImg.draggable = false
+          transitionWrapper.appendChild(transitionImg)
+          root.appendChild(transitionWrapper)
+          runtime.transitionLayer = {
+            wrapper: transitionWrapper,
+            img: transitionImg
+          }
+
+          preloadManifestAssets(config.manifest)
+
+          setForm(activeForm)
+        }
+
+        function setForm(form) {
+          var target = runtime.nodes[form] ? form : 'floating'
+          activeForm = target
+
+          for (var i = 0; i < FORM_ORDER.length; i++) {
+            var key = FORM_ORDER[i]
+            var node = runtime.nodes[key]
+            if (!node) continue
+            if (key === target) {
+              node.wrapper.classList.add('active')
+            } else {
+              node.wrapper.classList.remove('active')
+            }
+          }
+
+          if (runtime.transitionPlaying) {
+            return
+          }
+
+          stopTransitionAnimation()
+          playForm(target)
+        }
+
+        window.__setKirbyForm = function (form) {
+          setForm(form)
+        }
+
+        function playTransition(name) {
+          var transitionDef = runtime.manifest.transitions && runtime.manifest.transitions[name]
+          var frames = normalizeFrames(transitionDef || {})
+          if (!runtime.transitionLayer || frames.length === 0) return
+
+          stopStateAnimation()
+          stopTransitionAnimation()
+          runtime.transitionPlaying = true
+
+          var token = runtime.transitionToken
+          var layer = runtime.transitionLayer
+          var index = 0
+          layer.wrapper.classList.add('active')
+
+          function step() {
+            if (token !== runtime.transitionToken) return
+
+            var frame = frames[index]
+            if (!frame) {
+              runtime.transitionPlaying = false
+              layer.wrapper.classList.remove('active')
+              playForm(activeForm)
+              return
+            }
+
+            layer.img.src = resolveFrameUrl(frame.src)
+
+            index += 1
+            runtime.transitionTimer = window.setTimeout(function () {
+              if (token !== runtime.transitionToken) return
+              if (index >= frames.length) {
+                runtime.transitionPlaying = false
+                layer.wrapper.classList.remove('active')
+                layer.img.removeAttribute('src')
+                playForm(activeForm)
+                return
+              }
+              step()
+            }, frame.durationMs || 100)
+          }
+
+          step()
+        }
+
+        window.__playKirbyTransition = function (name) {
+          playTransition(name)
+        }
+
+        // Kept for future runtime pack switching without touching the native
+        // addon API. Main can inject a new manifest + asset base later.
+        window.__setKirbyPack = function (encodedManifest, assetBase) {
+          var manifest
+          try {
+            manifest = normalizeManifest(
+              JSON.parse(decodeBase64Url(encodedManifest)),
+              DEFAULT_PACK_ID
+            )
+          } catch (err) {
+            console.warn('[kirby] failed to hot-swap asset pack', err)
+            return
+          }
+          renderPack({
+            manifest: manifest,
+            assetBase: assetBase || runtime.assetBase,
+            packId: manifest.meta && manifest.meta.id
+          })
+        }
+
+        renderPack(resolvePackConfig())
+      })()
 
       // Suppress WebKit's default context menu ("Reload" etc.) on the
       // Kirby ball. The native DragHandler's NSEvent right-click monitor

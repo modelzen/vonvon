@@ -10,7 +10,8 @@
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
     "preview": "electron-vite preview",
-    "rebuild": "cmake-js rebuild --directory native"
+    "rebuild": "cmake-js rebuild --directory native",
+    "validate:kirby": "node scripts/validate-kirby-pack.mjs"
   },
   "keywords": [],
   "author": "Clay",

@@ -26,6 +26,7 @@ files:
 asarUnpack:
   - native/build/Release/*.node
   - out/renderer/components/Kirby/kirby.html
+  - out/renderer/kirby-packs/**/*
 
 # Sideloaded resources that DON'T go into app.asar — copied verbatim to
 # Vonvon.app/Contents/Resources/. Includes:

@@ -1,0 +1,1073 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Kirby Pack Preview</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --paper: #f7f2ea;
+        --panel: rgba(255, 252, 249, 0.86);
+        --panel-strong: rgba(255, 248, 244, 0.96);
+        --line: rgba(101, 64, 53, 0.14);
+        --text: #3a2a25;
+        --muted: #86685f;
+        --accent: #d64582;
+        --accent-soft: rgba(214, 69, 130, 0.12);
+        --shadow: 0 22px 50px rgba(86, 50, 34, 0.12);
+        --radius: 24px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "SF Pro Display", "PingFang SC", "Helvetica Neue", sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(circle at top left, rgba(255, 205, 225, 0.55), transparent 28%),
+          radial-gradient(circle at right 15%, rgba(255, 233, 210, 0.8), transparent 24%),
+          linear-gradient(180deg, #fff9f4 0%, #f5ece1 100%);
+      }
+
+      .shell {
+        max-width: 1380px;
+        margin: 0 auto;
+        padding: 40px 28px 56px;
+      }
+
+      .hero {
+        display: grid;
+        grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+        gap: 24px;
+        align-items: stretch;
+      }
+
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(18px);
+      }
+
+      .hero-copy {
+        padding: 30px 32px;
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px 12px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.7);
+        color: var(--muted);
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 18px 0 10px;
+        font-size: clamp(32px, 4vw, 52px);
+        line-height: 0.94;
+        letter-spacing: -0.04em;
+      }
+
+      .hero-copy p {
+        margin: 0;
+        max-width: 55ch;
+        color: var(--muted);
+        font-size: 15px;
+        line-height: 1.7;
+      }
+
+      .controls {
+        padding: 24px;
+        display: grid;
+        gap: 14px;
+      }
+
+      .control-label {
+        margin-bottom: 6px;
+        display: block;
+        font-size: 12px;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+
+      .row {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      input,
+      select,
+      button,
+      textarea {
+        font: inherit;
+      }
+
+      input,
+      select {
+        width: 100%;
+        min-height: 44px;
+        padding: 0 14px;
+        border-radius: 14px;
+        border: 1px solid rgba(120, 85, 72, 0.18);
+        background: rgba(255, 255, 255, 0.88);
+        color: var(--text);
+      }
+
+      button {
+        min-height: 44px;
+        padding: 0 16px;
+        border: 0;
+        border-radius: 14px;
+        background: #231815;
+        color: white;
+        cursor: pointer;
+        transition: transform 160ms ease, opacity 160ms ease, background 160ms ease;
+      }
+
+      button.secondary {
+        background: rgba(255, 255, 255, 0.85);
+        color: var(--text);
+        border: 1px solid rgba(120, 85, 72, 0.12);
+      }
+
+      button:hover {
+        transform: translateY(-1px);
+      }
+
+      button:disabled {
+        opacity: 0.55;
+        cursor: default;
+        transform: none;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.1fr) minmax(380px, 0.9fr);
+        gap: 24px;
+        margin-top: 24px;
+      }
+
+      .stage-panel {
+        padding: 24px;
+        display: grid;
+        gap: 18px;
+      }
+
+      .stage-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+
+      .stage-name {
+        font-size: 24px;
+        letter-spacing: -0.03em;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        padding: 7px 12px;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .stage {
+        position: relative;
+        min-height: 420px;
+        border-radius: 24px;
+        overflow: hidden;
+        border: 1px solid rgba(122, 89, 78, 0.12);
+        background:
+          linear-gradient(180deg, rgba(255,255,255,0.54), rgba(255,255,255,0.26)),
+          linear-gradient(135deg, #f2e5db 0%, #ddcbb8 100%);
+      }
+
+      .stage::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background-image:
+          linear-gradient(rgba(122, 89, 78, 0.04) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(122, 89, 78, 0.04) 1px, transparent 1px);
+        background-size: 32px 32px;
+        pointer-events: none;
+      }
+
+      .mock-feishu,
+      .mock-sidebar {
+        position: absolute;
+        box-shadow: 0 14px 28px rgba(34, 26, 22, 0.12);
+      }
+
+      .mock-feishu {
+        left: 74px;
+        top: 118px;
+        width: 340px;
+        height: 218px;
+        border-radius: 18px 0 0 18px;
+        background: rgba(255, 255, 255, 0.92);
+        overflow: hidden;
+      }
+
+      .mock-feishu::before,
+      .mock-sidebar::before {
+        content: "";
+        display: block;
+        height: 28px;
+      }
+
+      .mock-feishu::before {
+        background: linear-gradient(180deg, #faf5ef 0%, #f4ece2 100%);
+        border-bottom: 1px solid rgba(137, 112, 101, 0.12);
+      }
+
+      .mock-sidebar {
+        left: 414px;
+        top: 118px;
+        width: 300px;
+        height: 218px;
+        border-radius: 0 18px 18px 0;
+        background: rgba(255, 247, 250, 0.96);
+        overflow: hidden;
+        transform-origin: top left;
+      }
+
+      .mock-sidebar::before {
+        background: linear-gradient(180deg, #fff3f7 0%, #ffe8f1 100%);
+        border-bottom: 1px solid rgba(214, 69, 130, 0.12);
+      }
+
+      .mock-copy {
+        padding: 14px;
+        display: grid;
+        gap: 10px;
+      }
+
+      .mock-line {
+        height: 10px;
+        border-radius: 999px;
+        background: rgba(126, 102, 90, 0.12);
+      }
+
+      .mock-sidebar .mock-line {
+        background: rgba(214, 69, 130, 0.1);
+      }
+
+      .anchor-cross {
+        position: absolute;
+        left: 428px;
+        top: 118px;
+        width: 120px;
+        height: 120px;
+        pointer-events: none;
+      }
+
+      .anchor-cross::before,
+      .anchor-cross::after {
+        content: "";
+        position: absolute;
+        background: rgba(214, 69, 130, 0.35);
+      }
+
+      .anchor-cross::before {
+        left: 60px;
+        top: 0;
+        width: 1px;
+        height: 120px;
+      }
+
+      .anchor-cross::after {
+        left: 0;
+        top: 60px;
+        width: 120px;
+        height: 1px;
+      }
+
+      .sprite-host {
+        position: absolute;
+        left: 428px;
+        top: 118px;
+        width: 120px;
+        height: 120px;
+      }
+
+      .sprite-host img {
+        width: 100%;
+        height: 100%;
+        display: block;
+        user-select: none;
+        -webkit-user-drag: none;
+      }
+
+      .state-controls {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .state-button {
+        background: rgba(255, 255, 255, 0.82);
+        color: var(--text);
+        border: 1px solid rgba(120, 85, 72, 0.12);
+      }
+
+      .state-button.active {
+        background: #231815;
+        color: white;
+      }
+
+      .info-panel {
+        padding: 24px;
+        display: grid;
+        gap: 18px;
+      }
+
+      .info-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .info-card {
+        padding: 16px;
+        border-radius: 18px;
+        background: var(--panel-strong);
+        border: 1px solid rgba(120, 85, 72, 0.1);
+      }
+
+      .info-label {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--muted);
+        margin-bottom: 8px;
+      }
+
+      .info-value {
+        font-size: 20px;
+        letter-spacing: -0.03em;
+      }
+
+      .states-list {
+        display: grid;
+        gap: 12px;
+      }
+
+      .state-row {
+        display: grid;
+        grid-template-columns: 76px minmax(0, 1fr);
+        gap: 14px;
+        align-items: center;
+        padding: 14px;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.74);
+        border: 1px solid rgba(120, 85, 72, 0.1);
+      }
+
+      .state-thumb {
+        width: 76px;
+        height: 76px;
+        border-radius: 18px;
+        display: grid;
+        place-items: center;
+        background:
+          linear-gradient(135deg, rgba(255,255,255,0.92), rgba(246,232,239,0.82));
+        overflow: hidden;
+      }
+
+      .state-thumb img {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+
+      .state-meta strong {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 15px;
+      }
+
+      .state-meta p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.55;
+      }
+
+      .manifest-box {
+        min-height: 260px;
+        max-height: 420px;
+        overflow: auto;
+        padding: 16px;
+        border-radius: 18px;
+        background: #231815;
+        color: #ffe8f1;
+        font-family: "SFMono-Regular", "JetBrains Mono", monospace;
+        font-size: 12px;
+        line-height: 1.6;
+        white-space: pre-wrap;
+      }
+
+      .status {
+        padding: 12px 14px;
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.72);
+        border: 1px solid rgba(120, 85, 72, 0.1);
+        color: var(--muted);
+      }
+
+      .status.error {
+        background: rgba(255, 237, 240, 0.88);
+        border-color: rgba(202, 73, 114, 0.16);
+        color: #9f355a;
+      }
+
+      @media (max-width: 1080px) {
+        .hero,
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 760px) {
+        .shell {
+          padding: 20px 14px 28px;
+        }
+
+        .hero-copy,
+        .controls,
+        .stage-panel,
+        .info-panel {
+          padding: 18px;
+        }
+
+        .stage {
+          min-height: 360px;
+        }
+
+        .mock-feishu {
+          left: 22px;
+          top: 126px;
+          width: 220px;
+          height: 180px;
+        }
+
+        .mock-sidebar {
+          left: 242px;
+          top: 126px;
+          width: 124px;
+          height: 180px;
+        }
+
+        .anchor-cross,
+        .sprite-host {
+          left: 182px;
+          top: 126px;
+        }
+
+        .info-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .state-row {
+          grid-template-columns: 64px minmax(0, 1fr);
+        }
+
+        .state-thumb {
+          width: 64px;
+          height: 64px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <section class="hero">
+        <div class="panel hero-copy">
+          <div class="eyebrow">Kirby Pack Preview</div>
+          <h1>先验素材包，再接入程序</h1>
+          <p>
+            这个预览页直接读取 `kirby-packs/<pack-id>/manifest.json`，帮你快速检查每个状态的图、锚点信息和运行时配置。
+            设计师出图后，把导出包丢进 `public/kirby-packs/`，重新打开这里就能一起验收。
+          </p>
+        </div>
+
+        <div class="panel controls">
+          <div>
+            <label class="control-label" for="pack-id">Pack ID</label>
+            <div class="row">
+              <input id="pack-id" value="default" spellcheck="false" />
+              <button id="load-pack">加载素材包</button>
+              <button id="choose-pack-directory" class="secondary">选择素材包目录</button>
+            </div>
+            <input id="pack-directory" type="file" webkitdirectory directory multiple hidden />
+          </div>
+
+          <div>
+            <label class="control-label" for="state-select">Preview State</label>
+            <div class="row">
+              <select id="state-select">
+                <option value="floating">floating</option>
+                <option value="snapping">snapping</option>
+                <option value="dockedExpanded">dockedExpanded</option>
+                <option value="dockedCollapsed">dockedCollapsed</option>
+              </select>
+              <button id="play-sequence" class="secondary">播放序列</button>
+              <button id="play-detach" class="secondary">播放 detach 转场</button>
+            </div>
+          </div>
+
+          <div class="status" id="status-text">
+            输入 pack id 并点击“加载素材包”，例如 `default`。
+          </div>
+        </div>
+      </section>
+
+      <section class="grid">
+        <div class="panel stage-panel">
+          <div class="stage-top">
+            <div>
+              <div class="info-label">Current State</div>
+              <div class="stage-name" id="stage-name">floating</div>
+            </div>
+            <div class="pill" id="frame-info">1 frame</div>
+          </div>
+
+          <div class="stage" id="preview-stage">
+            <div class="mock-feishu" data-visible-in="snapping,dockedExpanded,dockedCollapsed">
+              <div class="mock-copy">
+                <div class="mock-line" style="width: 64%"></div>
+                <div class="mock-line" style="width: 84%"></div>
+                <div class="mock-line" style="width: 72%"></div>
+                <div class="mock-line" style="width: 78%"></div>
+              </div>
+            </div>
+            <div class="mock-sidebar" data-visible-in="dockedExpanded">
+              <div class="mock-copy">
+                <div class="mock-line" style="width: 76%"></div>
+                <div class="mock-line" style="width: 88%"></div>
+                <div class="mock-line" style="width: 66%"></div>
+                <div class="mock-line" style="width: 58%"></div>
+              </div>
+            </div>
+            <div class="anchor-cross" title="逻辑锚点预览"></div>
+            <div class="sprite-host">
+              <img id="stage-image" alt="kirby preview" />
+            </div>
+          </div>
+
+          <div class="state-controls" id="state-buttons"></div>
+        </div>
+
+        <div class="panel info-panel">
+          <div class="info-grid">
+            <div class="info-card">
+              <div class="info-label">Panel</div>
+              <div class="info-value" id="panel-size">120 × 120</div>
+            </div>
+            <div class="info-card">
+              <div class="info-label">Anchor</div>
+              <div class="info-value" id="anchor-value">60, 60</div>
+            </div>
+            <div class="info-card">
+              <div class="info-label">Hit Area</div>
+              <div class="info-value" id="hit-value">circle</div>
+            </div>
+            <div class="info-card">
+              <div class="info-label">Pack Version</div>
+              <div class="info-value" id="pack-version">v1</div>
+            </div>
+          </div>
+
+          <div>
+            <div class="info-label">States</div>
+            <div class="states-list" id="states-list"></div>
+          </div>
+
+          <div>
+            <div class="info-label">Manifest</div>
+            <div class="manifest-box" id="manifest-box"></div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <script>
+      ;(() => {
+        const REQUIRED_STATES = ['floating', 'snapping', 'dockedExpanded', 'dockedCollapsed']
+        const EMBEDDED_DEFAULT_MANIFEST = {
+          meta: {
+            id: 'default',
+            name: 'Default Pink Ball',
+            version: 1,
+            specVersion: 1,
+            author: 'Vonvon',
+          },
+          layout: {
+            panel: { width: 120, height: 120 },
+            anchor: {
+              x: 60,
+              y: 60,
+              description: "Docked states align this anchor to Feishu's top-right corner.",
+            },
+            hitArea: { type: 'circle', cx: 60, cy: 60, r: 40 },
+          },
+          transitions: {
+            formSwitch: { durationMs: 200, scaleFrom: 0.9, scaleTo: 1, easing: 'ease' },
+            detach: {
+              description: 'Peel-off stretch played when the docked ball is dragged away from Feishu.',
+              frames: [
+                { src: 'transitions/detach-01.svg', durationMs: 70 },
+                { src: 'transitions/detach-02.svg', durationMs: 70 },
+                { src: 'transitions/detach-03.svg', durationMs: 70 },
+                { src: 'transitions/detach-04.svg', durationMs: 80 },
+              ],
+            },
+            panelMove: { durationMs: 300, easing: 'ease-in-out' },
+            sidebarEnter: { durationMs: 240, origin: 'top-left', scaleAxis: 'x' },
+            sidebarExit: { durationMs: 240, origin: 'top-left', scaleAxis: 'x' },
+          },
+          states: {
+            floating: {
+              displayName: 'Floating',
+              kind: 'single',
+              src: 'floating.svg',
+              description: 'Default idle pose while the ball is free-floating.',
+            },
+            snapping: {
+              displayName: 'Snapping',
+              kind: 'single',
+              src: 'snapping.svg',
+              description: 'Preview pose shown while the ball enters the snap zone.',
+            },
+            dockedExpanded: {
+              displayName: 'Docked Expanded',
+              kind: 'single',
+              src: 'docked-expanded.svg',
+              description: "Pose used while docked at Feishu's top-right corner with the sidebar open.",
+            },
+            dockedCollapsed: {
+              displayName: 'Docked Collapsed',
+              kind: 'single',
+              src: 'docked-collapsed.svg',
+              description: 'Pose used while docked with the sidebar collapsed.',
+            },
+          },
+        }
+        const packInput = document.getElementById('pack-id')
+        const loadButton = document.getElementById('load-pack')
+        const chooseDirectoryButton = document.getElementById('choose-pack-directory')
+        const directoryInput = document.getElementById('pack-directory')
+        const stateSelect = document.getElementById('state-select')
+        const playButton = document.getElementById('play-sequence')
+        const playDetachButton = document.getElementById('play-detach')
+        const statusText = document.getElementById('status-text')
+        const stageName = document.getElementById('stage-name')
+        const frameInfo = document.getElementById('frame-info')
+        const stageImage = document.getElementById('stage-image')
+        const panelSize = document.getElementById('panel-size')
+        const anchorValue = document.getElementById('anchor-value')
+        const hitValue = document.getElementById('hit-value')
+        const packVersion = document.getElementById('pack-version')
+        const statesList = document.getElementById('states-list')
+        const manifestBox = document.getElementById('manifest-box')
+        const stateButtons = document.getElementById('state-buttons')
+        const visibilityNodes = Array.from(document.querySelectorAll('[data-visible-in]'))
+
+        let runtime = {
+          packId: 'default',
+          manifest: null,
+          assetBase: '',
+          assetResolver: null,
+          assetUrlCache: {},
+          objectUrls: [],
+          activeState: 'floating',
+          frames: {},
+          timer: 0,
+          detachTimer: 0,
+        }
+
+        function setStatus(message, isError) {
+          statusText.textContent = message
+          statusText.classList.toggle('error', Boolean(isError))
+        }
+
+        function updateMockVisibility(state) {
+          visibilityNodes.forEach((node) => {
+            const visibleIn = String(node.getAttribute('data-visible-in') || '')
+              .split(',')
+              .map((value) => value.trim())
+              .filter(Boolean)
+            node.style.display = visibleIn.includes(state) ? '' : 'none'
+          })
+        }
+
+        function resolveManifestUrl(packId) {
+          return new URL(`./kirby-packs/${packId}/manifest.json`, window.location.href).toString()
+        }
+
+        function resolveAssetUrl(relativePath) {
+          if (typeof runtime.assetResolver === 'function') {
+            return runtime.assetResolver(relativePath)
+          }
+          return new URL(relativePath, runtime.assetBase).toString()
+        }
+
+        function normalizeFrames(stateDef) {
+          if (!stateDef) return []
+          if (Array.isArray(stateDef.frames) && stateDef.frames.length > 0) {
+            return stateDef.frames.map((frame) =>
+              typeof frame === 'string'
+                ? { src: frame, durationMs: stateDef.frameDurationMs || 100 }
+                : { src: frame.src, durationMs: frame.durationMs || stateDef.frameDurationMs || 100 }
+            )
+          }
+          if (typeof stateDef.src === 'string' && stateDef.src.length > 0) {
+            return [{ src: stateDef.src, durationMs: stateDef.frameDurationMs || 100 }]
+          }
+          return []
+        }
+
+        function stopSequence() {
+          if (runtime.timer) {
+            clearTimeout(runtime.timer)
+            runtime.timer = 0
+          }
+        }
+
+        function stopDetachSequence() {
+          if (runtime.detachTimer) {
+            clearTimeout(runtime.detachTimer)
+            runtime.detachTimer = 0
+          }
+        }
+
+        function revokeObjectUrls() {
+          runtime.objectUrls.forEach((url) => {
+            try {
+              URL.revokeObjectURL(url)
+            } catch {}
+          })
+          runtime.objectUrls = []
+          runtime.assetUrlCache = {}
+        }
+
+        function resetAssetResolver() {
+          revokeObjectUrls()
+          runtime.assetResolver = null
+        }
+
+        function renderStateCards() {
+          statesList.innerHTML = ''
+          stateButtons.innerHTML = ''
+
+          REQUIRED_STATES.forEach((state) => {
+            const stateDef = runtime.manifest.states[state] || {}
+            const frames = runtime.frames[state] || []
+            const firstFrame = frames[0]
+            const row = document.createElement('div')
+            row.className = 'state-row'
+            row.innerHTML = `
+              <div class="state-thumb">${firstFrame ? `<img src="${resolveAssetUrl(firstFrame.src)}" alt="${state}" />` : ''}</div>
+              <div class="state-meta">
+                <strong>${state}</strong>
+                <p>${stateDef.description || 'No description provided.'}</p>
+                <p>${frames.length} frame(s)</p>
+              </div>
+            `
+            statesList.appendChild(row)
+
+            const button = document.createElement('button')
+            button.className = 'state-button'
+            button.textContent = state
+            button.addEventListener('click', () => {
+              stateSelect.value = state
+              setActiveState(state)
+            })
+            stateButtons.appendChild(button)
+          })
+        }
+
+        function updateStateButtons() {
+          Array.from(stateButtons.children).forEach((node) => {
+            node.classList.toggle('active', node.textContent === runtime.activeState)
+          })
+        }
+
+        function showFrame(state, index) {
+          const frames = runtime.frames[state] || []
+          if (!frames[index]) return
+          stageImage.src = resolveAssetUrl(frames[index].src)
+          stageName.textContent = state
+          frameInfo.textContent = `${frames.length} frame${frames.length === 1 ? '' : 's'}`
+        }
+
+        function playSequence(state) {
+          stopSequence()
+          const frames = runtime.frames[state] || []
+          if (frames.length <= 1) return
+          let index = 0
+
+          const tick = () => {
+            if (runtime.activeState !== state) return
+            showFrame(state, index)
+            const duration = frames[index].durationMs || 100
+            index = (index + 1) % frames.length
+            runtime.timer = window.setTimeout(tick, duration)
+          }
+
+          tick()
+        }
+
+        function setActiveState(state) {
+          runtime.activeState = state
+          stopSequence()
+          stopDetachSequence()
+          showFrame(state, 0)
+          updateMockVisibility(state)
+          updateStateButtons()
+        }
+
+        function playDetachTransition() {
+          const frames = normalizeFrames(runtime.manifest?.transitions?.detach || {})
+          if (frames.length === 0) {
+            setStatus('当前素材包没有定义 transitions.detach', true)
+            return
+          }
+
+          stopSequence()
+          stopDetachSequence()
+          let index = 0
+
+          const tick = () => {
+            const frame = frames[index]
+            if (!frame) {
+              showFrame(runtime.activeState, 0)
+              return
+            }
+
+            stageImage.src = resolveAssetUrl(frame.src)
+            stageName.textContent = `${runtime.activeState} · detach`
+            frameInfo.textContent = `detach ${index + 1}/${frames.length}`
+            index += 1
+
+            runtime.detachTimer = window.setTimeout(() => {
+              if (index >= frames.length) {
+                showFrame(runtime.activeState, 0)
+                return
+              }
+              tick()
+            }, frame.durationMs || 100)
+          }
+
+          tick()
+        }
+
+        function renderManifestInfo() {
+          const panel = runtime.manifest.layout?.panel || { width: 120, height: 120 }
+          const anchor = runtime.manifest.layout?.anchor || { x: 60, y: 60 }
+          const hit = runtime.manifest.layout?.hitArea || { type: 'circle', cx: 60, cy: 60, r: 40 }
+          const version = runtime.manifest.meta?.version ?? '?'
+          const author = runtime.manifest.meta?.author ? ` · ${runtime.manifest.meta.author}` : ''
+
+          panelSize.textContent = `${panel.width} × ${panel.height}`
+          anchorValue.textContent = `${anchor.x}, ${anchor.y}`
+          hitValue.textContent = `${hit.type || 'circle'} · ${hit.cx}, ${hit.cy}, r=${hit.r}`
+          packVersion.textContent = `v${version}${author}`
+          manifestBox.textContent = JSON.stringify(runtime.manifest, null, 2)
+        }
+
+        function validateManifestShape(manifest) {
+          if (!manifest || typeof manifest !== 'object' || !manifest.states) {
+            throw new Error('manifest 缺少 states')
+          }
+
+          REQUIRED_STATES.forEach((state) => {
+            if (!manifest.states[state]) {
+              throw new Error(`manifest 缺少状态 ${state}`)
+            }
+          })
+        }
+
+        function normalizeRelativePath(path) {
+          return String(path || '').replace(/\\/g, '/').replace(/^\.?\//, '')
+        }
+
+        function chooseManifestEntry(files) {
+          const manifestEntries = files
+            .map((file) => ({
+              file,
+              rel: normalizeRelativePath(file.webkitRelativePath || file.name),
+            }))
+            .filter((entry) => entry.rel === 'manifest.json' || entry.rel.endsWith('/manifest.json'))
+
+          if (manifestEntries.length === 0) {
+            throw new Error('所选目录里没有 manifest.json')
+          }
+
+          manifestEntries.sort((a, b) => a.rel.split('/').length - b.rel.split('/').length)
+          return manifestEntries[0]
+        }
+
+        async function loadPackFromDirectory(fileList) {
+          const files = Array.from(fileList || [])
+          if (files.length === 0) return
+
+          const manifestEntry = chooseManifestEntry(files)
+          const manifestText = await manifestEntry.file.text()
+          const manifest = JSON.parse(manifestText)
+          validateManifestShape(manifest)
+
+          const manifestRel = manifestEntry.rel
+          const manifestDir = manifestRel === 'manifest.json'
+            ? ''
+            : manifestRel.slice(0, -'manifest.json'.length)
+          const fileMap = new Map()
+
+          files.forEach((file) => {
+            const rel = normalizeRelativePath(file.webkitRelativePath || file.name)
+            fileMap.set(rel, file)
+          })
+
+          resetAssetResolver()
+          runtime.assetResolver = (relativePath) => {
+            const normalized = normalizeRelativePath(relativePath)
+            const lookupKey = normalizeRelativePath(`${manifestDir}${normalized}`)
+            const file = fileMap.get(lookupKey)
+            if (!file) {
+              throw new Error(`目录素材缺失：${lookupKey}`)
+            }
+
+            if (runtime.assetUrlCache[lookupKey]) {
+              return runtime.assetUrlCache[lookupKey]
+            }
+
+            const url = URL.createObjectURL(file)
+            runtime.objectUrls.push(url)
+            runtime.assetUrlCache[lookupKey] = url
+            return url
+          }
+
+          runtime.packId = manifest.meta?.id || packInput.value.trim() || 'directory-pack'
+          runtime.manifest = manifest
+          runtime.assetBase = ''
+          runtime.frames = {}
+
+          REQUIRED_STATES.forEach((state) => {
+            runtime.frames[state] = normalizeFrames(manifest.states[state])
+          })
+
+          renderManifestInfo()
+          renderStateCards()
+          setActiveState(stateSelect.value || 'floating')
+
+          const sourceLabel = manifestDir ? manifestDir.replace(/\/$/, '') : '.'
+          setStatus(`已从目录加载素材包 ${runtime.packId}（manifest 位置：${sourceLabel}）`, false)
+        }
+
+        async function loadPack(packId) {
+          const manifestUrl = resolveManifestUrl(packId)
+          setStatus(`正在加载 ${manifestUrl}`, false)
+
+          let manifest
+          try {
+            const response = await fetch(manifestUrl, { cache: 'no-store' })
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}`)
+            }
+            manifest = await response.json()
+          } catch (error) {
+            if (window.location.protocol === 'file:' && packId === 'default') {
+              manifest = EMBEDDED_DEFAULT_MANIFEST
+              setStatus('检测到 file:// 预览，已切换到内嵌 default manifest。', false)
+            } else {
+              throw error
+            }
+          }
+
+          validateManifestShape(manifest)
+
+          resetAssetResolver()
+          runtime.packId = packId
+          runtime.manifest = manifest
+          runtime.assetBase = new URL(`./kirby-packs/${packId}/`, window.location.href).toString()
+          runtime.assetResolver = null
+          runtime.frames = {}
+
+          REQUIRED_STATES.forEach((state) => {
+            runtime.frames[state] = normalizeFrames(manifest.states[state])
+          })
+
+          renderManifestInfo()
+          renderStateCards()
+          setActiveState(stateSelect.value || 'floating')
+          setStatus(`已加载素材包 ${packId}`, false)
+        }
+
+        loadButton.addEventListener('click', async () => {
+          const packId = packInput.value.trim() || 'default'
+          const url = new URL(window.location.href)
+          url.searchParams.set('pack', packId)
+          window.history.replaceState({}, '', url)
+
+          try {
+            await loadPack(packId)
+          } catch (error) {
+            setStatus(`加载失败：${error instanceof Error ? error.message : String(error)}`, true)
+          }
+        })
+
+        chooseDirectoryButton.addEventListener('click', () => {
+          directoryInput.value = ''
+          directoryInput.click()
+        })
+
+        directoryInput.addEventListener('change', async () => {
+          try {
+            await loadPackFromDirectory(directoryInput.files)
+          } catch (error) {
+            setStatus(`目录加载失败：${error instanceof Error ? error.message : String(error)}`, true)
+          }
+        })
+
+        stateSelect.addEventListener('change', () => {
+          setActiveState(stateSelect.value)
+        })
+
+        playButton.addEventListener('click', () => {
+          playSequence(runtime.activeState)
+        })
+
+        playDetachButton.addEventListener('click', () => {
+          playDetachTransition()
+        })
+
+        const params = new URLSearchParams(window.location.search)
+        const initialPack = params.get('pack') || 'default'
+        packInput.value = initialPack
+        loadPack(initialPack).catch((error) => {
+          setStatus(`加载失败：${error instanceof Error ? error.message : String(error)}`, true)
+        })
+      })()
+    </script>
+  </body>
+</html>

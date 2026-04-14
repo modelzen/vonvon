@@ -30,6 +30,7 @@ export default defineConfig({
   },
   renderer: {
     plugins: [react()],
+    publicDir: resolve(__dirname, 'public'),
     build: {
       rollupOptions: {
         input: {

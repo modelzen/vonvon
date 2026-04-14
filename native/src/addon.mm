@@ -122,6 +122,21 @@ Napi::Value SetKirbyForm(const Napi::CallbackInfo& info) {
     return info.Env().Undefined();
 }
 
+// JS → Native: trigger a short manifest-driven transition animation layered
+// on top of the current visible form. This does not change Kirby's state;
+// it only asks kirby.html to play a named transition (e.g. "detach").
+Napi::Value PlayKirbyTransition(const Napi::CallbackInfo& info) {
+    std::string name = info[0].As<Napi::String>().Utf8Value();
+    NSString *nsName = [NSString stringWithUTF8String:name.c_str()];
+    NSString *escaped = [nsName stringByReplacingOccurrencesOfString:@"'"
+                                                          withString:@"\\'"];
+    NSString *js = [NSString stringWithFormat:
+        @"if (typeof window.__playKirbyTransition === 'function') { window.__playKirbyTransition('%@'); }",
+        escaped];
+    [[KirbyWindow shared] evaluateJS:js];
+    return info.Env().Undefined();
+}
+
 // JS → Native: collapse the sidebar (triggered when user clicks the ✕ on
 // the sidebar header). Updates native state and switches the SVG form;
 // JS is responsible for hiding the sidebar BrowserWindow.
@@ -320,6 +335,7 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("onCollapseSidebar", Napi::Function::New(env, OnCollapseSidebar));
     exports.Set("onFeishuMoved",     Napi::Function::New(env, OnFeishuMoved));
     exports.Set("setKirbyForm",      Napi::Function::New(env, SetKirbyForm));
+    exports.Set("playKirbyTransition", Napi::Function::New(env, PlayKirbyTransition));
     exports.Set("collapseSidebar",   Napi::Function::New(env, CollapseSidebar));
     return exports;
 }

@@ -69,6 +69,11 @@ declare module 'vonvon-native' {
   /** JS → Native: force-set the SVG form displayed by the ball. */
   export function setKirbyForm(form: KirbyForm): void
 
+  /** JS → Native: trigger a manifest-driven transition animation on top of
+   *  the current form. Used for detach peel-off effects and similar
+   *  short-lived motion accents. */
+  export function playKirbyTransition(transitionName: 'detach'): void
+
   /** JS → Native: called when the user closes the sidebar via the ✕
    *  button. Transitions native state dockedExpanded → dockedCollapsed
    *  and switches SVG form. JS is responsible for hiding the BrowserWindow. */

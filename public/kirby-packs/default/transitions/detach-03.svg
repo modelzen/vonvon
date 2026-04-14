@@ -1,0 +1,46 @@
+<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="detach-03-body" cx="42%" cy="32%" r="72%" fx="42%" fy="32%">
+      <stop offset="0%" stop-color="#ffe2ee"/>
+      <stop offset="30%" stop-color="#ffb6da"/>
+      <stop offset="70%" stop-color="#ff6fb4"/>
+      <stop offset="100%" stop-color="#e11f85"/>
+    </radialGradient>
+    <radialGradient id="detach-03-spec" cx="42%" cy="28%" r="44%">
+      <stop offset="0%" stop-color="rgba(255,255,255,0.70)"/>
+      <stop offset="60%" stop-color="rgba(255,255,255,0.10)"/>
+      <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+    </radialGradient>
+    <filter id="detach-03-blush" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2"/>
+    </filter>
+  </defs>
+  <g>
+    <path d="
+      M 52 82
+      C 54 92 58 100 60 108
+      C 62 100 66 92 68 82 Z
+    " fill="#ff6fb4" opacity="0.9"/>
+    <path d="
+      M 24 48
+      C 24 14 36 4 58 4
+      C 80 4 92 14 92 48
+      C 92 78 80 88 58 88
+      C 36 88 24 78 24 48 Z
+    " fill="url(#detach-03-body)"/>
+    <path d="
+      M 24 48
+      C 24 14 36 4 58 4
+      C 80 4 92 14 92 48
+      C 92 78 80 88 58 88
+      C 36 88 24 78 24 48 Z
+    " fill="url(#detach-03-spec)"/>
+    <circle cx="48" cy="42" r="5" fill="#1a1230"/>
+    <circle cx="49" cy="40" r="1.7" fill="#fff"/>
+    <circle cx="70" cy="40" r="5" fill="#1a1230"/>
+    <circle cx="71" cy="38" r="1.7" fill="#fff"/>
+    <ellipse cx="58" cy="54" rx="3.2" ry="3.8" fill="#c2185b"/>
+    <ellipse cx="36" cy="52" rx="5.5" ry="3.5" fill="rgba(255,90,150,0.36)" filter="url(#detach-03-blush)"/>
+    <ellipse cx="80" cy="52" rx="5.5" ry="3.5" fill="rgba(255,90,150,0.36)" filter="url(#detach-03-blush)"/>
+  </g>
+</svg>
