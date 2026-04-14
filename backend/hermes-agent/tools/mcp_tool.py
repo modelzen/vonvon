@@ -92,6 +92,11 @@ _MCP_HTTP_AVAILABLE = False
 _MCP_SAMPLING_TYPES = False
 _MCP_NOTIFICATION_TYPES = False
 _MCP_MESSAGE_HANDLER_SUPPORTED = False
+ClientSession = None
+StdioServerParameters = None
+stdio_client = None
+streamablehttp_client = None
+streamable_http_client = None
 try:
     from mcp import ClientSession, StdioServerParameters
     from mcp.client.stdio import stdio_client
@@ -135,6 +140,16 @@ try:
         logger.debug("MCP notification types not available -- dynamic tool discovery disabled")
 except ImportError:
     logger.debug("mcp package not installed -- MCP tool support disabled")
+
+
+def _require_mcp_sdk() -> None:
+    """Raise a clear ImportError when the optional MCP SDK is unavailable."""
+    if _MCP_AVAILABLE:
+        return
+    raise ImportError(
+        "MCP support requires the optional 'mcp' Python package, but it is not installed "
+        "in the current backend environment. Reinstall backend dependencies with MCP support."
+    )
 
 
 def _check_message_handler_support() -> bool:
@@ -822,6 +837,8 @@ class MCPServerTask:
 
     async def _run_stdio(self, config: dict):
         """Run the server using stdio transport."""
+        _require_mcp_sdk()
+
         command = config.get("command")
         args = config.get("args", [])
         user_env = config.get("env")
@@ -1124,6 +1141,8 @@ def _mcp_loop_exception_handler(loop, context):
 
 def _ensure_mcp_loop():
     """Start the background event loop thread if not already running."""
+    _require_mcp_sdk()
+
     global _mcp_loop, _mcp_thread
     with _lock:
         if _mcp_loop is not None and _mcp_loop.is_running():

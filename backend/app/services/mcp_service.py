@@ -54,7 +54,7 @@ async def add_server(cfg: Dict[str, Any], *, probe: bool) -> Dict[str, Any]:
             probed_info = {"last_probed_at": time.time(),
                            "last_error": str(exc)}
     else:
-        clean["enabled"] = True
+        clean["enabled"] = bool(clean.get("enabled", True))
         probed_info = {}
 
     # _save_mcp_server does its own load/save; we add an outer lock for
@@ -76,6 +76,19 @@ def _remove_locked(name: str) -> bool:
 
 async def remove_server(name: str) -> bool:
     return await asyncio.to_thread(_remove_locked, name)
+
+
+async def set_server_enabled(name: str, enabled: bool) -> Dict[str, Any]:
+    servers = _get_mcp_servers()
+    cfg = servers.get(name)
+    if cfg is None:
+        raise KeyError(name)
+
+    clean = _sanitize(dict(cfg))
+    clean["enabled"] = enabled
+    await asyncio.to_thread(_save_locked, name, clean)
+    logger.info("mcp_server_toggled name=%s enabled=%s", name, enabled)
+    return {"name": name, **clean}
 
 
 async def probe_server(name: str) -> Dict[str, Any]:

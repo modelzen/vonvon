@@ -95,3 +95,11 @@ def test_run_stdio_uses_resolved_command_and_prepended_path(tmp_path):
             await server.shutdown()
 
     asyncio.run(_test())
+
+
+def test_ensure_mcp_loop_raises_clear_error_when_sdk_missing():
+    import tools.mcp_tool as mcp_tool
+
+    with patch("tools.mcp_tool._MCP_AVAILABLE", False):
+        with pytest.raises(ImportError, match="optional 'mcp' Python package"):
+            mcp_tool._ensure_mcp_loop()

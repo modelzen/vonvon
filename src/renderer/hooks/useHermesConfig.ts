@@ -82,6 +82,10 @@ export interface McpProbeResult {
   error?: string
 }
 
+export interface McpServerEnabledRequest {
+  enabled: boolean
+}
+
 export interface SkillView {
   name: string
   category?: string
@@ -241,6 +245,9 @@ export function useHermesConfig() {
   const removeMcpServer = (name: string): Promise<void> =>
     del(`/api/mcp/servers/${encodeURIComponent(name)}`)
 
+  const setMcpServerEnabled = (name: string, enabled: boolean) =>
+    post<McpServerView>(`/api/mcp/servers/${encodeURIComponent(name)}/enabled`, { enabled })
+
   const testMcpServer = (name: string) =>
     post<McpProbeResult>(`/api/mcp/servers/${encodeURIComponent(name)}/test`)
 
@@ -303,6 +310,7 @@ export function useHermesConfig() {
     listMcpServers,
     addMcpServer,
     removeMcpServer,
+    setMcpServerEnabled,
     testMcpServer,
     listSkills,
     toggleSkill,

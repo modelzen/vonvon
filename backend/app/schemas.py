@@ -130,6 +130,10 @@ class McpProbeResult(BaseModel):
     error: Optional[str] = None
 
 
+class McpServerEnabledRequest(BaseModel):
+    enabled: bool
+
+
 # ── Skills schemas ────────────────────────────────────────────────────────────
 
 class SkillView(BaseModel):

@@ -67,6 +67,14 @@ async def test_add_server_no_probe(_patch_hermes_mcp):
 
 
 @pytest.mark.asyncio
+async def test_add_server_no_probe_preserves_enabled_false(_patch_hermes_mcp):
+    cfg = {"name": "disabled-server", "url": "http://localhost:9000", "enabled": False}
+    result = await mcp_service.add_server(cfg, probe=False)
+    assert result["enabled"] is False
+    assert _patch_hermes_mcp["disabled-server"]["enabled"] is False
+
+
+@pytest.mark.asyncio
 async def test_add_server_requires_url_or_command(_patch_hermes_mcp):
     with pytest.raises(ValueError, match="url or command"):
         await mcp_service.add_server({"name": "bad"}, probe=False)
@@ -105,6 +113,20 @@ async def test_remove_server_existing(_patch_hermes_mcp):
 async def test_remove_server_missing(_patch_hermes_mcp):
     removed = await mcp_service.remove_server("nonexistent")
     assert removed is False
+
+
+@pytest.mark.asyncio
+async def test_set_server_enabled_existing(_patch_hermes_mcp):
+    _patch_hermes_mcp["fs"] = {"command": "npx", "enabled": True}
+    result = await mcp_service.set_server_enabled("fs", False)
+    assert result["enabled"] is False
+    assert _patch_hermes_mcp["fs"]["enabled"] is False
+
+
+@pytest.mark.asyncio
+async def test_set_server_enabled_missing(_patch_hermes_mcp):
+    with pytest.raises(KeyError):
+        await mcp_service.set_server_enabled("ghost", False)
 
 
 @pytest.mark.asyncio
