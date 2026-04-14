@@ -22,6 +22,7 @@ def models_client(mock_session_db):
 
 def test_list_models_uses_authenticated_providers(models_client):
     """AC-M1: GET /api/models returns providers from list_authenticated_providers."""
+    agent_service._current_provider = "openai"
     fake_providers = [
         {"slug": "openai", "name": "OpenAI", "models": ["gpt-4o"], "total_models": 1, "is_current": True}
     ]
@@ -71,6 +72,53 @@ def test_list_models_reflects_current_model(models_client):
 
     assert resp.json()["current"] == "openai/gpt-4o"
     assert resp.json()["current_provider"] == "openai"
+
+
+def test_list_models_prefers_local_codex_catalog(models_client):
+    """GET /api/models should use the cached/local Codex catalog for UI loads."""
+    fake_providers = [
+        {
+            "slug": "openai-codex",
+            "name": "OpenAI Codex",
+            "models": ["gpt-5.3-codex"],
+            "total_models": 1,
+            "is_current": True,
+        }
+    ]
+    list_mock = MagicMock(return_value=fake_providers)
+    codex_mock = MagicMock(return_value=["gpt-5.4", "gpt-5.3-codex"])
+    sys.modules["hermes_cli.model_switch"].list_authenticated_providers = list_mock
+    sys.modules["hermes_cli.codex_models"] = MagicMock(get_codex_model_ids=codex_mock)
+
+    try:
+        resp = models_client.get("/api/models")
+    finally:
+        sys.modules["hermes_cli.model_switch"].list_authenticated_providers = MagicMock()
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["providers"][0]["models"] == ["gpt-5.4", "gpt-5.3-codex"]
+    assert data["providers"][0]["source"] == "codex-cache"
+    codex_mock.assert_called_once_with()
+
+
+def test_list_models_uses_route_cache_until_invalidated(models_client):
+    """Repeated GET /api/models calls should reuse the in-process provider cache."""
+    fake_providers = [
+        {"slug": "openai", "name": "OpenAI", "models": ["gpt-4o"], "total_models": 1, "is_current": True}
+    ]
+    list_mock = MagicMock(return_value=fake_providers)
+    sys.modules["hermes_cli.model_switch"].list_authenticated_providers = list_mock
+
+    try:
+        first = models_client.get("/api/models")
+        second = models_client.get("/api/models")
+    finally:
+        sys.modules["hermes_cli.model_switch"].list_authenticated_providers = MagicMock()
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert list_mock.call_count == 1
 
 
 # ── POST /api/models/current ──────────────────────────────────────────────────

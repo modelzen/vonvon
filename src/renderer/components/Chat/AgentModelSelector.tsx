@@ -1,6 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useHermesConfig, ProviderInfo } from '../../hooks/useHermesConfig'
 import { useSession } from '../../contexts/SessionContext'
+import {
+  loadModelCatalog,
+  loadStoredModelCatalog,
+  saveStoredModelCatalog,
+} from '../../lib/modelCatalogCache'
 
 /**
  * Agent-mode model picker shown in the chat page header.
@@ -55,7 +60,7 @@ export function AgentModelSelector(): React.ReactElement {
     const refresh = async () => {
       try {
         const [data, stored] = await Promise.all([
-          listModelsRef.current(),
+          loadModelCatalog(() => listModelsRef.current()),
           window.electron.storeGet('modelWhitelist') as Promise<unknown>,
         ])
         if (cancelled) return
@@ -133,6 +138,18 @@ export function AgentModelSelector(): React.ReactElement {
         provider: owner?.slug,
         persist: true,
       })
+      const cached = await loadStoredModelCatalog()
+      if (cached) {
+        await saveStoredModelCatalog({
+          ...cached,
+          current: value,
+          current_provider: owner?.slug ?? cached.current_provider,
+          providers: cached.providers.map((provider) => ({
+            ...provider,
+            is_current: provider.slug === (owner?.slug ?? cached.current_provider),
+          })),
+        })
+      }
     } catch (err: any) {
       setError(err?.message ?? 'switch failed')
       setCurrent(previous)

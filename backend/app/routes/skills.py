@@ -34,6 +34,34 @@ class SkillSearchResult(BaseModel):
     trust_level: str
 
 
+class SkillDiscoverItem(BaseModel):
+    identifier: str
+    name: str
+    description: str
+    source: str
+    source_label: str
+    trust_level: str
+    category: str
+    category_label: str
+    tags: list[str] = []
+    install_kind: str
+    installed: bool = False
+
+
+class SkillDiscoverPage(BaseModel):
+    items: list[SkillDiscoverItem] = Field(default_factory=list)
+    total: int
+    offset: int
+    limit: int
+    has_more: bool
+
+
+class SkillDiscoverRefreshResponse(BaseModel):
+    count: int
+    updated_at: float
+    sources: dict[str, int] = Field(default_factory=dict)
+
+
 class SkillInstallStartRequest(BaseModel):
     identifier: str
 
@@ -81,6 +109,29 @@ async def search_skills(q: str, limit: int = 10) -> list[SkillSearchResult]:
     if not q.strip():
         return []
     return skills_service.search_hub(q, limit=limit)
+
+
+@router.get("/api/skills/discover")
+async def discover_skills(
+    q: str = "",
+    limit: int = 60,
+    offset: int = 0,
+    source: str = "all",
+) -> SkillDiscoverPage:
+    return skills_service.list_discoverable_skills(
+        query=q,
+        limit=limit,
+        offset=offset,
+        source=source,
+    )
+
+
+@router.post("/api/skills/discover/refresh")
+async def refresh_discover_skills() -> SkillDiscoverRefreshResponse:
+    try:
+        return skills_service.refresh_discoverable_skills_cache()
+    except RuntimeError as exc:
+        raise HTTPException(502, str(exc))
 
 
 @router.post("/api/skills/install")

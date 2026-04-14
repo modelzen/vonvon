@@ -107,6 +107,55 @@ def test_search_skills_empty_query_returns_empty(client):
     assert resp.json() == []
 
 
+# ── GET /api/skills/discover ──────────────────────────────────────────────────
+
+def test_discover_skills_200(client):
+    result = {
+        "items": [{
+            "identifier": "anthropics/skills/skills/frontend-design",
+            "name": "frontend-design",
+            "description": "UI polish",
+            "source": "anthropic",
+            "source_label": "Anthropic",
+            "trust_level": "trusted",
+            "category": "creative",
+            "category_label": "Creative",
+            "tags": ["design"],
+            "install_kind": "hub",
+            "installed": False,
+        }],
+        "total": 1,
+        "offset": 0,
+        "limit": 20,
+        "has_more": False,
+    }
+    with patch("app.routes.skills.skills_service") as svc:
+        svc.list_discoverable_skills.return_value = result
+        resp = client.get("/api/skills/discover?q=design&source=anthropic&limit=20&offset=40")
+    assert resp.status_code == 200
+    assert resp.json()["items"][0]["source"] == "anthropic"
+    assert resp.json()["items"][0]["install_kind"] == "hub"
+    svc.list_discoverable_skills.assert_called_once_with(
+        query="design",
+        limit=20,
+        offset=40,
+        source="anthropic",
+    )
+
+
+def test_refresh_discover_skills_200(client):
+    with patch("app.routes.skills.skills_service") as svc:
+        svc.refresh_discoverable_skills_cache.return_value = {
+            "count": 12,
+            "updated_at": 1700000000.0,
+            "sources": {"anthropic": 3, "lobehub": 9},
+        }
+        resp = client.post("/api/skills/discover/refresh")
+    assert resp.status_code == 200
+    assert resp.json()["count"] == 12
+    assert resp.json()["sources"]["lobehub"] == 9
+
+
 # ── POST /api/skills/install ───────────────────────────────────────────────────
 
 def test_start_install_200(client):

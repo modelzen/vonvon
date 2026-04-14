@@ -5,16 +5,21 @@ resolution). They run on a shared ThreadPoolExecutor and expose a start+poll
 job API. Jobs are in-memory (same semantics as OAuth flows)."""
 
 import asyncio
+import ast
+import json
 import logging
 import re
 import shutil
 import time
 import uuid
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import httpx
+
+from app.config import HERMES_HOME
 from hermes_cli.config import load_config
 from hermes_cli.config_lock import config_store_lock
 from hermes_cli.skills_config import get_disabled_skills, save_disabled_skills
@@ -26,6 +31,79 @@ MAX_CONCURRENT_JOBS = 4
 _executor = ThreadPoolExecutor(
     max_workers=MAX_CONCURRENT_JOBS, thread_name_prefix="skill-job"
 )
+
+_CATEGORY_LABELS = {
+    "apple": "Apple",
+    "autonomous-ai-agents": "AI Agents",
+    "blockchain": "Blockchain",
+    "communication": "Communication",
+    "creative": "Creative",
+    "copywriting": "Copywriting",
+    "data-science": "Data Science",
+    "devops": "DevOps",
+    "dogfood": "Dogfood",
+    "domain": "Domain",
+    "email": "Email",
+    "feeds": "Feeds",
+    "gaming": "Gaming",
+    "gifs": "GIFs",
+    "github": "GitHub",
+    "health": "Health",
+    "inference-sh": "Inference",
+    "leisure": "Leisure",
+    "mcp": "MCP",
+    "media": "Media",
+    "migration": "Migration",
+    "mlops": "MLOps",
+    "note-taking": "Note-Taking",
+    "other": "Other",
+    "productivity": "Productivity",
+    "research": "Research",
+    "security": "Security",
+    "smart-home": "Smart Home",
+    "social-media": "Social Media",
+    "software-development": "Software Dev",
+    "translation": "Translation",
+}
+_TAG_TO_CATEGORY: Dict[str, str] = {}
+for _cat, _tags in {
+    "software-development": [
+        "programming", "code", "coding", "software-development",
+        "frontend-development", "backend-development", "web-development",
+        "react", "python", "typescript", "java", "rust",
+    ],
+    "creative": ["writing", "design", "creative", "art", "image-generation"],
+    "research": ["education", "academic", "research"],
+    "social-media": ["marketing", "seo", "social-media"],
+    "productivity": ["productivity", "business"],
+    "data-science": ["data", "data-science"],
+    "mlops": ["machine-learning", "deep-learning", "mlops"],
+    "devops": ["devops"],
+    "gaming": ["gaming", "game", "game-development", "games"],
+    "media": ["music", "media", "video"],
+    "health": ["health", "fitness"],
+    "translation": ["translation", "language-learning"],
+    "security": ["security", "cybersecurity"],
+}.items():
+    for _tag in _tags:
+        _TAG_TO_CATEGORY[_tag] = _cat
+
+_DISCOVER_SOURCE_ORDER = {
+    "built-in": 0,
+    "optional": 1,
+    "anthropic": 2,
+    "lobehub": 3,
+}
+_DISCOVER_SOURCE_LABELS = {
+    "built-in": "Built-in",
+    "optional": "Optional",
+    "anthropic": "Anthropic",
+    "lobehub": "LobeHub",
+}
+_DISCOVER_CACHE_FILE = (
+    HERMES_HOME / "skills" / ".hub" / "index-cache" / "vonvon-discover-catalog-v1.json"
+)
+_REMOTE_DISCOVER_SOURCES = {"optional", "anthropic", "lobehub"}
 
 
 @dataclass
@@ -75,6 +153,494 @@ def _parse_skill_md(skill_md: Path) -> tuple:
     if len(description) > MAX_DESCRIPTION_LENGTH:
         description = description[:MAX_DESCRIPTION_LENGTH] + "..."
     return name, description
+
+
+def _normalize_category(raw: str | None) -> str:
+    category = (raw or "").strip().lower().replace("_", "-").replace(" ", "-")
+    if not category or category == "uncategorized":
+        return "other"
+    return category
+
+
+def _category_label(category: str) -> str:
+    return _CATEGORY_LABELS.get(category, category.replace("-", " ").title())
+
+
+def _guess_category(tags: List[str]) -> str:
+    for raw_tag in tags:
+        key = str(raw_tag).strip().lower()
+        if not key:
+            continue
+        category = _TAG_TO_CATEGORY.get(key)
+        if category:
+            return category
+    return "other"
+
+
+def _safe_text(value: Any) -> str:
+    if value is None:
+        return ""
+    return str(value).encode("utf-8", "replace").decode("utf-8")
+
+
+def _installed_skill_names() -> set[str]:
+    return {
+        str(skill.get("name", "")).strip().casefold()
+        for skill in _find_installed_skills()
+        if str(skill.get("name", "")).strip()
+    }
+
+
+def _build_discover_item(
+    *,
+    identifier: str,
+    name: str,
+    description: str,
+    source: str,
+    trust_level: str,
+    install_kind: str,
+    installed_names: set[str],
+    category: str = "other",
+    tags: Optional[List[str]] = None,
+    installed: Optional[bool] = None,
+) -> Dict[str, Any]:
+    safe_identifier = _safe_text(identifier).strip()
+    safe_name = _safe_text(name).strip()
+    safe_description = _safe_text(description).strip()
+    safe_source = _safe_text(source).strip()
+    normalized_category = _normalize_category(_safe_text(category))
+    safe_tags = [
+        _safe_text(tag).strip()
+        for tag in (tags or [])
+        if _safe_text(tag).strip()
+    ]
+    return {
+        "identifier": safe_identifier,
+        "name": safe_name,
+        "description": safe_description,
+        "source": safe_source,
+        "source_label": _DISCOVER_SOURCE_LABELS.get(safe_source, safe_source.title()),
+        "trust_level": trust_level,
+        "category": normalized_category,
+        "category_label": _category_label(normalized_category),
+        "tags": safe_tags,
+        "install_kind": install_kind,
+        "installed": (
+            installed if installed is not None else safe_name.casefold() in installed_names
+        ),
+    }
+
+
+def _discover_builtin_items(installed_names: set[str]) -> List[Dict[str, Any]]:
+    return [
+        _build_discover_item(
+            identifier=template["identifier"],
+            name=template["name"],
+            description=template.get("description", "") or "",
+            source="built-in",
+            trust_level="builtin",
+            install_kind="template",
+            installed_names=installed_names,
+            category=template.get("category", "other") or "other",
+            installed=bool(template.get("installed")),
+        )
+        for template in list_templates()
+    ]
+
+
+def _normalize_remote_source(raw_source: str) -> str:
+    source = (raw_source or "").strip().lower()
+    aliases = {
+        "built-in": "built-in",
+        "optional": "optional",
+        "anthropic": "anthropic",
+        "lobehub": "lobehub",
+        "claude marketplace": "claude-marketplace",
+    }
+    return aliases.get(source, source)
+
+
+def _trust_level_for_remote_source(source: str) -> str:
+    if source == "optional":
+        return "builtin"
+    if source == "anthropic":
+        return "trusted"
+    return "community"
+
+
+def _sanitize_cached_remote_item(
+    record: Dict[str, Any],
+    installed_names: set[str],
+) -> Optional[Dict[str, Any]]:
+    source = _normalize_remote_source(str(record.get("source", "")))
+    if source not in _REMOTE_DISCOVER_SOURCES:
+        return None
+
+    identifier = str(record.get("identifier", "")).strip()
+    name = str(record.get("name", "")).strip()
+    if not identifier or not name:
+        return None
+
+    raw_tags = record.get("tags", [])
+    tags = [str(tag) for tag in raw_tags if str(tag).strip()] if isinstance(raw_tags, list) else []
+
+    return _build_discover_item(
+        identifier=identifier,
+        name=name,
+        description=str(record.get("description", "") or ""),
+        source=source,
+        trust_level=_trust_level_for_remote_source(source),
+        install_kind="hub",
+        installed_names=installed_names,
+        category=str(record.get("category", "other") or "other"),
+        tags=tags,
+    )
+
+
+def _read_discover_cache(installed_names: set[str]) -> List[Dict[str, Any]]:
+    if not _DISCOVER_CACHE_FILE.exists():
+        return []
+
+    try:
+        payload = json.loads(_DISCOVER_CACHE_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        logger.info("discover_cache_read_failed err=%s", exc)
+        return []
+
+    if isinstance(payload, dict):
+        records = payload.get("items", [])
+    elif isinstance(payload, list):
+        records = payload
+    else:
+        records = []
+
+    if not isinstance(records, list):
+        return []
+
+    results: List[Dict[str, Any]] = []
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        item = _sanitize_cached_remote_item(record, installed_names)
+        if item is not None:
+            results.append(item)
+    return results
+
+
+def _write_discover_cache(items: List[Dict[str, Any]], *, updated_at: float) -> None:
+    _DISCOVER_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "version": 1,
+        "updated_at": updated_at,
+        "items": [
+            {
+                "identifier": item["identifier"],
+                "name": item["name"],
+                "description": item.get("description", ""),
+                "source": item["source"],
+                "category": item.get("category", "other"),
+                "tags": item.get("tags", []),
+            }
+            for item in items
+            if item.get("source") in _REMOTE_DISCOVER_SOURCES
+        ],
+    }
+    tmp_path = _DISCOVER_CACHE_FILE.with_name(
+        f".{_DISCOVER_CACHE_FILE.name}.{uuid.uuid4().hex}.tmp"
+    )
+    tmp_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    tmp_path.replace(_DISCOVER_CACHE_FILE)
+
+
+def _discover_official_hub_page_items(installed_names: set[str]) -> List[Dict[str, Any]]:
+    page_url = "https://hermes-agent.nousresearch.com/docs/skills/"
+
+    try:
+        page_resp = httpx.get(page_url, timeout=30, follow_redirects=True)
+        page_resp.raise_for_status()
+        html = page_resp.text
+    except Exception as exc:
+        logger.info("official_hub_page_fetch_failed err=%s", exc)
+        return []
+
+    runtime_match = re.search(r'<script src="([^"]*runtime~main[^"]+\.js)"', html)
+    main_match = re.search(r'<script src="([^"]*/main\.[^"]+\.js)"', html)
+    if not runtime_match or not main_match:
+        logger.info("official_hub_page_parse_failed reason=missing_script_tags")
+        return []
+
+    runtime_url = f"https://hermes-agent.nousresearch.com{runtime_match.group(1)}"
+    main_url = f"https://hermes-agent.nousresearch.com{main_match.group(1)}"
+
+    try:
+        main_js = httpx.get(main_url, timeout=30, follow_redirects=True).text
+        chunk_id_match = re.search(
+            r'Promise\.all\(\[n\.e\(\d+\),n\.e\((\d+)\)\]\)\.then\(n\.bind\(n,\d+\)\),"@site/src/pages/skills/index\.tsx"',
+            main_js,
+        )
+        if not chunk_id_match:
+            logger.info("official_hub_page_parse_failed reason=missing_chunk_id")
+            return []
+        chunk_id = chunk_id_match.group(1)
+
+        runtime_js = httpx.get(runtime_url, timeout=30, follow_redirects=True).text
+        filename_parts = re.findall(rf'{chunk_id}:"([^"]+)"', runtime_js)
+        if len(filename_parts) < 2:
+            logger.info("official_hub_page_parse_failed reason=missing_chunk_filename chunk_id=%s", chunk_id)
+            return []
+
+        chunk_url = (
+            "https://hermes-agent.nousresearch.com/docs/assets/js/"
+            f"{filename_parts[0]}.{filename_parts[1]}.js"
+        )
+        chunk_js = httpx.get(chunk_url, timeout=30, follow_redirects=True).text
+        json_match = re.search(r"JSON\.parse\('(.+?)'\)", chunk_js, re.S)
+        if not json_match:
+            logger.info("official_hub_page_parse_failed reason=missing_embedded_json chunk_url=%s", chunk_url)
+            return []
+        decoded_json = ast.literal_eval("'" + json_match.group(1) + "'")
+        records = json.loads(decoded_json)
+    except Exception as exc:
+        logger.info("official_hub_chunk_fetch_failed err=%s", exc)
+        return []
+
+    if not isinstance(records, list):
+        logger.info("official_hub_page_parse_failed reason=records_not_list")
+        return []
+
+    trust_levels = {
+        "optional": "builtin",
+        "anthropic": "trusted",
+        "lobehub": "community",
+        "claude-marketplace": "community",
+    }
+
+    results: List[Dict[str, Any]] = []
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        source = _normalize_remote_source(str(record.get("source", "")))
+        if source == "built-in":
+            continue
+        if source not in trust_levels:
+            continue
+        name = str(record.get("name", "")).strip()
+        category = str(record.get("category", "other") or "other")
+        if not name:
+            continue
+        if source == "optional":
+            identifier = f"official/{category}/{name}"
+        elif source == "anthropic":
+            identifier = f"anthropics/skills/skills/{name}"
+        elif source == "lobehub":
+            identifier = f"lobehub/{name}"
+        else:
+            identifier = name
+        results.append(
+            _build_discover_item(
+                identifier=identifier,
+                name=name,
+                description=str(record.get("description", "") or ""),
+                source=source,
+                trust_level=trust_levels[source],
+                install_kind="hub",
+                installed_names=installed_names,
+                category=category,
+                tags=[str(tag) for tag in record.get("tags", []) if str(tag).strip()]
+                if isinstance(record.get("tags"), list)
+                else [],
+            )
+        )
+
+    return [item for item in results if item["name"]]
+
+
+def _discover_optional_items(installed_names: set[str]) -> List[Dict[str, Any]]:
+    return _discover_remote_github_items(
+        repo="NousResearch/hermes-agent",
+        root_path="optional-skills",
+        source="optional",
+        trust_level="builtin",
+        installed_names=installed_names,
+        category_mode="path",
+    )
+
+
+def _discover_anthropic_items(installed_names: set[str]) -> List[Dict[str, Any]]:
+    return _discover_remote_github_items(
+        repo="anthropics/skills",
+        root_path="skills",
+        source="anthropic",
+        trust_level="trusted",
+        installed_names=installed_names,
+        category_mode="tags",
+    )
+
+
+def _discover_lobehub_items(installed_names: set[str]) -> List[Dict[str, Any]]:
+    try:
+        response = httpx.get("https://chat-agents.lobehub.com/index.json", timeout=30)
+        response.raise_for_status()
+        index = response.json()
+    except Exception as exc:
+        logger.info("lobehub_skill_discovery_failed err=%s", exc)
+        return []
+
+    agents = index.get("agents", index) if isinstance(index, dict) else index
+    if not isinstance(agents, list):
+        return []
+
+    results: List[Dict[str, Any]] = []
+    for agent in agents:
+        if not isinstance(agent, dict):
+            continue
+        meta = agent.get("meta", agent) if isinstance(agent.get("meta", agent), dict) else {}
+        tags = meta.get("tags", [])
+        category = meta.get("category") if isinstance(meta.get("category"), str) else ""
+        results.append(
+            _build_discover_item(
+                identifier=f"lobehub/{agent.get('identifier', '')}",
+                name=agent.get("identifier", ""),
+                description=meta.get("description", "") or "",
+                source="lobehub",
+                trust_level="community",
+                install_kind="hub",
+                installed_names=installed_names,
+                category=category or _guess_category(tags if isinstance(tags, list) else []),
+                tags=tags if isinstance(tags, list) else [],
+            )
+        )
+    return [item for item in results if item["identifier"] != "lobehub/"]
+
+
+def _extract_skill_tags(frontmatter: Dict[str, Any]) -> List[str]:
+    tags: List[str] = []
+    metadata = frontmatter.get("metadata", {})
+    if isinstance(metadata, dict):
+        hermes_meta = metadata.get("hermes", {})
+        if isinstance(hermes_meta, dict):
+            raw = hermes_meta.get("tags", [])
+            if isinstance(raw, list):
+                tags.extend(str(tag) for tag in raw if str(tag).strip())
+    raw_tags = frontmatter.get("tags", [])
+    if isinstance(raw_tags, list):
+        tags.extend(str(tag) for tag in raw_tags if str(tag).strip())
+    elif isinstance(raw_tags, str) and raw_tags.strip():
+        tags.append(raw_tags.strip())
+    deduped: List[str] = []
+    seen: set[str] = set()
+    for tag in tags:
+        key = tag.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(tag)
+    return deduped
+
+
+def _discover_remote_github_items(
+    *,
+    repo: str,
+    root_path: str,
+    source: str,
+    trust_level: str,
+    installed_names: set[str],
+    category_mode: str,
+) -> List[Dict[str, Any]]:
+    from tools.skills_hub import GitHubAuth, GitHubSource
+
+    auth = GitHubAuth()
+    headers = auth.get_headers()
+    parser = GitHubSource._parse_frontmatter_quick
+
+    try:
+        repo_resp = httpx.get(
+            f"https://api.github.com/repos/{repo}",
+            headers=headers,
+            timeout=15,
+            follow_redirects=True,
+        )
+        repo_resp.raise_for_status()
+        default_branch = repo_resp.json().get("default_branch", "main")
+
+        tree_resp = httpx.get(
+            f"https://api.github.com/repos/{repo}/git/trees/{default_branch}",
+            params={"recursive": "1"},
+            headers=headers,
+            timeout=30,
+            follow_redirects=True,
+        )
+        tree_resp.raise_for_status()
+        tree = tree_resp.json().get("tree", [])
+    except Exception as exc:
+        logger.info("%s_skill_discovery_failed err=%s", source, exc)
+        return []
+
+    prefix = root_path.rstrip("/") + "/"
+    skill_md_paths = [
+        item.get("path", "")
+        for item in tree
+        if item.get("type") == "blob"
+        and str(item.get("path", "")).startswith(prefix)
+        and str(item.get("path", "")).endswith("/SKILL.md")
+    ]
+
+    def _fetch_one(skill_md_path: str) -> Optional[Dict[str, Any]]:
+        try:
+            file_resp = httpx.get(
+                f"https://api.github.com/repos/{repo}/contents/{skill_md_path}",
+                headers={**headers, "Accept": "application/vnd.github.v3.raw"},
+                timeout=15,
+                follow_redirects=True,
+            )
+            if file_resp.status_code != 200:
+                return None
+            frontmatter = parser(file_resp.text)
+        except Exception:
+            return None
+
+        rel_parts = Path(skill_md_path).relative_to(root_path).parts
+        if len(rel_parts) < 2:
+            return None
+        skill_dir_parts = rel_parts[:-1]
+        skill_name = str(frontmatter.get("name") or skill_dir_parts[-1]).strip()
+        if not skill_name:
+            return None
+        tags = _extract_skill_tags(frontmatter)
+        if category_mode == "path" and len(skill_dir_parts) >= 2:
+            category = skill_dir_parts[0]
+        else:
+            category = _guess_category(tags)
+
+        return _build_discover_item(
+            identifier=(
+                f"official/{'/'.join(skill_dir_parts)}"
+                if source == "optional"
+                else f"{repo}/{'/'.join(skill_dir_parts)}"
+            ),
+            name=skill_name,
+            description=str(frontmatter.get("description", "") or ""),
+            source=source,
+            trust_level=trust_level,
+            install_kind="hub",
+            installed_names=installed_names,
+            category=category,
+            tags=tags,
+        )
+
+    results: List[Dict[str, Any]] = []
+    with ThreadPoolExecutor(max_workers=min(16, max(4, len(skill_md_paths) or 1))) as pool:
+        futures = [pool.submit(_fetch_one, path) for path in sorted(skill_md_paths)]
+        for future in as_completed(futures):
+            item = future.result()
+            if item is not None:
+                results.append(item)
+
+    results.sort(key=lambda item: (item["category_label"].lower(), item["name"].lower()))
+    return results
 
 
 def list_templates() -> List[Dict[str, Any]]:
@@ -368,6 +934,90 @@ def search_hub(query: str, *, limit: int) -> List[Dict[str, Any]]:
         }
         for r in results
     ]
+
+
+def list_discoverable_skills(
+    *,
+    query: str = "",
+    limit: int = 60,
+    offset: int = 0,
+    source: str = "all",
+) -> Dict[str, Any]:
+    installed_names = _installed_skill_names()
+    remote_items = _read_discover_cache(installed_names)
+    all_items = _discover_builtin_items(installed_names) + remote_items
+
+    query_lower = query.strip().lower()
+    source_key = source.strip().lower()
+    filtered: List[Dict[str, Any]] = []
+    seen: set[str] = set()
+
+    for item in all_items:
+        if source_key not in ("", "all") and item["source"] != source_key:
+            continue
+
+        searchable = " ".join(
+            [
+                item["name"],
+                item.get("description", ""),
+                item.get("category", ""),
+                item.get("category_label", ""),
+                item.get("source_label", ""),
+                " ".join(item.get("tags", [])),
+            ]
+        ).lower()
+        if query_lower and query_lower not in searchable:
+            continue
+
+        dedupe_key = item["identifier"]
+        if dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
+        filtered.append(item)
+
+    filtered.sort(
+        key=lambda item: (
+            _DISCOVER_SOURCE_ORDER.get(item["source"], 99),
+            item["category_label"].lower(),
+            item["name"].lower(),
+        )
+    )
+    page_limit = max(1, min(limit, 120))
+    page_offset = max(0, offset)
+    page_items = filtered[page_offset: page_offset + page_limit]
+    return {
+        "items": page_items,
+        "total": len(filtered),
+        "offset": page_offset,
+        "limit": page_limit,
+        "has_more": page_offset + len(page_items) < len(filtered),
+    }
+
+
+def refresh_discoverable_skills_cache() -> Dict[str, Any]:
+    remote_items = _discover_official_hub_page_items(set())
+    if not remote_items:
+        remote_items = (
+            _discover_optional_items(set())
+            + _discover_anthropic_items(set())
+            + _discover_lobehub_items(set())
+        )
+    if not remote_items:
+        raise RuntimeError("无法从远端 skill hub 获取数据")
+
+    updated_at = time.time()
+    _write_discover_cache(remote_items, updated_at=updated_at)
+
+    sources: Dict[str, int] = {}
+    for item in remote_items:
+        source = item.get("source", "")
+        sources[source] = sources.get(source, 0) + 1
+
+    return {
+        "count": len(remote_items),
+        "updated_at": updated_at,
+        "sources": sources,
+    }
 
 
 def check_updates() -> Dict[str, Any]:

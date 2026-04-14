@@ -194,7 +194,6 @@ export function McpServerPanel(): React.ReactElement {
   return (
     <SectionCard
       title="MCP 服务器"
-      index="03"
       subtitle={servers.length > 0 ? `已接入 ${servers.length} 个服务器` : '连接 Model Context Protocol 服务器以扩展工具'}
       action={
         <button onClick={() => setShowAdd(true)} style={BTN_PRIMARY}>

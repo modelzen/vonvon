@@ -64,6 +64,7 @@ export function registerIpcHandlers(): void {
       return key === 'backendUrl' ? cfg.url : cfg.enabled
     }
     if (key === 'modelWhitelist') return chatStore.getModelWhitelist()
+    if (key === 'hermesModelCatalog') return chatStore.getHermesModelCatalog()
     if (key === 'openTabs') return chatStore.getOpenTabs()
     if (key === 'activeTabId') return chatStore.getActiveTabId()
     if (key === 'autoTitleEnabled') return chatStore.getAutoTitleEnabled()
@@ -80,6 +81,23 @@ export function registerIpcHandlers(): void {
       await chatStore.setBackendConfig({ enabled: value as boolean })
     } else if (key === 'modelWhitelist') {
       await chatStore.setModelWhitelist(Array.isArray(value) ? (value as string[]) : [])
+    } else if (key === 'hermesModelCatalog') {
+      const catalog =
+        value && typeof value === 'object'
+          ? (value as {
+              providers: Array<{
+                slug: string
+                name: string
+                models: string[]
+                total_models: number
+                is_current: boolean
+                source?: string
+              }>
+              current: string
+              current_provider: string
+            })
+          : null
+      await chatStore.setHermesModelCatalog(catalog)
     } else if (key === 'openTabs') {
       await chatStore.setOpenTabs(Array.isArray(value) ? (value as string[]) : [])
     } else if (key === 'activeTabId') {

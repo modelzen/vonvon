@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { SectionCard } from './SectionCard'
 import { tokens } from './settingsStyles'
 import { useHermesConfig } from '../../hooks/useHermesConfig'
 import type { ProviderInfo } from '../../hooks/useHermesConfig'
+import { loadModelCatalog } from '../../lib/modelCatalogCache'
 
 interface TitleModel {
   model: string
@@ -23,8 +24,14 @@ function flattenModels(providers: ProviderInfo[]): TitleModel[] {
   return out
 }
 
-export function ChatPreferencesPanel(): React.ReactElement {
+export function ChatPreferencesPanel({
+  refreshToken = 0,
+}: {
+  refreshToken?: number
+} = {}): React.ReactElement {
   const { listModels } = useHermesConfig()
+  const listModelsRef = useRef(listModels)
+  listModelsRef.current = listModels
 
   const [enabled, setEnabled] = useState(true)
   const [models, setModels] = useState<TitleModel[]>([])
@@ -34,18 +41,23 @@ export function ChatPreferencesPanel(): React.ReactElement {
 
   useEffect(() => {
     ;(async () => {
-      const [val, stored, data] = await Promise.all([
-        window.electron?.storeGet?.(AUTO_TITLE_KEY),
-        window.electron?.storeGet?.(TITLE_MODEL_KEY) as Promise<TitleModel | null>,
-        listModels().catch(() => ({ providers: [], current: '', current_provider: '' })),
-      ])
-      setEnabled(val !== false)
-      setTitleModel(stored ?? null)
-      setModels(flattenModels(data.providers))
-      setCurrentModel(data.current)
-      setLoaded(true)
+      try {
+        const [val, stored, data] = await Promise.all([
+          window.electron?.storeGet?.(AUTO_TITLE_KEY),
+          window.electron?.storeGet?.(TITLE_MODEL_KEY) as Promise<TitleModel | null>,
+          loadModelCatalog(() => listModelsRef.current(), {
+            forceRefresh: refreshToken > 0,
+          }).catch(() => ({ providers: [], current: '', current_provider: '' })),
+        ])
+        setEnabled(val !== false)
+        setTitleModel(stored ?? null)
+        setModels(flattenModels(data.providers))
+        setCurrentModel(data.current)
+      } finally {
+        setLoaded(true)
+      }
     })()
-  }, [])
+  }, [refreshToken])
 
   const toggleEnabled = async () => {
     const next = !enabled

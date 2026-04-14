@@ -2,6 +2,8 @@ import { app, BrowserWindow, screen, shell } from 'electron'
 import { join } from 'path'
 
 const isDev = !app.isPackaged
+const DEFAULT_STANDALONE_WINDOW_WIDTH = 1040
+const DEFAULT_STANDALONE_WINDOW_HEIGHT = 780
 
 // ─── Settings window ─────────────────────────────────────────────────────────
 
@@ -25,15 +27,15 @@ export function openSettingsWindow(): void {
 
   const cursorPoint = screen.getCursorScreenPoint()
   const display = screen.getDisplayNearestPoint(cursorPoint)
-  const width = 760
-  const height = 780
+  const width = DEFAULT_STANDALONE_WINDOW_WIDTH
+  const height = DEFAULT_STANDALONE_WINDOW_HEIGHT
   const x = Math.round(display.workArea.x + (display.workArea.width - width) / 2)
   const y = Math.round(display.workArea.y + (display.workArea.height - height) / 2)
 
   settingsWindow = new BrowserWindow({
     width,
     height,
-    minWidth: 520,
+    minWidth: 980,
     minHeight: 520,
     x,
     y,
@@ -100,8 +102,8 @@ export function openFloatingChatWindow(): void {
 
   const cursorPoint = screen.getCursorScreenPoint()
   const display = screen.getDisplayNearestPoint(cursorPoint)
-  const width = 420
-  const height = 720
+  const width = DEFAULT_STANDALONE_WINDOW_WIDTH
+  const height = DEFAULT_STANDALONE_WINDOW_HEIGHT
   const x = Math.round(display.workArea.x + (display.workArea.width - width) / 2)
   const y = Math.round(display.workArea.y + (display.workArea.height - height) / 2)
 

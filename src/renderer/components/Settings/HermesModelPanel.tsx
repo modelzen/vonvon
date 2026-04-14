@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useHermesConfig, ProviderInfo } from '../../hooks/useHermesConfig'
 import { SectionCard } from './SectionCard'
 import { tokens } from './settingsStyles'
+import { loadModelCatalog } from '../../lib/modelCatalogCache'
 
 /**
  * "可用模型" whitelist panel.
@@ -13,8 +14,14 @@ import { tokens } from './settingsStyles'
  * First-run seeded with the hermes backend's currently-selected model so the
  * chat picker is never empty.
  */
-export function HermesModelPanel(): React.ReactElement {
+export function HermesModelPanel({
+  refreshToken = 0,
+}: {
+  refreshToken?: number
+} = {}): React.ReactElement {
   const { listModels } = useHermesConfig()
+  const listModelsRef = useRef(listModels)
+  listModelsRef.current = listModels
 
   const [providers, setProviders] = useState<ProviderInfo[]>([])
   const [whitelist, setWhitelist] = useState<Set<string>>(new Set())
@@ -26,9 +33,10 @@ export function HermesModelPanel(): React.ReactElement {
     let cancelled = false
     async function load() {
       setLoading(true)
+      setError(null)
       try {
         const [data, stored] = await Promise.all([
-          listModels(),
+          loadModelCatalog(() => listModelsRef.current(), { forceRefresh: refreshToken > 0 }),
           window.electron.storeGet('modelWhitelist') as Promise<unknown>,
         ])
         if (cancelled) return
@@ -51,7 +59,7 @@ export function HermesModelPanel(): React.ReactElement {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [refreshToken])
 
   const persist = async (next: Set<string>) => {
     setWhitelist(next)

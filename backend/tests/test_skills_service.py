@@ -1,5 +1,6 @@
 """Tests for skills_service: list, toggle, search, check_updates, job API."""
 import asyncio
+import json
 import sys
 import time
 import types
@@ -174,6 +175,169 @@ def test_search_hub_returns_empty_on_error():
     with patch("tools.skills_hub.unified_search", side_effect=RuntimeError("network")):
         result = skills_service.search_hub("anything", limit=5)
     assert result == []
+
+
+# ── discover catalog ──────────────────────────────────────────────────────────
+
+def test_list_discoverable_skills_reads_local_cache_and_filters(tmp_path):
+    cache_file = tmp_path / "discover-catalog.json"
+    cache_file.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "updated_at": 1700000000.0,
+                "items": [
+                    {
+                        "identifier": "official/security/1password",
+                        "name": "1password",
+                        "description": "Vault access",
+                        "source": "optional",
+                        "category": "security",
+                        "tags": ["security"],
+                    },
+                    {
+                        "identifier": "anthropics/skills/skills/frontend-design",
+                        "name": "frontend-design",
+                        "description": "UI polish",
+                        "source": "anthropic",
+                        "category": "creative",
+                        "tags": ["design"],
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    builtin = [{
+        "identifier": "builtin:creative/p5js",
+        "name": "p5js",
+        "description": "Creative coding",
+        "source": "built-in",
+        "source_label": "Built-in",
+        "trust_level": "builtin",
+        "category": "creative",
+        "category_label": "Creative",
+        "tags": ["art"],
+        "install_kind": "template",
+        "installed": False,
+    }]
+
+    with patch.object(skills_service, "_installed_skill_names", return_value={"p5js"}), \
+         patch.object(skills_service, "_DISCOVER_CACHE_FILE", cache_file), \
+         patch.object(skills_service, "_discover_builtin_items", return_value=builtin), \
+         patch.object(skills_service, "_discover_official_hub_page_items") as remote_fetch:
+        result = skills_service.list_discoverable_skills(query="design", source="all", limit=20)
+
+    assert [item["identifier"] for item in result["items"]] == ["anthropics/skills/skills/frontend-design"]
+    assert result["total"] == 1
+    remote_fetch.assert_not_called()
+
+
+def test_list_discoverable_skills_applies_source_filter(tmp_path):
+    cache_file = tmp_path / "discover-catalog.json"
+    cache_file.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "updated_at": 1700000000.0,
+                "items": [
+                    {
+                        "identifier": "lobehub/deep-thinker",
+                        "name": "deep-thinker",
+                        "description": "Thinking tool",
+                        "source": "lobehub",
+                        "category": "research",
+                        "tags": ["reasoning"],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    builtin = [{
+        "identifier": "builtin:creative/p5js",
+        "name": "p5js",
+        "description": "Creative coding",
+        "source": "built-in",
+        "source_label": "Built-in",
+        "trust_level": "builtin",
+        "category": "creative",
+        "category_label": "Creative",
+        "tags": [],
+        "install_kind": "template",
+        "installed": False,
+    }]
+
+    with patch.object(skills_service, "_installed_skill_names", return_value=set()), \
+         patch.object(skills_service, "_DISCOVER_CACHE_FILE", cache_file), \
+         patch.object(skills_service, "_discover_builtin_items", return_value=builtin), \
+         patch.object(skills_service, "_discover_official_hub_page_items") as remote_fetch:
+        result = skills_service.list_discoverable_skills(source="lobehub", limit=20)
+
+    assert [item["source"] for item in result["items"]] == ["lobehub"]
+    remote_fetch.assert_not_called()
+
+
+def test_list_discoverable_skills_applies_offset(tmp_path):
+    cache_file = tmp_path / "discover-catalog.json"
+    cache_file.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "updated_at": 1700000000.0,
+                "items": [
+                    {
+                        "identifier": f"lobehub/skill-{idx}",
+                        "name": f"skill-{idx}",
+                        "description": f"desc-{idx}",
+                        "source": "lobehub",
+                        "category": "research",
+                        "tags": [],
+                    }
+                    for idx in range(6)
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with patch.object(skills_service, "_installed_skill_names", return_value=set()), \
+         patch.object(skills_service, "_DISCOVER_CACHE_FILE", cache_file), \
+         patch.object(skills_service, "_discover_builtin_items", return_value=[]):
+        result = skills_service.list_discoverable_skills(source="lobehub", limit=2, offset=2)
+
+    assert [item["identifier"] for item in result["items"]] == [
+        "lobehub/skill-2",
+        "lobehub/skill-3",
+    ]
+    assert result["total"] == 6
+    assert result["has_more"] is True
+
+
+def test_refresh_discoverable_skills_cache_writes_remote_catalog(tmp_path):
+    cache_file = tmp_path / "discover-catalog.json"
+    remote_items = [{
+        "identifier": "anthropics/skills/skills/frontend-design",
+        "name": "frontend-design",
+        "description": "UI polish",
+        "source": "anthropic",
+        "source_label": "Anthropic",
+        "trust_level": "trusted",
+        "category": "creative",
+        "category_label": "Creative",
+        "tags": ["design"],
+        "install_kind": "hub",
+        "installed": False,
+    }]
+
+    with patch.object(skills_service, "_DISCOVER_CACHE_FILE", cache_file), \
+         patch.object(skills_service, "_discover_official_hub_page_items", return_value=remote_items):
+        result = skills_service.refresh_discoverable_skills_cache()
+
+    payload = json.loads(cache_file.read_text(encoding="utf-8"))
+    assert payload["items"][0]["identifier"] == "anthropics/skills/skills/frontend-design"
+    assert result["count"] == 1
+    assert result["sources"] == {"anthropic": 1}
 
 
 # ── check_updates ──────────────────────────────────────────────────────────────

@@ -107,6 +107,34 @@ export interface SkillSearchResult {
   trust_level: string
 }
 
+export interface SkillDiscoverItem {
+  identifier: string
+  name: string
+  description: string
+  source: string
+  source_label: string
+  trust_level: string
+  category: string
+  category_label: string
+  tags: string[]
+  install_kind: 'template' | 'hub'
+  installed: boolean
+}
+
+export interface SkillDiscoverPage {
+  items: SkillDiscoverItem[]
+  total: number
+  offset: number
+  limit: number
+  has_more: boolean
+}
+
+export interface SkillDiscoverRefreshResponse {
+  count: number
+  updated_at: number
+  sources: Record<string, number>
+}
+
 export interface SkillTemplate {
   name: string
   category: string
@@ -228,6 +256,14 @@ export function useHermesConfig() {
       `/api/skills/search?q=${encodeURIComponent(q)}&limit=${limit}`
     )
 
+  const listDiscoverSkills = (q = '', limit = 60, source = 'all', offset = 0) =>
+    json<SkillDiscoverPage>(
+      `/api/skills/discover?q=${encodeURIComponent(q)}&limit=${limit}&offset=${offset}&source=${encodeURIComponent(source)}`
+    )
+
+  const refreshDiscoverSkillsSource = () =>
+    post<SkillDiscoverRefreshResponse>('/api/skills/discover/refresh')
+
   const startInstallSkill = (identifier: string) =>
     post<SkillJobStatus>('/api/skills/install', { identifier })
 
@@ -271,6 +307,8 @@ export function useHermesConfig() {
     listSkills,
     toggleSkill,
     searchSkills,
+    listDiscoverSkills,
+    refreshDiscoverSkillsSource,
     startInstallSkill,
     startUninstallSkill,
     pollSkillJob,

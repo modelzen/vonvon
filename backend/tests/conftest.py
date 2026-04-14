@@ -108,6 +108,7 @@ sys.modules.setdefault("tools.skills_tool", MagicMock())
 
 # ─── 2. App imports (safe after stubs) ────────────────────────────────────────
 from app.main import app  # noqa: E402
+from app.routes import models as models_route  # noqa: E402
 from app.services import agent_service  # noqa: E402
 
 # ─── 3. Fixtures ──────────────────────────────────────────────────────────────
@@ -124,6 +125,7 @@ def _reset_agent_service():
         agent_service._running_session_id,
         agent_service._lock_owner_task,
     )
+    models_route.clear_models_cache()
     yield
     (
         agent_service._session_db,
@@ -134,6 +136,7 @@ def _reset_agent_service():
         agent_service._running_session_id,
         agent_service._lock_owner_task,
     ) = saved
+    models_route.clear_models_cache()
 
 
 @pytest.fixture

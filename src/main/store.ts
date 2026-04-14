@@ -33,6 +33,19 @@ interface StoreSchema {
   // Auto-title feature
   autoTitleEnabled: boolean
   titleSummaryModel: { model: string; provider: string } | null
+  hermesModelCatalog: {
+    providers: Array<{
+      slug: string
+      name: string
+      models: string[]
+      total_models: number
+      is_current: boolean
+      source?: string
+    }>
+    current: string
+    current_provider: string
+    fetchedAt: number
+  } | null
 }
 
 export class ChatStore {
@@ -58,7 +71,8 @@ export class ChatStore {
             openTabs: [],
             activeTabId: null,
             autoTitleEnabled: true,
-            titleSummaryModel: null
+            titleSummaryModel: null,
+            hermesModelCatalog: null
           }
         })
       })()
@@ -224,6 +238,28 @@ export class ChatStore {
   async setTitleSummaryModel(val: { model: string; provider: string } | null): Promise<void> {
     const store = await this.ensureStore()
     store.set('titleSummaryModel', val ?? null)
+  }
+
+  async getHermesModelCatalog(): Promise<StoreSchema['hermesModelCatalog']> {
+    const store = await this.ensureStore()
+    const val = store.get('hermesModelCatalog') as unknown
+    if (!val || typeof val !== 'object') return null
+    return val as StoreSchema['hermesModelCatalog']
+  }
+
+  async setHermesModelCatalog(
+    val: Omit<NonNullable<StoreSchema['hermesModelCatalog']>, 'fetchedAt'> | null
+  ): Promise<void> {
+    const store = await this.ensureStore()
+    store.set(
+      'hermesModelCatalog',
+      val
+        ? {
+            ...val,
+            fetchedAt: Date.now(),
+          }
+        : null
+    )
   }
 }
 

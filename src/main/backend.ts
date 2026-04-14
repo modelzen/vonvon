@@ -84,6 +84,7 @@ function isPortInUse(port: number, host: string): Promise<boolean> {
  * yourself in another terminal).
  */
 export async function startBackend(): Promise<void> {
+  const isDev = !app.isPackaged
   if (process.env.VONVON_SKIP_BACKEND === '1') {
     console.log('[backend] VONVON_SKIP_BACKEND=1, skipping auto-start')
     return
@@ -119,6 +120,9 @@ export async function startBackend(): Promise<void> {
     '--port',
     String(BACKEND_PORT),
   ]
+  if (isDev) {
+    args.push('--reload', '--reload-dir', join(backendDir, 'app'))
+  }
 
   const hermesHome = resolveHermesHome()
   console.log(
