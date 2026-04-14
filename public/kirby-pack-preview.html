@@ -278,6 +278,8 @@
         top: 118px;
         width: 120px;
         height: 120px;
+        --anchor-x: 60px;
+        --anchor-y: 60px;
         pointer-events: none;
       }
 
@@ -289,16 +291,16 @@
       }
 
       .anchor-cross::before {
-        left: 60px;
+        left: var(--anchor-x);
         top: 0;
         width: 1px;
-        height: 120px;
+        height: 100%;
       }
 
       .anchor-cross::after {
         left: 0;
-        top: 60px;
-        width: 120px;
+        top: var(--anchor-y);
+        width: 100%;
         height: 1px;
       }
 
@@ -553,7 +555,7 @@
           </div>
 
           <div class="stage" id="preview-stage">
-            <div class="mock-feishu" data-visible-in="snapping,dockedExpanded,dockedCollapsed">
+            <div class="mock-feishu" id="mock-feishu" data-visible-in="snapping,dockedExpanded,dockedCollapsed">
               <div class="mock-copy">
                 <div class="mock-line" style="width: 64%"></div>
                 <div class="mock-line" style="width: 84%"></div>
@@ -561,7 +563,7 @@
                 <div class="mock-line" style="width: 78%"></div>
               </div>
             </div>
-            <div class="mock-sidebar" data-visible-in="dockedExpanded">
+            <div class="mock-sidebar" id="mock-sidebar" data-visible-in="dockedExpanded">
               <div class="mock-copy">
                 <div class="mock-line" style="width: 76%"></div>
                 <div class="mock-line" style="width: 88%"></div>
@@ -569,8 +571,8 @@
                 <div class="mock-line" style="width: 58%"></div>
               </div>
             </div>
-            <div class="anchor-cross" title="逻辑锚点预览"></div>
-            <div class="sprite-host">
+            <div class="anchor-cross" id="anchor-cross" title="逻辑锚点预览"></div>
+            <div class="sprite-host" id="sprite-host">
               <img id="stage-image" alt="kirby preview" />
             </div>
           </div>
@@ -684,6 +686,10 @@
         const stageName = document.getElementById('stage-name')
         const frameInfo = document.getElementById('frame-info')
         const stageImage = document.getElementById('stage-image')
+        const mockFeishu = document.getElementById('mock-feishu')
+        const mockSidebar = document.getElementById('mock-sidebar')
+        const anchorCross = document.getElementById('anchor-cross')
+        const spriteHost = document.getElementById('sprite-host')
         const panelSize = document.getElementById('panel-size')
         const anchorValue = document.getElementById('anchor-value')
         const hitValue = document.getElementById('hit-value')
@@ -692,6 +698,7 @@
         const manifestBox = document.getElementById('manifest-box')
         const stateButtons = document.getElementById('state-buttons')
         const visibilityNodes = Array.from(document.querySelectorAll('[data-visible-in]'))
+        const DOCKED_STATES = new Set(['dockedExpanded', 'dockedCollapsed'])
 
         let runtime = {
           packId: 'default',
@@ -719,6 +726,51 @@
               .filter(Boolean)
             node.style.display = visibleIn.includes(state) ? '' : 'none'
           })
+        }
+
+        function updateStageLayout(state = runtime.activeState) {
+          const panel = runtime.manifest?.layout?.panel || { width: 120, height: 120 }
+          const fallbackAnchorX = Math.round((panel.width || 120) / 2)
+          const fallbackAnchorY = Math.round((panel.height || 120) / 2)
+          const anchor = runtime.manifest?.layout?.anchor || { x: fallbackAnchorX, y: fallbackAnchorY }
+
+          anchorCross.style.width = `${panel.width}px`
+          anchorCross.style.height = `${panel.height}px`
+          anchorCross.style.setProperty('--anchor-x', `${anchor.x}px`)
+          anchorCross.style.setProperty('--anchor-y', `${anchor.y}px`)
+
+          spriteHost.style.width = `${panel.width}px`
+          spriteHost.style.height = `${panel.height}px`
+
+          if (DOCKED_STATES.has(state) && mockFeishu) {
+            const dockX = mockFeishu.offsetLeft + mockFeishu.offsetWidth
+            const dockY = mockFeishu.offsetTop
+            const panelLeft = Math.round(dockX - anchor.x)
+            const panelTop = Math.round(dockY - anchor.y)
+
+            anchorCross.style.left = `${panelLeft}px`
+            anchorCross.style.top = `${panelTop}px`
+            spriteHost.style.left = `${panelLeft}px`
+            spriteHost.style.top = `${panelTop}px`
+
+            if (state === 'dockedExpanded' && mockSidebar) {
+              mockSidebar.style.left = `${Math.round(dockX)}px`
+              mockSidebar.style.top = `${Math.round(dockY)}px`
+            } else if (mockSidebar) {
+              mockSidebar.style.left = ''
+              mockSidebar.style.top = ''
+            }
+            return
+          }
+
+          anchorCross.style.left = ''
+          anchorCross.style.top = ''
+          spriteHost.style.left = ''
+          spriteHost.style.top = ''
+          if (mockSidebar) {
+            mockSidebar.style.left = ''
+            mockSidebar.style.top = ''
+          }
         }
 
         function resolveManifestUrl(packId) {
@@ -844,6 +896,7 @@
           stopDetachSequence()
           showFrame(state, 0)
           updateMockVisibility(state)
+          updateStageLayout(state)
           updateStateButtons()
         }
 
@@ -1051,6 +1104,10 @@
 
         stateSelect.addEventListener('change', () => {
           setActiveState(stateSelect.value)
+        })
+
+        window.addEventListener('resize', () => {
+          updateStageLayout(runtime.activeState)
         })
 
         playButton.addEventListener('click', () => {
