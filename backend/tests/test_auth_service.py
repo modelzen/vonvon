@@ -47,7 +47,7 @@ def _make_pool(entries=None, current=None):
 @pytest.mark.asyncio
 async def test_list_credentials_empty():
     with patch.object(auth_service, "load_pool", return_value=_make_pool()):
-        with patch.object(auth_service, "PROVIDER_REGISTRY", {"openai-codex": MagicMock()}):
+        with patch.object(auth_service, "SUPPORTED_PROVIDER_SPECS", {"openai-codex": {}}):
             result = await auth_service.list_all_credentials()
     assert result == []
 
@@ -69,7 +69,7 @@ async def test_list_credentials_returns_entries():
         return pool if provider == "openai" else empty_pool
 
     with patch.object(auth_service, "load_pool", side_effect=_pool_side_effect):
-        with patch.object(auth_service, "PROVIDER_REGISTRY", {"openai": MagicMock()}):
+        with patch.object(auth_service, "SUPPORTED_PROVIDER_SPECS", {"openai": {}}):
             result = await auth_service.list_all_credentials()
 
     assert len(result) == 1
@@ -96,6 +96,35 @@ async def test_add_api_key_credential_masks_token():
     assert "supersecretkey" not in result.get("last4", "")
 
 
+@pytest.mark.asyncio
+async def test_add_api_key_credential_requires_base_url_for_compatible_provider():
+    with pytest.raises(ValueError, match="base_url is required"):
+        await auth_service.add_api_key_credential(
+            provider="openai-compatible",
+            api_key="sk-compatible",
+        )
+
+
+@pytest.mark.asyncio
+async def test_add_api_key_credential_sets_native_default_base_url():
+    created: dict[str, object] = {}
+
+    def _fake_credential(**kw):
+        created.update(kw)
+        return MagicMock(**kw)
+
+    pool = _make_pool()
+    with patch.object(auth_service, "load_pool", return_value=pool):
+        with patch.object(auth_service, "PooledCredential", side_effect=_fake_credential):
+            await auth_service.add_api_key_credential(
+                provider="anthropic",
+                api_key="sk-ant-secret",
+                label="primary",
+            )
+
+    assert created["base_url"] == auth_service.ANTHROPIC_API_BASE_URL
+
+
 # ── remove_credential ──────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
@@ -115,6 +144,48 @@ async def test_remove_credential_not_found():
     assert result is False
 
 
+@pytest.mark.asyncio
+async def test_set_current_credential_reorders_provider_entries():
+    first = MagicMock()
+    first.id = "cred-1"
+    first.label = "first"
+    first.auth_type = "api_key"
+    first.access_token = "sk-first"
+    first.source = "manual"
+    first.last_status = None
+    first.priority = 0
+    first.to_dict.return_value = {"id": "cred-1", "priority": 1}
+
+    second = MagicMock()
+    second.id = "cred-2"
+    second.label = "second"
+    second.auth_type = "api_key"
+    second.access_token = "sk-second"
+    second.source = "manual"
+    second.last_status = None
+    second.priority = 1
+    second.to_dict.return_value = {"id": "cred-2", "priority": 0}
+
+    pool = _make_pool(entries=[first, second], current=first)
+    pool.resolve_target.return_value = (2, second, None)
+
+    with patch.object(auth_service, "load_pool", return_value=pool):
+        with patch.object(auth_service, "replace", side_effect=lambda entry, **kw: entry):
+            with patch.object(auth_service, "write_credential_pool") as write_mock:
+                result = await auth_service.set_current_credential("openai", "cred-2")
+
+    assert result is not None
+    assert result["id"] == "cred-2"
+    assert result["is_current"] is True
+    write_mock.assert_called_once_with(
+        "openai",
+        [
+            {"id": "cred-2", "priority": 0},
+            {"id": "cred-1", "priority": 1},
+        ],
+    )
+
+
 # ── start_codex_oauth_flow ─────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
@@ -126,11 +197,12 @@ async def test_start_oauth_flow_returns_state():
         "interval": 5,
     }
     with patch.object(auth_service, "start_device_flow", return_value=fake_flow):
-        resp = await auth_service.start_codex_oauth_flow()
+        resp = await auth_service.start_codex_oauth_flow(label="work")
 
     assert resp["user_code"] == "ABC-DEF"
     assert resp["expires_in_seconds"] == 900
     assert resp["flow_id"] in auth_service._active_flows
+    assert auth_service._active_flows[resp["flow_id"]].label == "work"
 
 
 @pytest.mark.asyncio
@@ -193,7 +265,7 @@ async def test_poll_success_persists_credential():
     }
     fake_entry = MagicMock()
     fake_entry.id = "new1"
-    fake_entry.label = "openai-codex-oauth-1"
+    fake_entry.label = "custom-label"
     fake_entry.auth_type = "oauth"
     fake_entry.access_token = "tok_abc1234"
     fake_entry.source = "manual:device_code"
@@ -204,10 +276,12 @@ async def test_poll_success_persists_credential():
         with patch.object(auth_service, "load_pool", return_value=pool):
             with patch.object(auth_service, "label_from_token", return_value="openai-codex-oauth-1"):
                 with patch.object(auth_service, "PooledCredential", side_effect=lambda **kw: fake_entry):
+                    auth_service._active_flows[fid].label = "custom-label"
                     result = await auth_service.poll_codex_oauth_flow(fid)
 
     assert result["status"] == "success"
     assert result["credential"] is not None
+    assert result["credential"]["label"] == "custom-label"
     # Ensure access_token not logged — check log calls don't contain token
     # (structural check: flow state is success)
     state = auth_service._active_flows.get(fid)

@@ -9,7 +9,7 @@ import asyncio
 import logging
 import time
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Dict, List, Optional
 
 from agent.credential_pool import (
@@ -21,12 +21,39 @@ from agent.credential_pool import (
     label_from_token,
 )
 from agent.codex_device_flow import start_device_flow, poll_device_flow
-from hermes_cli.auth import PROVIDER_REGISTRY
-
+from hermes_cli.auth import write_credential_pool
 logger = logging.getLogger(__name__)
 
 FLOW_TTL_SECONDS = 15 * 60
 MAX_CONCURRENT_FLOWS = 8
+
+OPENAI_API_BASE_URL = "https://api.openai.com/v1"
+ANTHROPIC_API_BASE_URL = "https://api.anthropic.com"
+
+SUPPORTED_PROVIDER_SPECS: Dict[str, Dict[str, Any]] = {
+    "openai": {
+        "auth_type": AUTH_TYPE_API_KEY,
+        "default_base_url": OPENAI_API_BASE_URL,
+        "requires_base_url": False,
+    },
+    "openai-codex": {
+        "auth_type": AUTH_TYPE_OAUTH,
+        "requires_base_url": False,
+    },
+    "anthropic": {
+        "auth_type": AUTH_TYPE_API_KEY,
+        "default_base_url": ANTHROPIC_API_BASE_URL,
+        "requires_base_url": False,
+    },
+    "openai-compatible": {
+        "auth_type": AUTH_TYPE_API_KEY,
+        "requires_base_url": True,
+    },
+    "anthropic-compatible": {
+        "auth_type": AUTH_TYPE_API_KEY,
+        "requires_base_url": True,
+    },
+}
 
 
 @dataclass
@@ -37,6 +64,7 @@ class OAuthFlowState:
     user_code: str
     verification_url: str
     interval: int
+    label: Optional[str] = None
     started_at: float = field(default_factory=time.time)
     status: str = "pending"
     error: Optional[str] = None
@@ -49,6 +77,29 @@ class OAuthFlowState:
 
 _active_flows: Dict[str, OAuthFlowState] = {}
 _flows_lock = asyncio.Lock()
+
+
+def _normalize_provider(provider: str) -> str:
+    return (provider or "").strip().lower()
+
+
+def _normalize_optional_text(value: Optional[str]) -> Optional[str]:
+    normalized = (value or "").strip()
+    return normalized or None
+
+
+def _normalize_base_url(value: Optional[str]) -> Optional[str]:
+    normalized = _normalize_optional_text(value)
+    return normalized.rstrip("/") if normalized else None
+
+
+def _get_supported_provider_spec(provider: str) -> tuple[str, Dict[str, Any]]:
+    normalized = _normalize_provider(provider)
+    spec = SUPPORTED_PROVIDER_SPECS.get(normalized)
+    if spec is None:
+        supported = ", ".join(SUPPORTED_PROVIDER_SPECS.keys())
+        raise ValueError(f"unsupported provider '{normalized}'. supported providers: {supported}")
+    return normalized, spec
 
 
 def _mask(token: str) -> str:
@@ -70,9 +121,8 @@ def _to_view(provider: str, entry: PooledCredential, *, is_current: bool) -> dic
 
 async def list_all_credentials() -> List[dict]:
     def _load() -> List[dict]:
-        providers = sorted({*PROVIDER_REGISTRY.keys(), "openrouter"})
         out: List[dict] = []
-        for provider in providers:
+        for provider in SUPPORTED_PROVIDER_SPECS:
             pool = load_pool(provider)
             entries = pool.entries()
             if not entries:
@@ -94,9 +144,22 @@ async def add_api_key_credential(
     base_url: Optional[str] = None,
 ) -> dict:
     def _add() -> dict:
-        p = provider.strip().lower()
+        p, spec = _get_supported_provider_spec(provider)
+        if spec["auth_type"] != AUTH_TYPE_API_KEY:
+            raise ValueError(f"provider '{p}' only supports OAuth")
+        normalized_api_key = (api_key or "").strip()
+        if not normalized_api_key:
+            raise ValueError("api_key is required")
+        normalized_base_url = _normalize_base_url(base_url)
+        requires_base_url = bool(spec.get("requires_base_url"))
+        if requires_base_url and not normalized_base_url:
+            raise ValueError(f"base_url is required for provider '{p}'")
+        if not requires_base_url and normalized_base_url:
+            raise ValueError(f"provider '{p}' does not support base_url")
+
         pool = load_pool(p)
-        lbl = (label or "").strip() or f"api-key-{len(pool.entries()) + 1}"
+        lbl = _normalize_optional_text(label) or f"{p}-{len(pool.entries()) + 1}"
+        effective_base_url = normalized_base_url or spec.get("default_base_url") or ""
         entry = PooledCredential(
             provider=p,
             id=uuid.uuid4().hex[:6],
@@ -104,11 +167,16 @@ async def add_api_key_credential(
             auth_type=AUTH_TYPE_API_KEY,
             priority=0,
             source=SOURCE_MANUAL,
-            access_token=api_key,
-            base_url=base_url or "",
+            access_token=normalized_api_key,
+            base_url=effective_base_url,
         )
         pool.add_entry(entry)
-        logger.info("credential_added provider=%s label=%s last4=%s", p, lbl, _mask(api_key))
+        logger.info(
+            "credential_added provider=%s label=%s last4=%s",
+            p,
+            lbl,
+            _mask(normalized_api_key),
+        )
         return _to_view(p, entry, is_current=False)
 
     return await asyncio.to_thread(_add)
@@ -127,7 +195,30 @@ async def remove_credential(provider: str, cred_id: str) -> bool:
     return await asyncio.to_thread(_remove)
 
 
-async def start_codex_oauth_flow() -> dict:
+async def set_current_credential(provider: str, cred_id: str) -> Optional[dict]:
+    def _set_current() -> Optional[dict]:
+        p, _ = _get_supported_provider_spec(provider)
+        pool = load_pool(p)
+        _, matched, _ = pool.resolve_target(cred_id)
+        if matched is None:
+            return None
+
+        reordered = [matched, *[entry for entry in pool.entries() if entry.id != matched.id]]
+        persisted_entries = [
+            replace(entry, priority=priority)
+            for priority, entry in enumerate(reordered)
+        ]
+        write_credential_pool(
+            p,
+            [entry.to_dict() for entry in persisted_entries],
+        )
+        logger.info("credential_current_set provider=%s id=%s", p, matched.id)
+        return _to_view(p, persisted_entries[0], is_current=True)
+
+    return await asyncio.to_thread(_set_current)
+
+
+async def start_codex_oauth_flow(*, label: Optional[str] = None) -> dict:
     async with _flows_lock:
         # Purge expired flows
         now = time.time()
@@ -148,6 +239,7 @@ async def start_codex_oauth_flow() -> dict:
             user_code=flow["user_code"],
             verification_url=flow["verification_url"],
             interval=flow["interval"],
+            label=_normalize_optional_text(label),
         )
         _active_flows[fid] = state
         logger.info("oauth_flow_started flow_id=%s provider=openai-codex", fid)
@@ -220,7 +312,7 @@ async def poll_codex_oauth_flow(flow_id: str) -> dict:
     # pool.add_entry grabs its own _auth_store_lock via to_thread
     def _persist_codex_credential() -> Dict[str, Any]:
         pool = load_pool("openai-codex")
-        lbl = label_from_token(
+        lbl = state.label or label_from_token(
             result["tokens"]["access_token"],
             f"openai-codex-oauth-{len(pool.entries()) + 1}",
         )

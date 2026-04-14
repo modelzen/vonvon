@@ -87,6 +87,21 @@ def test_add_api_key_credential_ok(client):
     assert resp.json()["id"] == "abc123"
 
 
+def test_add_api_key_credential_validation_error(client):
+    with patch.object(
+        auth_service,
+        "add_api_key_credential",
+        side_effect=ValueError("unsupported provider 'openrouter'"),
+    ):
+        resp = client.post("/api/auth/credentials", json={
+            "provider": "openrouter",
+            "auth_type": "api_key",
+            "api_key": "sk-secret",
+        })
+    assert resp.status_code == 400
+    assert "unsupported provider" in resp.json()["detail"]
+
+
 def test_add_credential_missing_api_key(client):
     resp = client.post("/api/auth/credentials", json={
         "provider": "openai",
@@ -118,6 +133,20 @@ def test_remove_credential_not_found(client):
     assert resp.status_code == 404
 
 
+def test_set_current_credential_ok(client):
+    updated_cred = {**_sample_cred_view, "is_current": True}
+    with patch.object(auth_service, "set_current_credential", return_value=updated_cred):
+        resp = client.post("/api/auth/credentials/openai/abc123/current")
+    assert resp.status_code == 200
+    assert resp.json()["is_current"] is True
+
+
+def test_set_current_credential_not_found(client):
+    with patch.object(auth_service, "set_current_credential", return_value=None):
+        resp = client.post("/api/auth/credentials/openai/nope/current")
+    assert resp.status_code == 404
+
+
 # ── POST /api/auth/oauth/start ────────────────────────────────────────────────
 
 def test_oauth_start_ok(client):
@@ -129,12 +158,13 @@ def test_oauth_start_ok(client):
         "interval": 5,
         "expires_in_seconds": 900,
     }
-    with patch.object(auth_service, "start_codex_oauth_flow", return_value=flow_resp):
-        resp = client.post("/api/auth/oauth/start?provider=openai-codex")
+    with patch.object(auth_service, "start_codex_oauth_flow", return_value=flow_resp) as start_mock:
+        resp = client.post("/api/auth/oauth/start?provider=openai-codex&label=work")
     assert resp.status_code == 200
     data = resp.json()
     assert data["flow_id"] == "flow-abc"
     assert data["user_code"] == "ABCD-EFGH"
+    start_mock.assert_called_once_with(label="work")
 
 
 def test_oauth_start_unsupported_provider(client):

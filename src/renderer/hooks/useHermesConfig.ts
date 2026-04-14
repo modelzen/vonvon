@@ -184,10 +184,18 @@ export function useHermesConfig() {
   const removeCredential = (provider: string, cred_id: string): Promise<void> =>
     del(`/api/auth/credentials/${encodeURIComponent(provider)}/${encodeURIComponent(cred_id)}`)
 
+  const setCurrentCredential = (provider: string, cred_id: string) =>
+    post<CredentialView>(
+      `/api/auth/credentials/${encodeURIComponent(provider)}/${encodeURIComponent(cred_id)}/current`
+    )
+
   // ── OAuth (codex) ────────────────────────────────────────────────────────────
 
-  const startCodexOAuth = () =>
-    post<OAuthStartResponse>('/api/auth/oauth/start?provider=openai-codex')
+  const startCodexOAuth = (label?: string) => {
+    const params = new URLSearchParams({ provider: 'openai-codex' })
+    if (label?.trim()) params.set('label', label.trim())
+    return post<OAuthStartResponse>(`/api/auth/oauth/start?${params.toString()}`)
+  }
 
   const pollCodexOAuth = (flow_id: string) =>
     json<OAuthPollResponse>(`/api/auth/oauth/poll?flow_id=${encodeURIComponent(flow_id)}`)
@@ -252,6 +260,7 @@ export function useHermesConfig() {
     listCredentials,
     addApiKey,
     removeCredential,
+    setCurrentCredential,
     startCodexOAuth,
     pollCodexOAuth,
     cancelCodexOAuth,
