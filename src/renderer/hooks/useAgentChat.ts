@@ -83,11 +83,26 @@ export function useAgentChat(sessionId: string | null | undefined, opts?: UseAge
   // append deltas here for the current in-flight run.
   const [thinking, setThinking] = useState('')
   const abortRef = useRef<AbortController | null>(null)
+  const activeSessionIdRef = useRef<string | null | undefined>(sessionId)
+  const sessionMessageCacheRef = useRef<Map<string, AgentMessage[]>>(new Map())
+  const preferLocalCacheRef = useRef<Set<string>>(new Set())
+  const stoppingSessionsRef = useRef<Set<string>>(new Set())
+  const stopPromiseRef = useRef<Promise<void> | null>(null)
   // Avoid stale closure: always read the latest opts inside callbacks.
   const optsRef = useRef(opts)
   optsRef.current = opts
   // Fire auto-title once per session (reset when sessionId changes).
   const hasSummarizedRef = useRef(false)
+
+  useEffect(() => {
+    activeSessionIdRef.current = sessionId
+  }, [sessionId])
+
+  useEffect(() => {
+    const sid = activeSessionIdRef.current
+    if (!sid) return
+    sessionMessageCacheRef.current.set(sid, messages)
+  }, [messages])
 
   // Reset + load history whenever the active session changes.
   useEffect(() => {
@@ -95,7 +110,7 @@ export function useAgentChat(sessionId: string | null | undefined, opts?: UseAge
     abortRef.current?.abort()
     abortRef.current = null
     hasSummarizedRef.current = false
-    setMessages([])
+    setMessages(sessionId ? sessionMessageCacheRef.current.get(sessionId) ?? [] : [])
     setIsLoading(false)
     setThinking('')
     // Seed usage from cache if we have a prior authoritative number for
@@ -260,7 +275,17 @@ export function useAgentChat(sessionId: string | null | undefined, opts?: UseAge
             })
           }
         }
-        setMessages(history)
+        const cached = sessionMessageCacheRef.current.get(sessionId) ?? []
+        const preferLocal = preferLocalCacheRef.current.has(sessionId)
+        const nextMessages =
+          preferLocal && cached.length > history.length ? cached : history
+
+        if (preferLocal && history.length >= cached.length) {
+          preferLocalCacheRef.current.delete(sessionId)
+        }
+
+        sessionMessageCacheRef.current.set(sessionId, nextMessages)
+        setMessages(nextMessages)
       } catch {
         // Silent: keep the list empty on any failure.
       } finally {
@@ -291,6 +316,8 @@ export function useAgentChat(sessionId: string | null | undefined, opts?: UseAge
         timestamp: Date.now(),
         ...(hasAttachments ? { attachments } : {})
       }
+      preferLocalCacheRef.current.add(sessionId)
+      stoppingSessionsRef.current.delete(sessionId)
       setMessages((prev) => {
         if (hasAttachments && attachments) {
           // Ordinal = count of existing user messages (0-based index of
@@ -438,6 +465,8 @@ export function useAgentChat(sessionId: string | null | undefined, opts?: UseAge
                     m.id === assistantId && !m.content ? { ...m, content: output } : m
                   )
                 )
+                preferLocalCacheRef.current.delete(sessionId)
+                stoppingSessionsRef.current.delete(sessionId)
                 const pct = (data.usage_percent as number) ?? 0
                 setUsagePercent(pct)
                 // Snapshot the authoritative value so future session switches
@@ -475,6 +504,8 @@ export function useAgentChat(sessionId: string | null | undefined, opts?: UseAge
                   })()
                 }
               } else if (currentEvent === 'run.failed') {
+                preferLocalCacheRef.current.delete(sessionId)
+                stoppingSessionsRef.current.delete(sessionId)
                 setMessages((prev) =>
                   prev.map((m) =>
                     m.id === assistantId
@@ -489,7 +520,11 @@ export function useAgentChat(sessionId: string | null | undefined, opts?: UseAge
           }
         }
       } catch (err) {
-        if ((err as Error).name !== 'AbortError') {
+        const abortError = (err as Error).name === 'AbortError'
+        const stopping = stoppingSessionsRef.current.has(sessionId)
+        if (!abortError) {
+          preferLocalCacheRef.current.delete(sessionId)
+          stoppingSessionsRef.current.delete(sessionId)
           setMessages((prev) =>
             prev.map((m) =>
               m.id === assistantId
@@ -497,9 +532,12 @@ export function useAgentChat(sessionId: string | null | undefined, opts?: UseAge
                 : m
             )
           )
+          setIsLoading(false)
+          setThinking('')
+        } else if (!stopping) {
+          setIsLoading(false)
+          setThinking('')
         }
-        setIsLoading(false)
-        setThinking('')
       }
     },
     [apiFetch, isLoading]
@@ -517,12 +555,70 @@ export function useAgentChat(sessionId: string | null | undefined, opts?: UseAge
   // the input area's "stop" button so the user can interrupt a long-running
   // tool chain or runaway generation, then keep the conversation. Anything
   // already streamed into the assistant placeholder stays in the bubble.
-  const stop = useCallback(() => {
-    abortRef.current?.abort()
-    abortRef.current = null
-    setIsLoading(false)
-    setThinking('')
-  }, [])
+  const stop = useCallback(async () => {
+    const sid = sessionId
+    if (!sid) {
+      setIsLoading(false)
+      setThinking('')
+      return
+    }
+
+    if (stopPromiseRef.current && stoppingSessionsRef.current.has(sid)) {
+      await stopPromiseRef.current
+      return
+    }
+
+    const inflight = abortRef.current
+    stoppingSessionsRef.current.add(sid)
+    setThinking('正在停止...')
+
+    const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms))
+    const stopPromise = (async () => {
+      let stopped = false
+      try {
+        if (inflight) {
+          inflight.abort()
+          if (abortRef.current === inflight) {
+            abortRef.current = null
+          }
+        }
+
+        for (let attempt = 0; attempt < 40; attempt += 1) {
+          const res = await apiFetch('/api/chat/stop', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: sid }),
+          })
+          let payload: { stopped?: boolean; had_active_run?: boolean } | null = null
+          try {
+            payload = (await res.json()) as { stopped?: boolean; had_active_run?: boolean }
+          } catch {
+            payload = null
+          }
+          stopped = !!payload?.stopped || payload?.had_active_run === false
+          if (stopped) break
+          await sleep(250)
+        }
+      } catch {
+        // Best effort: fall through to the local state handling below.
+      } finally {
+        stopPromiseRef.current = null
+        if (abortRef.current === inflight) {
+          abortRef.current = null
+        }
+        if (stopped) {
+          stoppingSessionsRef.current.delete(sid)
+          setIsLoading(false)
+          setThinking('')
+        } else {
+          setThinking('停止超时，请再试一次')
+        }
+      }
+    })()
+
+    stopPromiseRef.current = stopPromise
+    await stopPromise
+  }, [apiFetch, sessionId])
 
   return {
     messages,

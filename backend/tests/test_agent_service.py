@@ -75,3 +75,69 @@ async def test_agent_lock_serializes_concurrent_calls():
         assert results[i].startswith("enter")
         assert results[i + 1].startswith("exit")
         assert results[i].split("-")[1] == results[i + 1].split("-")[1]
+
+
+async def test_request_stop_interrupts_and_waits_for_running_task():
+    """request_stop should interrupt the active agent and await task exit."""
+    gate = asyncio.Event()
+
+    async def _runner():
+        await gate.wait()
+
+    task = asyncio.create_task(_runner())
+    agent = MagicMock()
+    agent.interrupt.side_effect = lambda reason: gate.set()
+
+    agent_service.register_running_task("sid-stop", task)
+    agent_service.attach_running_agent("sid-stop", agent)
+
+    result = await agent_service.request_stop("sid-stop", timeout=1.0)
+    agent_service.clear_running_task(task)
+
+    assert result["had_active_run"] is True
+    assert result["stopped"] is True
+    agent.interrupt.assert_called_once_with("Stop requested")
+
+
+async def test_request_stop_ignores_other_sessions():
+    """request_stop should no-op when another session owns the active run."""
+    task = asyncio.create_task(asyncio.sleep(0))
+    agent = MagicMock()
+    agent_service.register_running_task("sid-a", task)
+    agent_service.attach_running_agent("sid-a", agent)
+
+    result = await agent_service.request_stop("sid-b", timeout=0.01)
+    await task
+    agent_service.clear_running_task(task)
+
+    assert result["had_active_run"] is False
+    assert result["stopped"] is True
+    agent.interrupt.assert_not_called()
+
+
+async def test_request_stop_force_unlocks_hung_run():
+    """Timed-out stops should still unlock the backend for the next request."""
+    never = asyncio.Event()
+
+    async def _runner():
+        await never.wait()
+
+    task = asyncio.create_task(_runner())
+    agent = MagicMock()
+
+    await agent_service._agent_lock.acquire()
+    agent_service.claim_agent_lock(task)
+    agent_service.register_running_task("sid-hung", task)
+    agent_service.attach_running_agent("sid-hung", agent)
+
+    result = await agent_service.request_stop("sid-hung", timeout=0.01)
+
+    assert result["had_active_run"] is True
+    assert result["stopped"] is True
+    assert result["hard_stopped"] is True
+    assert agent_service._running_task is None
+    assert agent_service._running_agent is None
+    assert agent_service._running_session_id is None
+    assert agent_service._lock_owner_task is None
+    assert agent_service._agent_lock.locked() is False
+    agent.interrupt.assert_called_once_with("Stop requested")

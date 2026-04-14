@@ -12,7 +12,7 @@ from app.services import agent_service, workspace_service
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Order matters (DELTA-6):
-    # 1. Load hermes model/provider state FIRST (reads ~/.hermes absolute path)
+    # 1. Load hermes model/provider state FIRST (reads the process HERMES_HOME)
     agent_service.init_from_hermes_config()
     # 2. Apply workspace — calls os.chdir + sets TERMINAL_CWD
     workspace_service.init_from_hermes_config()

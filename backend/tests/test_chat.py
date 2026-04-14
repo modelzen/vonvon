@@ -1,4 +1,7 @@
 """Tests for chat endpoints."""
+import asyncio
+import threading
+
 import pytest
 from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
@@ -66,6 +69,53 @@ def test_send_message_expands_inline_skills_before_agent_run(client, mock_agent)
     kwargs = mock_agent.run_conversation.call_args.kwargs
     assert kwargs["user_message"] == "skill prompt + user instruction"
     assert kwargs["persist_user_message"] == '@skill:checkpoint save current state'
+
+
+def test_send_message_interrupts_agent_when_sse_client_disconnects(mock_session_db, mock_agent):
+    """Disconnecting the SSE client should interrupt the running agent."""
+    from app.routes.chat import send_message
+    from app.schemas import ChatRequest
+
+    stop_event = threading.Event()
+
+    def _run_conversation(*args, **kwargs):
+        stop_event.wait(timeout=2.0)
+        return {
+            "final_response": "late response",
+            "last_prompt_tokens": 500,
+            "total_tokens": 1000,
+            "completed": True,
+            "messages": [],
+        }
+
+    def _interrupt(reason: str):
+        stop_event.set()
+
+    class _DisconnectingRequest:
+        def __init__(self):
+            self._checks = 0
+
+        async def is_disconnected(self) -> bool:
+            self._checks += 1
+            return self._checks >= 2
+
+    mock_agent.run_conversation.side_effect = _run_conversation
+    mock_agent.interrupt.side_effect = _interrupt
+
+    async def _collect_chunks():
+        response = await send_message(
+            ChatRequest(session_id="test-session-123", message="Hello"),
+            _DisconnectingRequest(),
+        )
+        chunks = []
+        async for chunk in response._gen:
+            chunks.append(chunk)
+        return chunks
+
+    chunks = asyncio.run(_collect_chunks())
+
+    mock_agent.interrupt.assert_called_once_with("SSE client disconnected")
+    assert all("run.completed" not in str(chunk) for chunk in chunks)
 
 
 def test_compress_context(client, mock_session_db):

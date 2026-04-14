@@ -20,6 +20,10 @@ class CompressRequest(BaseModel):
     session_id: str
 
 
+class StopRequest(BaseModel):
+    session_id: Optional[str] = None
+
+
 class SessionRequest(BaseModel):
     name: str
 

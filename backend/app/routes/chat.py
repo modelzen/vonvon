@@ -1,22 +1,26 @@
 """Chat routes: SSE streaming endpoint and context compression."""
 import asyncio
 import json
+import logging
+from contextlib import suppress
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
 from agent.context_compressor import ContextCompressor
 
 import os
 
-from app.schemas import ChatRequest, CompressRequest
+from app.schemas import ChatRequest, CompressRequest, StopRequest
 from app.services import agent_service, session_service, skills_service, workspace_service
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.post("/api/chat/send")
-async def send_message(req: ChatRequest):
+async def send_message(req: ChatRequest, request: Request):
     """Send a message and stream the response as SSE events.
 
     Events emitted:
@@ -33,6 +37,35 @@ async def send_message(req: ChatRequest):
 
     async def event_generator():
         queue: asyncio.Queue = asyncio.Queue()
+        run_task: asyncio.Task | None = None
+        disconnect_task: asyncio.Task | None = None
+        stop_requested = False
+
+        async def stop_running_agent(reason: str) -> None:
+            nonlocal stop_requested
+            if stop_requested:
+                return
+            stop_requested = True
+            result = await agent_service.request_stop(
+                req.session_id,
+                reason=reason,
+                timeout=0.5,
+            )
+            if not result.get("had_active_run", False):
+                queue.put_nowait(None)
+            logger.info("SSE client disconnected; interrupted chat route agent")
+
+        async def watch_client_disconnect() -> None:
+            while True:
+                if run_task is not None and run_task.done():
+                    return
+                try:
+                    if await request.is_disconnected():
+                        await stop_running_agent("SSE client disconnected")
+                        return
+                except Exception:
+                    return
+                await asyncio.sleep(0.1)
 
         # ── Callbacks (called from worker thread) ────────────────────────────
 
@@ -112,8 +145,7 @@ async def send_message(req: ChatRequest):
             persisted_text = raw_plain_text if active_skills else None
 
         async def run_agent():
-            nonlocal effective_message, persisted_text
-            lock_held = False
+            nonlocal effective_message, persisted_text, run_task
             try:
                 # Acquire lock with 5s timeout so a stuck request can't freeze
                 # the entire backend for subsequent sends. Note: we do NOT put
@@ -123,7 +155,8 @@ async def send_message(req: ChatRequest):
                     await asyncio.wait_for(
                         agent_service._agent_lock.acquire(), timeout=5.0
                     )
-                    lock_held = True
+                    if run_task is not None:
+                        agent_service.claim_agent_lock(run_task)
                 except asyncio.TimeoutError:
                     queue.put_nowait({
                         "event": "run.failed",
@@ -191,12 +224,16 @@ async def send_message(req: ChatRequest):
                     tool_progress_callback=on_tool_progress,
                     thinking_callback=on_thinking,
                 )
+                agent_service.attach_running_agent(req.session_id, agent)
                 result = await asyncio.to_thread(
                     agent.run_conversation,
                     user_message=effective_message,
                     conversation_history=history,
                     persist_user_message=persisted_text,
                 )
+
+                if stop_requested or run_task is None or not agent_service.is_current_task(run_task):
+                    return
 
                 # NOTE: use last_prompt_tokens (last API call's prompt size),
                 # NOT total_tokens (cumulative across all API calls in session).
@@ -217,17 +254,27 @@ async def send_message(req: ChatRequest):
                         "session_id": new_session_id,
                     },
                 })
+            except asyncio.CancelledError:
+                raise
             except Exception as exc:
-                queue.put_nowait({
-                    "event": "run.failed",
-                    "data": {"error": str(exc)},
-                })
+                if (
+                    not stop_requested
+                    and run_task is not None
+                    and agent_service.is_current_task(run_task)
+                ):
+                    queue.put_nowait({
+                        "event": "run.failed",
+                        "data": {"error": str(exc)},
+                    })
             finally:
-                if lock_held:
-                    agent_service._agent_lock.release()
+                if run_task is not None:
+                    agent_service.release_agent_lock(run_task)
+                    agent_service.clear_running_task(run_task)
                 queue.put_nowait(None)  # sentinel — unblock event_generator
 
-        asyncio.create_task(run_agent())
+        run_task = asyncio.create_task(run_agent())
+        agent_service.register_running_task(req.session_id, run_task)
+        disconnect_task = asyncio.create_task(watch_client_disconnect())
 
         # ── Stream queue → SSE ───────────────────────────────────────────────
         # NOTE: sse_starlette's EventSourceResponse expects dict/ServerSentEvent
@@ -235,13 +282,41 @@ async def send_message(req: ChatRequest):
         # string gets used as the `data` field, producing
         # `data: event: ...\ndata: data: ...`), which breaks the frontend SSE
         # parser and leaves the UI stuck in the loading state forever.
-        while True:
-            item = await queue.get()
-            if item is None:
-                break
-            yield {"event": item["event"], "data": json.dumps(item["data"])}
+        try:
+            while True:
+                item = await queue.get()
+                if item is None:
+                    break
+                yield {"event": item["event"], "data": json.dumps(item["data"])}
+        except asyncio.CancelledError:
+            await stop_running_agent("SSE client disconnected")
+            raise
+        finally:
+            if disconnect_task is not None:
+                disconnect_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await disconnect_task
 
     return EventSourceResponse(event_generator())
+
+
+@router.post("/api/chat/stop")
+async def stop_message(req: StopRequest):
+    """Interrupt the active chat run and wait briefly for it to exit."""
+    result = await agent_service.request_stop(
+        req.session_id,
+        reason="Stop requested",
+        timeout=0.5,
+    )
+    status_code = 200 if result.get("stopped", True) else 202
+    return JSONResponse(
+        {
+            "stopped": result.get("stopped", True),
+            "had_active_run": result.get("had_active_run", False),
+            "session_id": result.get("session_id"),
+        },
+        status_code=status_code,
+    )
 
 
 @router.post("/api/chat/compress")

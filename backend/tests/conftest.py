@@ -25,7 +25,18 @@ class _FakeEventSourceResponse(Response):
     async def __call__(self, scope, receive, send):
         chunks = []
         async for chunk in self._gen:
-            chunks.append(chunk.encode() if isinstance(chunk, str) else chunk)
+            if isinstance(chunk, dict):
+                event = chunk.get("event")
+                data = chunk.get("data", "")
+                payload = ""
+                if event:
+                    payload += f"event: {event}\n"
+                payload += f"data: {data}\n\n"
+                chunks.append(payload.encode())
+            elif isinstance(chunk, str):
+                chunks.append(chunk.encode())
+            else:
+                chunks.append(chunk)
         body = b"".join(chunks)
         await send({
             "type": "http.response.start",
@@ -108,12 +119,20 @@ def _reset_agent_service():
         agent_service._session_db,
         agent_service._current_model,
         agent_service._current_provider,
+        agent_service._running_agent,
+        agent_service._running_task,
+        agent_service._running_session_id,
+        agent_service._lock_owner_task,
     )
     yield
     (
         agent_service._session_db,
         agent_service._current_model,
         agent_service._current_provider,
+        agent_service._running_agent,
+        agent_service._running_task,
+        agent_service._running_session_id,
+        agent_service._lock_owner_task,
     ) = saved
 
 

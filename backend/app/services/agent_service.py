@@ -4,7 +4,8 @@ Pre-requisite: pip install -e /path/to/hermes-agent (editable install)
 Do NOT use sys.path.insert — rely on editable install for imports.
 """
 import asyncio
-from typing import Optional
+from contextlib import suppress
+from typing import Any, Optional
 
 from run_agent import AIAgent
 from hermes_state import SessionDB
@@ -18,6 +19,10 @@ _current_provider: str = ""       # NEW in v1.1
 
 # AIAgent is NOT thread-safe. Serialize all run_conversation calls via this lock.
 _agent_lock = asyncio.Lock()
+_running_agent: Optional[AIAgent] = None
+_running_task: Optional[asyncio.Task[Any]] = None
+_running_session_id: Optional[str] = None
+_lock_owner_task: Optional[asyncio.Task[Any]] = None
 
 # NOTE (v1.1): _api_key / _base_url REMOVED — credential resolution is
 # delegated entirely to hermes credential_pool via per-request lookups.
@@ -45,7 +50,7 @@ def _peek_current_credentials() -> tuple[Optional[str], Optional[str]]:
     does NOT auto-resolve OAuth credentials from credential_pool when
     api_key/base_url are omitted — it falls back to env vars like
     OPENAI_API_KEY. For openai-codex (ChatGPT OAuth) the tokens live in
-    ~/.hermes/auth.json credential_pool only, not in any env var. So we
+    HERMES_HOME/auth.json credential_pool only, not in any env var. So we
     MUST peek the pool explicitly per request and pass the resolved values
     into AIAgent(), otherwise the agent hits the default OpenAI endpoint
     with an empty key and gets 403.
@@ -92,6 +97,133 @@ def create_agent(session_id: str, **callbacks) -> AIAgent:
         quiet_mode=True,
         **callbacks,
     )
+
+
+def register_running_task(session_id: str, task: asyncio.Task[Any]) -> None:
+    """Track the current in-flight chat task so /stop can await its exit."""
+    global _running_task, _running_session_id, _running_agent
+    _running_task = task
+    _running_session_id = session_id
+    _running_agent = None
+
+
+def attach_running_agent(session_id: str, agent: AIAgent) -> None:
+    """Attach the live agent instance to the tracked run."""
+    global _running_agent
+    if _running_session_id == session_id:
+        _running_agent = agent
+
+
+def clear_running_task(task: asyncio.Task[Any]) -> None:
+    """Clear tracked run state once the task exits."""
+    global _running_agent, _running_task, _running_session_id
+    if _running_task is task:
+        _running_agent = None
+        _running_task = None
+        _running_session_id = None
+
+
+def claim_agent_lock(task: asyncio.Task[Any]) -> None:
+    """Mark which run currently owns the serialized agent lock."""
+    global _lock_owner_task
+    _lock_owner_task = task
+
+
+def owns_agent_lock(task: asyncio.Task[Any]) -> bool:
+    """Return whether the given run still owns the serialized agent lock."""
+    return _lock_owner_task is task
+
+
+def release_agent_lock(task: asyncio.Task[Any]) -> bool:
+    """Release the serialized agent lock iff the given run still owns it."""
+    global _lock_owner_task
+    if _lock_owner_task is not task:
+        return False
+    _lock_owner_task = None
+    if _agent_lock.locked():
+        _agent_lock.release()
+    return True
+
+
+def is_current_task(task: asyncio.Task[Any]) -> bool:
+    """Return whether the given task is still the active chat run."""
+    return _running_task is task
+
+
+def force_clear_running_task(task: asyncio.Task[Any]) -> bool:
+    """Drop the tracked run state even if the task never exits cleanly."""
+    global _running_agent, _running_task, _running_session_id
+    if _running_task is not task:
+        return False
+    _running_agent = None
+    _running_task = None
+    _running_session_id = None
+    return True
+
+
+async def request_stop(
+    session_id: str | None = None,
+    *,
+    reason: str = "Stop requested",
+    timeout: float = 8.0,
+) -> dict[str, Any]:
+    """Interrupt the active run and wait for its task to exit.
+
+    Returns whether there was an active run and whether it stopped before
+    the timeout expired.
+    """
+    agent = _running_agent
+    task = _running_task
+    running_session_id = _running_session_id
+
+    if task is None or task.done():
+        return {
+            "had_active_run": False,
+            "stopped": True,
+            "session_id": running_session_id,
+        }
+
+    if session_id and running_session_id and running_session_id != session_id:
+        return {
+            "had_active_run": False,
+            "stopped": True,
+            "session_id": running_session_id,
+        }
+
+    if agent is not None:
+        try:
+            agent.interrupt(reason)
+        except Exception:
+            pass
+
+    try:
+        await asyncio.wait_for(asyncio.shield(task), timeout=timeout)
+        return {
+            "had_active_run": True,
+            "stopped": True,
+            "session_id": running_session_id,
+        }
+    except asyncio.TimeoutError:
+        if not task.done():
+            task.cancel()
+            with suppress(asyncio.CancelledError, asyncio.TimeoutError, Exception):
+                await asyncio.wait_for(task, timeout=0.2)
+        force_clear_running_task(task)
+        release_agent_lock(task)
+        return {
+            "had_active_run": True,
+            "stopped": True,
+            "hard_stopped": True,
+            "session_id": running_session_id,
+        }
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        return {
+            "had_active_run": True,
+            "stopped": True,
+            "session_id": running_session_id,
+        }
 
 
 # ── Model utilities ───────────────────────────────────────────────────────────
@@ -155,7 +287,7 @@ def _switch_model_sync(model: str, persist: bool,
             # hermes DEFAULT_CONFIG stores `model` as "" (str) on fresh
             # installs, and _normalize_root_model_keys only migrates str→dict
             # when a stale root-level provider/base_url also exists. So on a
-            # clean ~/.hermes cfg["model"] is the empty string and setdefault
+            # clean HERMES_HOME cfg["model"] is the empty string and setdefault
             # won't replace it — we must normalize explicitly before any item
             # assignment, otherwise `cfg["model"]["provider"] = …` raises
             # TypeError: 'str' object does not support item assignment.
@@ -189,7 +321,7 @@ def get_current_provider() -> str:
 # ── Config loader ─────────────────────────────────────────────────────────────
 
 def init_from_hermes_config() -> None:
-    """Read model/provider from ~/.hermes/config.yaml on startup.
+    """Read model/provider from HERMES_HOME/config.yaml on startup.
 
     DELTA-4: no longer reads or caches api_key or base_url — credential
     resolution is delegated to hermes credential_pool per request.

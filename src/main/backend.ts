@@ -10,6 +10,10 @@ const BACKEND_HOST = '127.0.0.1'
 
 let backendProc: ChildProcess | null = null
 
+function resolveHermesHome(): string {
+  return process.env.HERMES_HOME || join(app.getPath('home'), '.vonvon', '.hermes')
+}
+
 /**
  * Locate the backend source directory (contains app/main.py).
  *  - Dev:       <repo>/backend
@@ -116,10 +120,13 @@ export async function startBackend(): Promise<void> {
     String(BACKEND_PORT),
   ]
 
-  console.log(`[backend] spawning: ${runner.cmd} ${args.join(' ')} (cwd=${backendDir})`)
+  const hermesHome = resolveHermesHome()
+  console.log(
+    `[backend] spawning: ${runner.cmd} ${args.join(' ')} (cwd=${backendDir}, HERMES_HOME=${hermesHome})`
+  )
   const child = spawn(runner.cmd, args, {
     cwd: backendDir,
-    env: { ...process.env, PYTHONUNBUFFERED: '1' },
+    env: { ...process.env, PYTHONUNBUFFERED: '1', HERMES_HOME: hermesHome },
     stdio: ['ignore', 'pipe', 'pipe'],
   })
 

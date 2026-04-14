@@ -132,7 +132,7 @@ async def reset_to_sandbox() -> Dict[str, object]:
 
 
 def init_from_hermes_config() -> None:
-    """Load workspace from ~/.hermes/config.yaml:vonvon.workspace at backend startup.
+    """Load workspace from HERMES_HOME/config.yaml:vonvon.workspace at backend startup.
 
     Order:
       1. Persisted vonvon.workspace (if valid)
