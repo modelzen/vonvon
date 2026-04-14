@@ -2,7 +2,7 @@ import React from 'react'
 import { tokens } from './settingsStyles'
 
 export function AboutSection(): React.ReactElement {
-  const [version, setVersion] = React.useState('0.1.3')
+  const [version, setVersion] = React.useState('0.1.4')
 
   React.useEffect(() => {
     void window.electron
