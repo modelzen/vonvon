@@ -13,7 +13,16 @@ export function ChatContainer({ defaultModel = 'gpt-4o' }: ChatContainerProps): 
     useChat(defaultModel)
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        overflow: 'hidden',
+        background:
+          'linear-gradient(180deg, #fffdfd 0%, #fff8fb 44%, #f8f5fb 100%)'
+      }}
+    >
       <div style={{
         display: 'flex', alignItems: 'center', gap: 8,
         padding: '5px 14px', borderBottom: '1px solid #fce4ec',

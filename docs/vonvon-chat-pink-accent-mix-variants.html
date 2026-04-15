@@ -1,0 +1,840 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vonvon Pink Accent Mix Variants</title>
+    <style>
+      :root {
+        color-scheme: light;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+      }
+
+      body {
+        font-family: "Avenir Next", "SF Pro Text", "PingFang SC", "Hiragino Sans GB", sans-serif;
+        color: #2d2630;
+        background:
+          radial-gradient(circle at top left, rgba(255, 196, 218, 0.12), transparent 20%),
+          radial-gradient(circle at top right, rgba(255, 223, 234, 0.18), transparent 28%),
+          linear-gradient(180deg, #fffbfd 0%, #fffefe 46%, #fff8fb 100%);
+      }
+
+      .page {
+        width: min(1580px, calc(100vw - 34px));
+        margin: 0 auto;
+        padding: 32px 0 64px;
+      }
+
+      .hero {
+        display: grid;
+        gap: 12px;
+        margin-bottom: 22px;
+      }
+
+      .eyebrow {
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.18em;
+        color: #c86f96;
+      }
+
+      h1 {
+        margin: 0;
+        font-family: "Iowan Old Style", "Baskerville", "Songti SC", serif;
+        font-size: clamp(31px, 4.5vw, 56px);
+        line-height: 0.96;
+        letter-spacing: -0.055em;
+      }
+
+      .hero p {
+        margin: 0;
+        max-width: 980px;
+        color: #756975;
+        font-size: 16px;
+        line-height: 1.72;
+      }
+
+      .tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .tags span {
+        display: inline-flex;
+        align-items: center;
+        min-height: 34px;
+        padding: 0 14px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.78);
+        color: #6f626d;
+        font-size: 13px;
+        box-shadow:
+          0 10px 20px rgba(128, 95, 114, 0.06),
+          inset 0 1px 0 rgba(255, 255, 255, 0.96);
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 18px;
+      }
+
+      .card {
+        position: relative;
+        overflow: hidden;
+        border-radius: 28px;
+        padding: 16px;
+        background: rgba(255, 255, 255, 0.74);
+        backdrop-filter: blur(18px);
+        box-shadow:
+          0 22px 50px rgba(124, 89, 108, 0.1),
+          inset 0 1px 0 rgba(255, 255, 255, 0.96);
+      }
+
+      .card::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background:
+          radial-gradient(circle at top right, var(--wash), transparent 34%),
+          linear-gradient(180deg, rgba(255, 255, 255, 0.24), transparent 24%);
+      }
+
+      .card > * {
+        position: relative;
+        z-index: 1;
+      }
+
+      .meta {
+        display: grid;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+
+      .meta-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .id {
+        font-size: 11px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--pink);
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        min-height: 25px;
+        padding: 0 10px;
+        border-radius: 999px;
+        background: rgba(27, 20, 24, 0.05);
+        color: #766b73;
+        font-size: 12px;
+      }
+
+      .meta h2 {
+        margin: 0;
+        font-size: 26px;
+        line-height: 1;
+        letter-spacing: -0.05em;
+      }
+
+      .meta p {
+        margin: 0;
+        color: #756b74;
+        font-size: 13px;
+        line-height: 1.58;
+      }
+
+      .swatches {
+        display: flex;
+        gap: 8px;
+      }
+
+      .swatch {
+        width: 28px;
+        height: 28px;
+        border-radius: 999px;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.64);
+      }
+
+      .window {
+        overflow: hidden;
+        border-radius: 24px;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.74)),
+          var(--window-bg);
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.98),
+          0 16px 30px rgba(113, 87, 100, 0.08);
+      }
+
+      .tabbar {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 10px;
+        padding: 12px 12px 0;
+        background: var(--tabbar-bg);
+        border-bottom: 1px solid var(--divider);
+      }
+
+      .tabs {
+        display: flex;
+        align-items: flex-end;
+        gap: 8px;
+        min-width: 0;
+      }
+
+      .tab {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        min-width: 0;
+        height: 46px;
+        padding: 0 13px;
+        border-radius: 18px 18px 0 0;
+        color: var(--tab-text);
+        font-size: 13px;
+        font-weight: 600;
+      }
+
+      .tab.active {
+        background: var(--tab-active-bg);
+        color: var(--pink-strong);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.86);
+      }
+
+      .tab svg {
+        flex: 0 0 auto;
+      }
+
+      .tab span {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .tab .close {
+        color: var(--tab-close);
+        font-size: 18px;
+        line-height: 1;
+      }
+
+      .actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--action);
+        padding-bottom: 8px;
+      }
+
+      .action {
+        width: 28px;
+        height: 28px;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(255, 255, 255, 0.58);
+      }
+
+      .content {
+        padding: 16px;
+        background: var(--content-bg);
+      }
+
+      .channel-row {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 14px;
+      }
+
+      .channel-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 42px;
+        padding: 0 16px;
+        border-radius: 999px;
+        background: rgba(255, 240, 246, 0.96);
+        color: var(--pink-strong);
+        box-shadow:
+          0 8px 18px rgba(227, 168, 193, 0.12),
+          inset 0 1px 0 rgba(255, 255, 255, 0.92);
+      }
+
+      .channel-pill .inner {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 32px;
+        padding: 0 13px;
+        border-radius: 999px;
+        background: rgba(255, 226, 236, 0.88);
+      }
+
+      .tools {
+        display: grid;
+        gap: 8px;
+        margin-bottom: 14px;
+      }
+
+      .tool {
+        display: grid;
+        grid-template-columns: 12px 1fr 10px;
+        gap: 10px;
+        align-items: center;
+        color: var(--tool-text);
+        font-family: "SF Mono", "JetBrains Mono", "Menlo", monospace;
+        font-size: 11px;
+      }
+
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: var(--tool-dot);
+      }
+
+      .arrow {
+        color: var(--tool-arrow);
+        text-align: right;
+      }
+
+      .assistant {
+        color: var(--assistant);
+        font-size: 14px;
+        line-height: 1.7;
+      }
+
+      .assistant p {
+        margin: 0 0 10px;
+      }
+
+      .assistant ul {
+        margin: 8px 0 14px 22px;
+        padding: 0;
+      }
+
+      .assistant li {
+        margin: 0 0 6px;
+      }
+
+      .user-row {
+        display: flex;
+        justify-content: flex-end;
+        margin: 14px 0 18px;
+      }
+
+      .bubble {
+        max-width: min(80%, 290px);
+        min-height: 56px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 20px;
+        border-radius: var(--bubble-radius);
+        background: var(--bubble-bg);
+        color: var(--bubble-text);
+        border: var(--bubble-border);
+        box-shadow: var(--bubble-shadow);
+        font-size: 14px;
+        line-height: 1.5;
+        font-weight: 600;
+      }
+
+      .composer {
+        margin-top: 16px;
+        padding: 14px;
+        border-radius: 24px;
+        background: var(--composer-bg);
+        border: 1px solid rgba(241, 217, 227, 0.62);
+        box-shadow:
+          0 10px 22px rgba(224, 180, 197, 0.08),
+          inset 0 1px 0 rgba(255, 255, 255, 0.98);
+      }
+
+      .placeholder {
+        color: var(--composer-text);
+        font-size: 13px;
+        line-height: 1.6;
+        margin-bottom: 12px;
+      }
+
+      .composer-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .model {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        min-height: 40px;
+        padding: 0 14px 0 16px;
+        border-radius: 999px;
+        background: rgba(255, 241, 246, 0.96);
+        color: var(--pink-strong);
+        border: 1px solid rgba(242, 208, 223, 0.66);
+        font-weight: 600;
+      }
+
+      .caret {
+        width: 0;
+        height: 0;
+        border-left: 6px solid transparent;
+        border-right: 6px solid transparent;
+        border-top: 8px solid currentColor;
+      }
+
+      .send-area {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .orb {
+        width: 42px;
+        height: 42px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.58);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.98);
+        position: relative;
+      }
+
+      .orb::after {
+        content: "";
+        position: absolute;
+        top: 6px;
+        left: 18px;
+        width: 6px;
+        height: 6px;
+        border-radius: 999px;
+        background: var(--pink);
+      }
+
+      .send {
+        width: 54px;
+        height: 54px;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(180deg, #ff91bd, #ff72ad);
+        color: white;
+        box-shadow:
+          0 10px 22px rgba(228, 118, 169, 0.26),
+          inset 0 1px 0 rgba(255, 255, 255, 0.3);
+        font-size: 28px;
+        line-height: 1;
+      }
+
+      .notes {
+        display: grid;
+        gap: 6px;
+        margin-top: 12px;
+      }
+
+      .note {
+        font-size: 12px;
+        line-height: 1.55;
+        color: #726771;
+      }
+
+      .note strong {
+        color: #322933;
+      }
+
+      .theme-sand {
+        --pink: #e85b94;
+        --pink-strong: #da3f82;
+        --wash: rgba(255, 204, 222, 0.24);
+        --window-bg: radial-gradient(circle at top left, rgba(255, 242, 247, 0.68), transparent 32%);
+        --tabbar-bg: linear-gradient(180deg, rgba(255, 252, 253, 0.98), rgba(255, 247, 249, 0.94));
+        --divider: rgba(244, 204, 220, 0.42);
+        --tab-text: #afa2aa;
+        --tab-close: #c7bcc3;
+        --tab-active-bg: rgba(255, 247, 250, 0.98);
+        --action: #cb9cb1;
+        --content-bg: linear-gradient(180deg, rgba(255, 253, 254, 0.99), rgba(255, 248, 250, 0.96));
+        --tool-text: #aaa0a8;
+        --tool-dot: #d9d1d5;
+        --tool-arrow: #cac2c7;
+        --assistant: #4f474d;
+        --bubble-bg: linear-gradient(180deg, #f3ece7 0%, #eee5df 100%);
+        --bubble-text: #864a64;
+        --bubble-border: none;
+        --bubble-shadow: 0 12px 24px rgba(184, 165, 156, 0.16);
+        --bubble-radius: 999px;
+        --composer-bg: linear-gradient(180deg, rgba(255, 248, 251, 0.98), rgba(255, 243, 247, 0.98));
+        --composer-text: #aca2aa;
+      }
+
+      .theme-cocoa {
+        --pink: #ea5c93;
+        --pink-strong: #dc417f;
+        --wash: rgba(255, 202, 219, 0.24);
+        --window-bg: radial-gradient(circle at top left, rgba(255, 241, 246, 0.66), transparent 32%);
+        --tabbar-bg: linear-gradient(180deg, rgba(255, 252, 253, 0.98), rgba(255, 247, 249, 0.94));
+        --divider: rgba(242, 203, 218, 0.4);
+        --tab-text: #ae9fa8;
+        --tab-close: #c4bac1;
+        --tab-active-bg: rgba(255, 246, 249, 0.98);
+        --action: #c999af;
+        --content-bg: linear-gradient(180deg, rgba(255, 252, 253, 0.99), rgba(255, 247, 250, 0.96));
+        --tool-text: #aaa1a9;
+        --tool-dot: #d8ced3;
+        --tool-arrow: #c9bec4;
+        --assistant: #4f474d;
+        --bubble-bg: linear-gradient(180deg, #d7c8c8 0%, #cdbbbb 100%);
+        --bubble-text: #6c304f;
+        --bubble-border: none;
+        --bubble-shadow: 0 14px 28px rgba(165, 141, 141, 0.2);
+        --bubble-radius: 28px;
+        --composer-bg: linear-gradient(180deg, rgba(255, 247, 250, 0.99), rgba(255, 241, 246, 0.98));
+        --composer-text: #ab9fa8;
+      }
+
+      .theme-lilac {
+        --pink: #eb5a92;
+        --pink-strong: #dc3f7e;
+        --wash: rgba(248, 205, 223, 0.22);
+        --window-bg: radial-gradient(circle at top left, rgba(255, 242, 248, 0.68), transparent 34%);
+        --tabbar-bg: linear-gradient(180deg, rgba(255, 252, 253, 0.98), rgba(255, 247, 250, 0.94));
+        --divider: rgba(243, 206, 220, 0.4);
+        --tab-text: #afa2ac;
+        --tab-close: #c6bbc2;
+        --tab-active-bg: rgba(255, 247, 250, 0.98);
+        --action: #ca9eb2;
+        --content-bg: linear-gradient(180deg, rgba(255, 253, 254, 0.99), rgba(255, 248, 251, 0.96));
+        --tool-text: #a89ea8;
+        --tool-dot: #d7cfd5;
+        --tool-arrow: #c8bfc5;
+        --assistant: #4f474f;
+        --bubble-bg: linear-gradient(180deg, #e4dce7 0%, #ded5e2 100%);
+        --bubble-text: #75486f;
+        --bubble-border: 1px solid rgba(224, 216, 229, 0.96);
+        --bubble-shadow: 0 12px 24px rgba(177, 166, 185, 0.18);
+        --bubble-radius: 999px;
+        --composer-bg: linear-gradient(180deg, rgba(255, 248, 251, 0.98), rgba(255, 243, 247, 0.98));
+        --composer-text: #aba1ab;
+      }
+
+      .theme-sage {
+        --pink: #e85890;
+        --pink-strong: #da3c7d;
+        --wash: rgba(255, 203, 220, 0.22);
+        --window-bg: radial-gradient(circle at top left, rgba(255, 242, 246, 0.68), transparent 34%);
+        --tabbar-bg: linear-gradient(180deg, rgba(255, 252, 253, 0.98), rgba(255, 247, 249, 0.94));
+        --divider: rgba(243, 204, 218, 0.4);
+        --tab-text: #aea2ab;
+        --tab-close: #c4bbc1;
+        --tab-active-bg: rgba(255, 247, 250, 0.98);
+        --action: #c99cb0;
+        --content-bg: linear-gradient(180deg, rgba(255, 253, 254, 0.99), rgba(255, 248, 250, 0.96));
+        --tool-text: #9da5a0;
+        --tool-dot: #c7d0ca;
+        --tool-arrow: #b9c2bc;
+        --assistant: #49514c;
+        --bubble-bg: linear-gradient(180deg, #dde5de 0%, #d4ddd6 100%);
+        --bubble-text: #536a5a;
+        --bubble-border: none;
+        --bubble-shadow: 0 12px 24px rgba(163, 180, 168, 0.18);
+        --bubble-radius: 999px;
+        --composer-bg: linear-gradient(180deg, rgba(255, 248, 251, 0.98), rgba(255, 243, 247, 0.98));
+        --composer-text: #a9a1a8;
+      }
+
+      .theme-blue {
+        --pink: #ea5b94;
+        --pink-strong: #dc407f;
+        --wash: rgba(255, 205, 222, 0.22);
+        --window-bg: radial-gradient(circle at top left, rgba(255, 241, 247, 0.66), transparent 34%);
+        --tabbar-bg: linear-gradient(180deg, rgba(255, 252, 253, 0.98), rgba(255, 247, 250, 0.94));
+        --divider: rgba(241, 204, 219, 0.4);
+        --tab-text: #aab0bb;
+        --tab-close: #c1c5cd;
+        --tab-active-bg: rgba(255, 247, 250, 0.98);
+        --action: #b7bac5;
+        --content-bg: linear-gradient(180deg, rgba(251, 252, 255, 0.99), rgba(247, 249, 253, 0.96));
+        --tool-text: #95a0ae;
+        --tool-dot: #c3cedd;
+        --tool-arrow: #b5c0cf;
+        --assistant: #46505e;
+        --bubble-bg: linear-gradient(180deg, #dce3ec 0%, #d3dbe6 100%);
+        --bubble-text: #52627b;
+        --bubble-border: none;
+        --bubble-shadow: 0 12px 24px rgba(162, 175, 193, 0.18);
+        --bubble-radius: 24px;
+        --composer-bg: linear-gradient(180deg, rgba(255, 248, 251, 0.98), rgba(255, 243, 247, 0.98));
+        --composer-text: #9aa2af;
+      }
+
+      .theme-cream {
+        --pink: #eb5b93;
+        --pink-strong: #dd4180;
+        --wash: rgba(255, 204, 221, 0.22);
+        --window-bg: radial-gradient(circle at top left, rgba(255, 241, 246, 0.64), transparent 34%);
+        --tabbar-bg: linear-gradient(180deg, rgba(255, 252, 253, 0.98), rgba(255, 247, 250, 0.94));
+        --divider: rgba(244, 206, 220, 0.42);
+        --tab-text: #b1a59e;
+        --tab-close: #c8bfb7;
+        --tab-active-bg: rgba(255, 247, 250, 0.98);
+        --action: #c9b4a6;
+        --content-bg: linear-gradient(180deg, rgba(255, 253, 251, 0.99), rgba(255, 249, 245, 0.96));
+        --tool-text: #a69f97;
+        --tool-dot: #d8d0c7;
+        --tool-arrow: #cabfb5;
+        --assistant: #534d48;
+        --bubble-bg: linear-gradient(180deg, #f6efe4 0%, #f0e7da 100%);
+        --bubble-text: #8a5a5b;
+        --bubble-border: 1px solid rgba(243, 234, 221, 0.96);
+        --bubble-shadow: 0 12px 24px rgba(186, 172, 151, 0.16);
+        --bubble-radius: 999px;
+        --composer-bg: linear-gradient(180deg, rgba(255, 248, 251, 0.98), rgba(255, 243, 247, 0.98));
+        --composer-text: #aba29b;
+      }
+
+      @media (max-width: 1280px) {
+        .grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 840px) {
+        .page {
+          width: min(100vw - 20px, 100%);
+          padding: 24px 0 48px;
+        }
+
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <section class="hero">
+        <div class="eyebrow">Pink As Primary</div>
+        <h1>粉色当主色就够了，辅助色只负责让粉色更高级、更清楚</h1>
+        <p>
+          这版所有方案都遵循同一个原则：活跃状态、发送按钮、频道 pill、模型选择器都继续用粉；
+          其他颜色只给消息和底面做分层。这样 Vonvon 还是粉色的，但不会被粉色淹没。
+        </p>
+        <div class="tags">
+          <span>主色固定是粉</span>
+          <span>辅助色只做结构层次</span>
+          <span>消息区可读性优先</span>
+          <span>更像完整产品，不像单一主题皮肤</span>
+        </div>
+      </section>
+
+      <section class="grid">
+        <article class="card theme-sand">
+          <div class="meta">
+            <div class="meta-top"><span class="id">Option A</span><span class="badge">最稳妥</span></div>
+            <h2>Pink + Sand</h2>
+            <p>粉色做品牌和动作，沙色做发送消息。最像成熟产品的做法，也最容易看清。</p>
+            <div class="swatches">
+              <span class="swatch" style="background:#ff76ad"></span>
+              <span class="swatch" style="background:#eee5df"></span>
+              <span class="swatch" style="background:#fff8fa"></span>
+            </div>
+          </div>
+          <div class="window">
+            <div class="tabbar">
+              <div class="tabs">
+                <div class="tab"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>微信代回复</span><span class="close">×</span></div>
+                <div class="tab active"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>小红书吐槽</span><span class="close">×</span></div>
+              </div>
+              <div class="actions"><span class="action">+</span><span class="action">◷</span><span class="action">×</span></div>
+            </div>
+            <div class="content">
+              <div class="channel-row"><div class="channel-pill"><div class="inner"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 5.5 6.75v10.5L12 21l6.5-3.75V6.75L12 3Z"/><path d="M12 3v7.5m0 0 6.5-3.75M12 10.5 5.5 6.75"/></svg><span>xiaohongshu</span></div></div></div>
+              <div class="tools"><div class="tool"><span class="dot"></span><span>skill_view</span><span class="arrow">▸</span></div><div class="tool"><span class="dot"></span><span>clarify</span><span class="arrow">▸</span></div></div>
+              <div class="assistant"><p>姐妹，你还没告诉我到底要吐槽什么事呀🥺</p><p>比如你可以直接丢给我一种场景：吐槽前任、吐槽老板、吐槽室友。</p></div>
+              <div class="user-row"><div class="bubble">吐槽脱口秀</div></div>
+              <div class="assistant"><p>这版粉色很明确，但发送消息不会和页面底混在一起。</p></div>
+              <div class="composer"><div class="placeholder">输入消息…（粉色是主角，沙色只负责把消息托出来）</div><div class="composer-footer"><div class="model"><span>gpt-5.4</span><span class="caret"></span></div><div class="send-area"><div class="orb"></div><div class="send">↑</div></div></div></div>
+            </div>
+          </div>
+          <div class="notes"><div class="note"><strong>适合：</strong>你想稳、想高级、还想看得清。</div></div>
+        </article>
+
+        <article class="card theme-cocoa">
+          <div class="meta">
+            <div class="meta-top"><span class="id">Option B</span><span class="badge">更有记忆点</span></div>
+            <h2>Pink + Cocoa</h2>
+            <p>粉色配可可灰粉，发送消息更有重量。比纯粉更高级，也比中性灰更有情绪。</p>
+            <div class="swatches">
+              <span class="swatch" style="background:#ff78af"></span>
+              <span class="swatch" style="background:#cdbbbb"></span>
+              <span class="swatch" style="background:#fff8fa"></span>
+            </div>
+          </div>
+          <div class="window">
+            <div class="tabbar">
+              <div class="tabs">
+                <div class="tab"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>微信代回复</span><span class="close">×</span></div>
+                <div class="tab active"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>小红书吐槽</span><span class="close">×</span></div>
+              </div>
+              <div class="actions"><span class="action">+</span><span class="action">◷</span><span class="action">×</span></div>
+            </div>
+            <div class="content">
+              <div class="channel-row"><div class="channel-pill"><div class="inner"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 5.5 6.75v10.5L12 21l6.5-3.75V6.75L12 3Z"/><path d="M12 3v7.5m0 0 6.5-3.75M12 10.5 5.5 6.75"/></svg><span>xiaohongshu</span></div></div></div>
+              <div class="tools"><div class="tool"><span class="dot"></span><span>skill_view</span><span class="arrow">▸</span></div><div class="tool"><span class="dot"></span><span>clarify</span><span class="arrow">▸</span></div></div>
+              <div class="assistant"><p>你只要发我一句：“帮我写一段吐槽 XXX 的小红书文案”。</p><p>我就能把情绪和节奏拉出来。</p></div>
+              <div class="user-row"><div class="bubble">吐槽脱口秀</div></div>
+              <div class="assistant"><p>这版的消息更有“落点”，适合情绪类场景。</p></div>
+              <div class="composer"><div class="placeholder">输入消息…（粉色很亮眼，消息却更稳）</div><div class="composer-footer"><div class="model"><span>gpt-5.4</span><span class="caret"></span></div><div class="send-area"><div class="orb"></div><div class="send">↑</div></div></div></div>
+            </div>
+          </div>
+          <div class="notes"><div class="note"><strong>适合：</strong>想要一点情绪重量，但不想变得很暗。</div></div>
+        </article>
+
+        <article class="card theme-lilac">
+          <div class="meta">
+            <div class="meta-top"><span class="id">Option C</span><span class="badge">最顺滑</span></div>
+            <h2>Pink + Lilac</h2>
+            <p>粉色和灰紫最容易天然协调。整体会更柔、更统一，也比全粉更有边界。</p>
+            <div class="swatches">
+              <span class="swatch" style="background:#ff79b0"></span>
+              <span class="swatch" style="background:#ded5e2"></span>
+              <span class="swatch" style="background:#fff8fb"></span>
+            </div>
+          </div>
+          <div class="window">
+            <div class="tabbar">
+              <div class="tabs">
+                <div class="tab"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>微信代回复</span><span class="close">×</span></div>
+                <div class="tab active"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>小红书吐槽</span><span class="close">×</span></div>
+              </div>
+              <div class="actions"><span class="action">+</span><span class="action">◷</span><span class="action">×</span></div>
+            </div>
+            <div class="content">
+              <div class="channel-row"><div class="channel-pill"><div class="inner"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 5.5 6.75v10.5L12 21l6.5-3.75V6.75L12 3Z"/><path d="M12 3v7.5m0 0 6.5-3.75M12 10.5 5.5 6.75"/></svg><span>xiaohongshu</span></div></div></div>
+              <div class="tools"><div class="tool"><span class="dot"></span><span>skill_view</span><span class="arrow">▸</span></div><div class="tool"><span class="dot"></span><span>clarify</span><span class="arrow">▸</span></div></div>
+              <div class="assistant"><p>比如你可以直接说：帮我写一段吐槽脱口秀的小红书文案。</p><p>我会自动把语气组织成更像帖子的样子。</p></div>
+              <div class="user-row"><div class="bubble">吐槽脱口秀</div></div>
+              <div class="assistant"><p>如果你想要“粉色主调 + 最自然的辅助色”，这版很强。</p></div>
+              <div class="composer"><div class="placeholder">输入消息…（灰紫把粉色衬得更柔，也更有层次）</div><div class="composer-footer"><div class="model"><span>gpt-5.4</span><span class="caret"></span></div><div class="send-area"><div class="orb"></div><div class="send">↑</div></div></div></div>
+            </div>
+          </div>
+          <div class="notes"><div class="note"><strong>适合：</strong>想温柔、精致、顺滑，不要太甜。</div></div>
+        </article>
+
+        <article class="card theme-sage">
+          <div class="meta">
+            <div class="meta-top"><span class="id">Option D</span><span class="badge">更产品化</span></div>
+            <h2>Pink + Sage</h2>
+            <p>粉色做品牌，鼠尾草绿做结构。会让 Vonvon 更像一个设计过的产品，而不是单色皮肤。</p>
+            <div class="swatches">
+              <span class="swatch" style="background:#ff79ae"></span>
+              <span class="swatch" style="background:#d4ddd6"></span>
+              <span class="swatch" style="background:#fff8fa"></span>
+            </div>
+          </div>
+          <div class="window">
+            <div class="tabbar">
+              <div class="tabs">
+                <div class="tab"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>微信代回复</span><span class="close">×</span></div>
+                <div class="tab active"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>小红书吐槽</span><span class="close">×</span></div>
+              </div>
+              <div class="actions"><span class="action">+</span><span class="action">◷</span><span class="action">×</span></div>
+            </div>
+            <div class="content">
+              <div class="channel-row"><div class="channel-pill"><div class="inner"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 5.5 6.75v10.5L12 21l6.5-3.75V6.75L12 3Z"/><path d="M12 3v7.5m0 0 6.5-3.75M12 10.5 5.5 6.75"/></svg><span>xiaohongshu</span></div></div></div>
+              <div class="tools"><div class="tool"><span class="dot"></span><span>skill_view</span><span class="arrow">▸</span></div><div class="tool"><span class="dot"></span><span>clarify</span><span class="arrow">▸</span></div></div>
+              <div class="assistant"><p>姐妹，你还没告诉我到底要吐槽什么事呀。</p><p>这版会让粉色显得更克制，也更耐看。</p></div>
+              <div class="user-row"><div class="bubble">吐槽脱口秀</div></div>
+              <div class="assistant"><p>绿色只是辅助层，粉色依然是视觉中心。</p></div>
+              <div class="composer"><div class="placeholder">输入消息…（粉色还是主色，但页面更完整）</div><div class="composer-footer"><div class="model"><span>gpt-5.4</span><span class="caret"></span></div><div class="send-area"><div class="orb"></div><div class="send">↑</div></div></div></div>
+            </div>
+          </div>
+          <div class="notes"><div class="note"><strong>适合：</strong>如果你想让 Vonvon 更像长期使用的产品界面。</div></div>
+        </article>
+
+        <article class="card theme-blue">
+          <div class="meta">
+            <div class="meta-top"><span class="id">Option E</span><span class="badge">更现代</span></div>
+            <h2>Pink + Blue Grey</h2>
+            <p>粉色配冷灰蓝，会有一点“编辑器 / 工具型”产品感。粉色会显得更干净、更锐利。</p>
+            <div class="swatches">
+              <span class="swatch" style="background:#ff79b0"></span>
+              <span class="swatch" style="background:#d3dbe6"></span>
+              <span class="swatch" style="background:#f7f9fd"></span>
+            </div>
+          </div>
+          <div class="window">
+            <div class="tabbar">
+              <div class="tabs">
+                <div class="tab"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>微信代回复</span><span class="close">×</span></div>
+                <div class="tab active"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>小红书吐槽</span><span class="close">×</span></div>
+              </div>
+              <div class="actions"><span class="action">+</span><span class="action">◷</span><span class="action">×</span></div>
+            </div>
+            <div class="content">
+              <div class="channel-row"><div class="channel-pill"><div class="inner"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 5.5 6.75v10.5L12 21l6.5-3.75V6.75L12 3Z"/><path d="M12 3v7.5m0 0 6.5-3.75M12 10.5 5.5 6.75"/></svg><span>xiaohongshu</span></div></div></div>
+              <div class="tools"><div class="tool"><span class="dot"></span><span>skill_view</span><span class="arrow">▸</span></div><div class="tool"><span class="dot"></span><span>clarify</span><span class="arrow">▸</span></div></div>
+              <div class="assistant"><p>你只要发一个场景，我就能帮你写得像真的要发出去一样。</p><p>这版辅助色更冷，粉色反而更亮眼。</p></div>
+              <div class="user-row"><div class="bubble">吐槽脱口秀</div></div>
+              <div class="assistant"><p>如果你不想全站太甜，这版会很有帮助。</p></div>
+              <div class="composer"><div class="placeholder">输入消息…（冷辅助色把粉色主色撑得更现代）</div><div class="composer-footer"><div class="model"><span>gpt-5.4</span><span class="caret"></span></div><div class="send-area"><div class="orb"></div><div class="send">↑</div></div></div></div>
+            </div>
+          </div>
+          <div class="notes"><div class="note"><strong>适合：</strong>如果你想要一点工具感、现代感。</div></div>
+        </article>
+
+        <article class="card theme-cream">
+          <div class="meta">
+            <div class="meta-top"><span class="id">Option F</span><span class="badge">更柔和</span></div>
+            <h2>Pink + Cream</h2>
+            <p>粉色配奶油白，整体会更柔、更生活化。比 Sand 更轻一点，比全粉更舒服。</p>
+            <div class="swatches">
+              <span class="swatch" style="background:#ff79af"></span>
+              <span class="swatch" style="background:#f0e7da"></span>
+              <span class="swatch" style="background:#fff9f5"></span>
+            </div>
+          </div>
+          <div class="window">
+            <div class="tabbar">
+              <div class="tabs">
+                <div class="tab"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>微信代回复</span><span class="close">×</span></div>
+                <div class="tab active"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>小红书吐槽</span><span class="close">×</span></div>
+              </div>
+              <div class="actions"><span class="action">+</span><span class="action">◷</span><span class="action">×</span></div>
+            </div>
+            <div class="content">
+              <div class="channel-row"><div class="channel-pill"><div class="inner"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 5.5 6.75v10.5L12 21l6.5-3.75V6.75L12 3Z"/><path d="M12 3v7.5m0 0 6.5-3.75M12 10.5 5.5 6.75"/></svg><span>xiaohongshu</span></div></div></div>
+              <div class="tools"><div class="tool"><span class="dot"></span><span>skill_view</span><span class="arrow">▸</span></div><div class="tool"><span class="dot"></span><span>clarify</span><span class="arrow">▸</span></div></div>
+              <div class="assistant"><p>比如你可以直接说：帮我写一段吐槽脱口秀的小红书文案。</p><p>我会帮你把情绪、停顿和语气一起写出来。</p></div>
+              <div class="user-row"><div class="bubble">吐槽脱口秀</div></div>
+              <div class="assistant"><p>这版整体最柔和，适合想保留亲和力的方向。</p></div>
+              <div class="composer"><div class="placeholder">输入消息…（最柔和的辅助色组合）</div><div class="composer-footer"><div class="model"><span>gpt-5.4</span><span class="caret"></span></div><div class="send-area"><div class="orb"></div><div class="send">↑</div></div></div></div>
+            </div>
+          </div>
+          <div class="notes"><div class="note"><strong>适合：</strong>想亲和、想柔和，但不想“全粉奶油”。</div></div>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>

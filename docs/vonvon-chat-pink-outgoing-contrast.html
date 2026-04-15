@@ -1,0 +1,1023 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vonvon Pink Outgoing Contrast</title>
+    <style>
+      :root {
+        color-scheme: light;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+      }
+
+      body {
+        font-family: "Avenir Next", "SF Pro Text", "PingFang SC", "Hiragino Sans GB", sans-serif;
+        color: #302932;
+        background:
+          radial-gradient(circle at top left, rgba(255, 197, 218, 0.1), transparent 22%),
+          radial-gradient(circle at top right, rgba(255, 221, 234, 0.16), transparent 28%),
+          linear-gradient(180deg, #fffdfd 0%, #fffefe 48%, #fff9fb 100%);
+      }
+
+      .page {
+        width: min(1480px, calc(100vw - 32px));
+        margin: 0 auto;
+        padding: 32px 0 64px;
+      }
+
+      .hero {
+        display: grid;
+        gap: 12px;
+        margin-bottom: 22px;
+      }
+
+      .eyebrow {
+        font-size: 12px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: #c86f96;
+      }
+
+      h1 {
+        margin: 0;
+        font-family: "Iowan Old Style", "Baskerville", "Songti SC", serif;
+        font-size: clamp(30px, 4.3vw, 54px);
+        line-height: 0.96;
+        letter-spacing: -0.055em;
+      }
+
+      .hero p {
+        margin: 0;
+        max-width: 960px;
+        color: #786d77;
+        font-size: 16px;
+        line-height: 1.72;
+      }
+
+      .rules {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .rules span {
+        display: inline-flex;
+        align-items: center;
+        min-height: 34px;
+        padding: 0 14px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.78);
+        color: #6f646e;
+        font-size: 13px;
+        box-shadow:
+          0 10px 20px rgba(127, 95, 114, 0.06),
+          inset 0 1px 0 rgba(255, 255, 255, 0.96);
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 20px;
+      }
+
+      .card {
+        position: relative;
+        overflow: hidden;
+        border-radius: 28px;
+        padding: 18px;
+        background: rgba(255, 255, 255, 0.76);
+        backdrop-filter: blur(18px);
+        box-shadow:
+          0 22px 48px rgba(124, 89, 108, 0.1),
+          inset 0 1px 0 rgba(255, 255, 255, 0.96);
+      }
+
+      .card::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background:
+          radial-gradient(circle at top right, var(--wash), transparent 36%),
+          linear-gradient(180deg, rgba(255, 255, 255, 0.24), transparent 24%);
+      }
+
+      .card > * {
+        position: relative;
+        z-index: 1;
+      }
+
+      .meta {
+        display: grid;
+        gap: 8px;
+        margin-bottom: 14px;
+      }
+
+      .meta-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .meta-id {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.18em;
+        color: var(--accent);
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        min-height: 26px;
+        padding: 0 10px;
+        border-radius: 999px;
+        background: rgba(30, 22, 27, 0.05);
+        color: #776b74;
+        font-size: 12px;
+      }
+
+      .meta h2 {
+        margin: 0;
+        font-size: 28px;
+        line-height: 1;
+        letter-spacing: -0.05em;
+      }
+
+      .meta p {
+        margin: 0;
+        color: #756a74;
+        font-size: 13px;
+        line-height: 1.58;
+      }
+
+      .swatches {
+        display: flex;
+        gap: 8px;
+      }
+
+      .swatch {
+        width: 30px;
+        height: 30px;
+        border-radius: 999px;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.66);
+      }
+
+      .window {
+        overflow: hidden;
+        border-radius: 24px;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.82)),
+          var(--window-bg);
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.98),
+          0 16px 30px rgba(111, 87, 100, 0.08);
+      }
+
+      .tabbar {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 10px;
+        padding: 12px 12px 0;
+        background: linear-gradient(180deg, rgba(255, 252, 253, 0.98), rgba(255, 247, 250, 0.94));
+        border-bottom: 1px solid rgba(243, 207, 220, 0.42);
+      }
+
+      .tabs {
+        display: flex;
+        align-items: flex-end;
+        gap: 8px;
+        min-width: 0;
+      }
+
+      .tab {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        min-width: 0;
+        height: 46px;
+        padding: 0 14px;
+        border-radius: 18px 18px 0 0;
+        color: #a99da6;
+        font-size: 13px;
+        font-weight: 600;
+      }
+
+      .tab.active {
+        background: rgba(255, 247, 250, 0.98);
+        color: var(--accent-strong);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.88);
+      }
+
+      .tab svg {
+        flex: 0 0 auto;
+      }
+
+      .tab span {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .tab .close {
+        color: #c5bbc2;
+        font-size: 18px;
+        line-height: 1;
+      }
+
+      .actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: #c89ab1;
+        padding-bottom: 8px;
+      }
+
+      .action {
+        width: 28px;
+        height: 28px;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(255, 255, 255, 0.58);
+      }
+
+      .content {
+        position: relative;
+        padding: 16px 16px 18px;
+        background: var(--content-bg);
+      }
+
+      .content::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 4px;
+        height: 100%;
+        background: linear-gradient(180deg, rgba(255, 162, 198, 0), rgba(255, 162, 198, 0.22) 6%, rgba(255, 142, 186, 0.54) 28%, rgba(255, 142, 186, 0.16) 100%);
+      }
+
+      .channel-row {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 16px;
+      }
+
+      .channel-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        min-height: 44px;
+        padding: 0 16px;
+        border-radius: 999px;
+        background: rgba(255, 242, 247, 0.96);
+        color: var(--accent-strong);
+        box-shadow:
+          0 8px 18px rgba(228, 167, 193, 0.12),
+          inset 0 1px 0 rgba(255, 255, 255, 0.92);
+      }
+
+      .channel-pill .inner {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 33px;
+        padding: 0 14px;
+        border-radius: 999px;
+        background: rgba(255, 226, 236, 0.9);
+      }
+
+      .assistant {
+        color: #4e474d;
+        font-size: 14px;
+        line-height: 1.72;
+      }
+
+      .assistant p {
+        margin: 0 0 10px;
+      }
+
+      .assistant ul {
+        margin: 8px 0 14px 22px;
+        padding: 0;
+      }
+
+      .assistant li {
+        margin: 0 0 6px;
+      }
+
+      .user-row {
+        display: flex;
+        justify-content: flex-end;
+        margin: 14px 0 18px;
+      }
+
+      .user-bubble {
+        background: var(--user-bg);
+        color: var(--user-text);
+        box-shadow:
+          var(--user-shadow),
+          inset 0 1px 0 rgba(255, 255, 255, 0.42);
+      }
+
+      .user-bubble--compact {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 58px;
+        padding: 0 24px;
+        border-radius: var(--compact-radius, 999px);
+        font-size: 15px;
+        font-weight: 600;
+      }
+
+      .user-bubble--mixed {
+        width: min(100%, 660px);
+        padding: 16px 18px 18px;
+        border-radius: var(--mixed-radius, 28px);
+      }
+
+      .user-bubble--media {
+        width: min(100%, 300px);
+        padding: 18px;
+        border-radius: var(--media-radius, 30px);
+      }
+
+      .mixed-line {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 10px;
+        align-items: center;
+        margin-bottom: 10px;
+        font-size: 14px;
+        line-height: 1.6;
+        font-weight: 600;
+      }
+
+      .mixed-line:last-child {
+        margin-bottom: 0;
+      }
+
+      .token {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        min-height: 32px;
+        padding: 0 11px;
+        border-radius: 999px;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.54);
+      }
+
+      .token.skill {
+        background: rgba(255, 227, 237, 0.96);
+        color: #d34683;
+      }
+
+      .token.file {
+        color: #5b5a64;
+      }
+
+      .token.file.txt {
+        background: rgba(234, 229, 232, 0.98);
+        color: #76727c;
+      }
+
+      .token.file.pdf {
+        background: rgba(255, 224, 233, 0.98);
+        color: #cc4a73;
+      }
+
+      .token.file.py {
+        background: rgba(223, 236, 220, 0.98);
+        color: #4d8654;
+      }
+
+      .token-mark {
+        font-size: 11px;
+        font-weight: 700;
+        font-family: "SF Mono", "JetBrains Mono", "Menlo", monospace;
+        text-transform: lowercase;
+      }
+
+      .token-label {
+        font-size: 13px;
+        font-weight: 650;
+        letter-spacing: -0.01em;
+      }
+
+      .photo {
+        position: relative;
+        width: 198px;
+        height: 228px;
+        border-radius: 18px;
+        overflow: hidden;
+        margin: 0 auto 16px;
+        background:
+          linear-gradient(180deg, rgba(255,255,255,0.16), rgba(255,255,255,0.02)),
+          linear-gradient(140deg, #ddcfc7 0%, #c6b0a2 46%, #9d7f6d 100%);
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.56),
+          0 10px 18px rgba(143, 121, 114, 0.14);
+      }
+
+      .photo::before {
+        content: "";
+        position: absolute;
+        inset: -8% -6%;
+        background:
+          radial-gradient(circle at 22% 16%, rgba(255,255,255,0.94) 0 4%, transparent 4.4%),
+          radial-gradient(circle at 27% 11%, rgba(246,239,241,0.92) 0 3.8%, transparent 4.2%),
+          radial-gradient(circle at 30% 17%, rgba(255,255,255,0.94) 0 4%, transparent 4.4%),
+          radial-gradient(circle at 40% 8%, rgba(255,248,250,0.95) 0 4.2%, transparent 4.7%),
+          radial-gradient(circle at 49% 14%, rgba(255,255,255,0.94) 0 4.1%, transparent 4.6%),
+          radial-gradient(circle at 58% 18%, rgba(248,240,242,0.94) 0 3.8%, transparent 4.3%),
+          radial-gradient(circle at 70% 11%, rgba(255,255,255,0.94) 0 4%, transparent 4.4%),
+          linear-gradient(115deg, transparent 0 38%, rgba(112, 84, 62, 0.74) 38.7% 39.6%, transparent 40.3%),
+          linear-gradient(90deg, transparent 0 50%, rgba(120, 89, 68, 0.72) 50.8% 51.6%, transparent 52.4%),
+          linear-gradient(132deg, transparent 0 60%, rgba(134, 98, 72, 0.64) 60.7% 61.5%, transparent 62.2%);
+        filter: blur(0.2px);
+      }
+
+      .photo::after {
+        content: "";
+        position: absolute;
+        left: 16px;
+        bottom: 12px;
+        width: 72px;
+        height: 14px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.9);
+        box-shadow: 0 2px 6px rgba(112, 98, 98, 0.1);
+      }
+
+      .media-copy {
+        display: grid;
+        gap: 18px;
+        font-size: 15px;
+        line-height: 1.6;
+        font-weight: 600;
+      }
+
+      .tools {
+        display: grid;
+        gap: 8px;
+        margin: 16px 0 18px;
+      }
+
+      .tool {
+        display: grid;
+        grid-template-columns: 12px 1fr 10px;
+        gap: 10px;
+        align-items: center;
+        color: #aaa2ab;
+        font-family: "SF Mono", "JetBrains Mono", "Menlo", monospace;
+        font-size: 11px;
+      }
+
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: #d9d0d7;
+      }
+
+      .arrow {
+        color: #cbc1c7;
+        text-align: right;
+      }
+
+      .composer {
+        padding: 14px;
+        border-radius: 24px;
+        background: rgba(255, 249, 251, 0.98);
+        border: 2px solid rgba(246, 209, 224, 0.88);
+        box-shadow:
+          0 10px 22px rgba(223, 179, 196, 0.08),
+          inset 0 1px 0 rgba(255, 255, 255, 0.98);
+      }
+
+      .placeholder {
+        color: #a79da6;
+        font-size: 13px;
+        line-height: 1.6;
+        margin-bottom: 12px;
+      }
+
+      .composer-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .model-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        min-height: 42px;
+        padding: 0 14px 0 16px;
+        border-radius: 999px;
+        background: rgba(255, 240, 246, 0.96);
+        color: var(--accent-strong);
+        font-weight: 600;
+      }
+
+      .caret {
+        width: 0;
+        height: 0;
+        border-left: 6px solid transparent;
+        border-right: 6px solid transparent;
+        border-top: 8px solid currentColor;
+      }
+
+      .send-area {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .orb {
+        width: 42px;
+        height: 42px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.58);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.98);
+        position: relative;
+      }
+
+      .orb::after {
+        content: "";
+        position: absolute;
+        top: 6px;
+        left: 18px;
+        width: 6px;
+        height: 6px;
+        border-radius: 999px;
+        background: var(--accent);
+      }
+
+      .send {
+        width: 56px;
+        height: 56px;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(180deg, #ff93be, #ff72ac);
+        color: white;
+        box-shadow:
+          0 10px 22px rgba(227, 116, 167, 0.26),
+          inset 0 1px 0 rgba(255, 255, 255, 0.3);
+        font-size: 28px;
+        line-height: 1;
+      }
+
+      .notes {
+        display: grid;
+        gap: 6px;
+        margin-top: 12px;
+      }
+
+      .note {
+        font-size: 12px;
+        line-height: 1.55;
+        color: #726771;
+      }
+
+      .note strong {
+        color: #322933;
+      }
+
+      .variant-a {
+        --accent: #e95b94;
+        --accent-strong: #dc3f82;
+        --wash: rgba(255, 204, 221, 0.24);
+        --window-bg: radial-gradient(circle at top left, rgba(255, 243, 248, 0.62), transparent 34%);
+        --content-bg: linear-gradient(180deg, rgba(255, 254, 255, 0.995), rgba(255, 251, 252, 0.985));
+        --user-bg: linear-gradient(180deg, #fff1f6 0%, #ffebf2 100%);
+        --user-text: #9a5572;
+        --user-shadow: 0 10px 22px rgba(235, 182, 203, 0.12);
+        --compact-radius: 999px;
+        --mixed-radius: 28px;
+        --media-radius: 30px;
+      }
+
+      .variant-b {
+        --accent: #e75890;
+        --accent-strong: #da3d7d;
+        --wash: rgba(255, 215, 224, 0.26);
+        --window-bg: radial-gradient(circle at top left, rgba(255, 245, 243, 0.82), transparent 36%);
+        --content-bg: linear-gradient(180deg, rgba(255, 252, 249, 0.995), rgba(255, 247, 243, 0.982));
+        --user-bg: linear-gradient(180deg, #ffeef3 0%, #ffe7ee 100%);
+        --user-text: #9a496f;
+        --user-shadow: 0 10px 20px rgba(235, 184, 180, 0.14);
+        --compact-radius: 28px;
+        --mixed-radius: 24px;
+        --media-radius: 26px;
+      }
+
+      .variant-c {
+        --accent: #eb5d95;
+        --accent-strong: #de4281;
+        --wash: rgba(244, 220, 255, 0.34);
+        --window-bg: radial-gradient(circle at top left, rgba(245, 242, 255, 0.88), transparent 36%);
+        --content-bg: linear-gradient(180deg, rgba(252, 251, 255, 0.995), rgba(246, 243, 251, 0.982));
+        --user-bg: linear-gradient(180deg, #ffeff6 0%, #ffe8f1 100%);
+        --user-text: #915277;
+        --user-shadow: 0 12px 24px rgba(203, 188, 232, 0.18);
+        --compact-radius: 999px;
+        --mixed-radius: 34px;
+        --media-radius: 34px;
+      }
+
+      .variant-d {
+        --accent: #e75790;
+        --accent-strong: #d93f7c;
+        --wash: rgba(255, 210, 223, 0.18);
+        --window-bg: radial-gradient(circle at top left, rgba(250, 249, 250, 0.86), transparent 36%);
+        --content-bg: linear-gradient(180deg, rgba(253, 253, 254, 0.995), rgba(248, 247, 249, 0.985));
+        --user-bg: linear-gradient(180deg, #fff0f5 0%, #ffeaf1 100%);
+        --user-text: #975b76;
+        --user-shadow: 0 8px 18px rgba(210, 186, 198, 0.16);
+        --compact-radius: 22px;
+        --mixed-radius: 22px;
+        --media-radius: 24px;
+      }
+
+      @media (max-width: 1120px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 720px) {
+        .page {
+          width: min(100vw - 20px, 100%);
+          padding: 24px 0 48px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <section class="hero">
+        <div class="eyebrow">Pink Outgoing Contrast</div>
+        <h1>整页底更浅，你发出的消息更深一点，而且所有你发出的消息都用同一个底色</h1>
+        <p>
+          我按你刚刚的想法把方向收紧了：不再给发出消息加外边框，整体对话底面尽量浅，
+          你发出的消息统一成更深一点的粉底。`skill / file` 继续保留自己的背景色，只把外边框去掉。
+        </p>
+        <div class="rules">
+          <span>发出消息去外边框</span>
+          <span>整体背景更浅</span>
+          <span>发出消息背景统一</span>
+          <span>skill / file 保留各自底色</span>
+          <span>内容直接沿用你截图里的这组</span>
+        </div>
+      </section>
+
+      <section class="grid">
+        <article class="card variant-a">
+          <div class="meta">
+            <div class="meta-top"><span class="meta-id">Option A</span><span class="badge">推荐</span></div>
+            <h2>Rose Paper</h2>
+            <p>最平衡。底面很浅，用户消息是温和的深粉，既看得清，也不会显得太硬。</p>
+            <div class="swatches">
+              <span class="swatch" style="background:#fffafb"></span>
+              <span class="swatch" style="background:#ffe3ed"></span>
+              <span class="swatch" style="background:#ff74ad"></span>
+            </div>
+          </div>
+          <div class="window">
+            <div class="tabbar">
+              <div class="tabs">
+                <div class="tab"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>助手自我...</span><span class="close">×</span></div>
+                <div class="tab active"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>会话 11:5...</span><span class="close">×</span></div>
+              </div>
+              <div class="actions"><span class="action">+</span><span class="action">◷</span><span class="action">×</span></div>
+            </div>
+            <div class="content">
+              <div class="channel-row"><div class="channel-pill"><div class="inner"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 5.5 6.75v10.5L12 21l6.5-3.75V6.75L12 3Z"/><path d="M12 3v7.5m0 0 6.5-3.75M12 10.5 5.5 6.75"/></svg><span>xiaohongshu</span></div></div></div>
+              <div class="user-row"><div class="user-bubble user-bubble--compact">你是？</div></div>
+              <div class="assistant">
+                <p>我是 Vonvon，你的智能 AI 助手。</p>
+                <p>我可以直接帮你：</p>
+                <ul>
+                  <li>回答问题</li>
+                  <li>写作、润色、翻译</li>
+                  <li>写代码、改代码、查问题</li>
+                  <li>查文件、跑命令、分析数据</li>
+                  <li>用浏览器操作网页</li>
+                  <li>帮你做信息整理和研究</li>
+                </ul>
+                <p>你也可以直接一句话给我任务，比如：</p>
+                <p>“帮我总结这段文字”</p>
+                <p>“检查这个报错怎么修”</p>
+                <p>“写一个 Python 脚本”</p>
+                <p>“打开某个网页帮我找信息”</p>
+                <p>如果你愿意，也可以叫我直接开始干活。</p>
+              </div>
+              <div class="user-row">
+                <div class="user-bubble user-bubble--mixed">
+                  <div class="mixed-line">
+                    <span>啊啊</span>
+                    <span class="token skill"><span class="token-mark">⌘</span><span class="token-label">xiaohongshu</span></span>
+                    <span>对对对</span>
+                  </div>
+                  <div class="mixed-line">
+                    <span class="token file txt"><span class="token-mark">txt</span><span class="token-label">agent:detail.log</span></span>
+                  </div>
+                  <div class="mixed-line">
+                    <span class="token file pdf"><span class="token-mark">pdf</span><span class="token-label">Open API 文档 - 权限管理.pdf</span></span>
+                    <span class="token file py"><span class="token-mark">py</span><span class="token-label">mock.py</span></span>
+                  </div>
+                </div>
+              </div>
+              <div class="user-row">
+                <div class="user-bubble user-bubble--media">
+                  <div class="photo"></div>
+                  <div class="media-copy">
+                    <div>的撒的撒点点滴滴</div>
+                    <div>放大速度</div>
+                    <div>dsa'd'w</div>
+                  </div>
+                </div>
+              </div>
+              <div class="tools"><div class="tool"><span class="dot"></span><span>skill_view</span><span class="arrow">▸</span></div></div>
+              <div class="composer">
+                <div class="placeholder">贴张图给我看看</div>
+                <div class="composer-footer">
+                  <div class="model-pill"><span>gpt-5.4</span><span class="caret"></span></div>
+                  <div class="send-area"><div class="orb"></div><div class="send">↑</div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="notes">
+            <div class="note"><strong>特点：</strong>三个你发出的消息块都用同一粉底，只靠内容结构区分。</div>
+            <div class="note"><strong>适合：</strong>如果你想马上落地，我会先推这个。</div>
+          </div>
+        </article>
+
+        <article class="card variant-b">
+          <div class="meta">
+            <div class="meta-top"><span class="meta-id">Option B</span><span class="badge">更显眼</span></div>
+            <h2>Blush Contrast</h2>
+            <p>用户消息更深一点，和页面底的反差更明显。适合你担心“消息还是不够立起来”的情况。</p>
+            <div class="swatches">
+              <span class="swatch" style="background:#fffbfd"></span>
+              <span class="swatch" style="background:#ffd9e7"></span>
+              <span class="swatch" style="background:#ff72ab"></span>
+            </div>
+          </div>
+          <div class="window">
+            <div class="tabbar">
+              <div class="tabs">
+                <div class="tab"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>助手自我...</span><span class="close">×</span></div>
+                <div class="tab active"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>会话 11:5...</span><span class="close">×</span></div>
+              </div>
+              <div class="actions"><span class="action">+</span><span class="action">◷</span><span class="action">×</span></div>
+            </div>
+            <div class="content">
+              <div class="channel-row"><div class="channel-pill"><div class="inner"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 5.5 6.75v10.5L12 21l6.5-3.75V6.75L12 3Z"/><path d="M12 3v7.5m0 0 6.5-3.75M12 10.5 5.5 6.75"/></svg><span>xiaohongshu</span></div></div></div>
+              <div class="user-row"><div class="user-bubble user-bubble--compact">你是？</div></div>
+              <div class="assistant">
+                <p>我是 Vonvon，你的智能 AI 助手。</p>
+                <p>我可以直接帮你：</p>
+                <ul>
+                  <li>回答问题</li>
+                  <li>写作、润色、翻译</li>
+                  <li>写代码、改代码、查问题</li>
+                  <li>查文件、跑命令、分析数据</li>
+                  <li>用浏览器操作网页</li>
+                  <li>帮你做信息整理和研究</li>
+                </ul>
+                <p>你也可以直接一句话给我任务，比如：</p>
+                <p>“帮我总结这段文字”</p>
+                <p>“检查这个报错怎么修”</p>
+                <p>“写一个 Python 脚本”</p>
+                <p>“打开某个网页帮我找信息”</p>
+                <p>如果你愿意，也可以叫我直接开始干活。</p>
+              </div>
+              <div class="user-row">
+                <div class="user-bubble user-bubble--mixed">
+                  <div class="mixed-line">
+                    <span>啊啊</span>
+                    <span class="token skill"><span class="token-mark">⌘</span><span class="token-label">xiaohongshu</span></span>
+                    <span>对对对</span>
+                  </div>
+                  <div class="mixed-line">
+                    <span class="token file txt"><span class="token-mark">txt</span><span class="token-label">agent:detail.log</span></span>
+                  </div>
+                  <div class="mixed-line">
+                    <span class="token file pdf"><span class="token-mark">pdf</span><span class="token-label">Open API 文档 - 权限管理.pdf</span></span>
+                    <span class="token file py"><span class="token-mark">py</span><span class="token-label">mock.py</span></span>
+                  </div>
+                </div>
+              </div>
+              <div class="user-row">
+                <div class="user-bubble user-bubble--media">
+                  <div class="photo"></div>
+                  <div class="media-copy">
+                    <div>的撒的撒点点滴滴</div>
+                    <div>放大速度</div>
+                    <div>dsa'd'w</div>
+                  </div>
+                </div>
+              </div>
+              <div class="tools"><div class="tool"><span class="dot"></span><span>skill_view</span><span class="arrow">▸</span></div></div>
+              <div class="composer">
+                <div class="placeholder">贴张图给我看看</div>
+                <div class="composer-footer">
+                  <div class="model-pill"><span>gpt-5.4</span><span class="caret"></span></div>
+                  <div class="send-area"><div class="orb"></div><div class="send">↑</div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="notes">
+            <div class="note"><strong>特点：</strong>同样无外边框，但消息更有“站出来”的感觉。</div>
+            <div class="note"><strong>适合：</strong>如果你想进一步强调“这是我发出的消息”。</div>
+          </div>
+        </article>
+
+        <article class="card variant-c">
+          <div class="meta">
+            <div class="meta-top"><span class="meta-id">Option C</span><span class="badge">更饱满</span></div>
+            <h2>Petal Block</h2>
+            <p>仍然是同一底色规则，但整体更接近“粉色块面”，更有情绪一点。</p>
+            <div class="swatches">
+              <span class="swatch" style="background:#fff9fb"></span>
+              <span class="swatch" style="background:#ffd1e0"></span>
+              <span class="swatch" style="background:#ff73ab"></span>
+            </div>
+          </div>
+          <div class="window">
+            <div class="tabbar">
+              <div class="tabs">
+                <div class="tab"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>助手自我...</span><span class="close">×</span></div>
+                <div class="tab active"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>会话 11:5...</span><span class="close">×</span></div>
+              </div>
+              <div class="actions"><span class="action">+</span><span class="action">◷</span><span class="action">×</span></div>
+            </div>
+            <div class="content">
+              <div class="channel-row"><div class="channel-pill"><div class="inner"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 5.5 6.75v10.5L12 21l6.5-3.75V6.75L12 3Z"/><path d="M12 3v7.5m0 0 6.5-3.75M12 10.5 5.5 6.75"/></svg><span>xiaohongshu</span></div></div></div>
+              <div class="user-row"><div class="user-bubble user-bubble--compact">你是？</div></div>
+              <div class="assistant">
+                <p>我是 Vonvon，你的智能 AI 助手。</p>
+                <p>我可以直接帮你：</p>
+                <ul>
+                  <li>回答问题</li>
+                  <li>写作、润色、翻译</li>
+                  <li>写代码、改代码、查问题</li>
+                  <li>查文件、跑命令、分析数据</li>
+                  <li>用浏览器操作网页</li>
+                  <li>帮你做信息整理和研究</li>
+                </ul>
+                <p>你也可以直接一句话给我任务，比如：</p>
+                <p>“帮我总结这段文字”</p>
+                <p>“检查这个报错怎么修”</p>
+                <p>“写一个 Python 脚本”</p>
+                <p>“打开某个网页帮我找信息”</p>
+                <p>如果你愿意，也可以叫我直接开始干活。</p>
+              </div>
+              <div class="user-row">
+                <div class="user-bubble user-bubble--mixed">
+                  <div class="mixed-line">
+                    <span>啊啊</span>
+                    <span class="token skill"><span class="token-mark">⌘</span><span class="token-label">xiaohongshu</span></span>
+                    <span>对对对</span>
+                  </div>
+                  <div class="mixed-line">
+                    <span class="token file txt"><span class="token-mark">txt</span><span class="token-label">agent:detail.log</span></span>
+                  </div>
+                  <div class="mixed-line">
+                    <span class="token file pdf"><span class="token-mark">pdf</span><span class="token-label">Open API 文档 - 权限管理.pdf</span></span>
+                    <span class="token file py"><span class="token-mark">py</span><span class="token-label">mock.py</span></span>
+                  </div>
+                </div>
+              </div>
+              <div class="user-row">
+                <div class="user-bubble user-bubble--media">
+                  <div class="photo"></div>
+                  <div class="media-copy">
+                    <div>的撒的撒点点滴滴</div>
+                    <div>放大速度</div>
+                    <div>dsa'd'w</div>
+                  </div>
+                </div>
+              </div>
+              <div class="tools"><div class="tool"><span class="dot"></span><span>skill_view</span><span class="arrow">▸</span></div></div>
+              <div class="composer">
+                <div class="placeholder">贴张图给我看看</div>
+                <div class="composer-footer">
+                  <div class="model-pill"><span>gpt-5.4</span><span class="caret"></span></div>
+                  <div class="send-area"><div class="orb"></div><div class="send">↑</div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="notes">
+            <div class="note"><strong>特点：</strong>消息颜色更饱和，但依然没有描边。</div>
+            <div class="note"><strong>适合：</strong>如果你想让对话页再有一点情绪温度。</div>
+          </div>
+        </article>
+
+        <article class="card variant-d">
+          <div class="meta">
+            <div class="meta-top"><span class="meta-id">Option D</span><span class="badge">更柔和</span></div>
+            <h2>Soft Shell</h2>
+            <p>还是同样的规则，但颜色最轻，最像“被托起来的一块柔软纸面”。</p>
+            <div class="swatches">
+              <span class="swatch" style="background:#fffbfd"></span>
+              <span class="swatch" style="background:#ffd4e2"></span>
+              <span class="swatch" style="background:#ff73aa"></span>
+            </div>
+          </div>
+          <div class="window">
+            <div class="tabbar">
+              <div class="tabs">
+                <div class="tab"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>助手自我...</span><span class="close">×</span></div>
+                <div class="tab active"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>会话 11:5...</span><span class="close">×</span></div>
+              </div>
+              <div class="actions"><span class="action">+</span><span class="action">◷</span><span class="action">×</span></div>
+            </div>
+            <div class="content">
+              <div class="channel-row"><div class="channel-pill"><div class="inner"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 5.5 6.75v10.5L12 21l6.5-3.75V6.75L12 3Z"/><path d="M12 3v7.5m0 0 6.5-3.75M12 10.5 5.5 6.75"/></svg><span>xiaohongshu</span></div></div></div>
+              <div class="user-row"><div class="user-bubble user-bubble--compact">你是？</div></div>
+              <div class="assistant">
+                <p>我是 Vonvon，你的智能 AI 助手。</p>
+                <p>我可以直接帮你：</p>
+                <ul>
+                  <li>回答问题</li>
+                  <li>写作、润色、翻译</li>
+                  <li>写代码、改代码、查问题</li>
+                  <li>查文件、跑命令、分析数据</li>
+                  <li>用浏览器操作网页</li>
+                  <li>帮你做信息整理和研究</li>
+                </ul>
+                <p>你也可以直接一句话给我任务，比如：</p>
+                <p>“帮我总结这段文字”</p>
+                <p>“检查这个报错怎么修”</p>
+                <p>“写一个 Python 脚本”</p>
+                <p>“打开某个网页帮我找信息”</p>
+                <p>如果你愿意，也可以叫我直接开始干活。</p>
+              </div>
+              <div class="user-row">
+                <div class="user-bubble user-bubble--mixed">
+                  <div class="mixed-line">
+                    <span>啊啊</span>
+                    <span class="token skill"><span class="token-mark">⌘</span><span class="token-label">xiaohongshu</span></span>
+                    <span>对对对</span>
+                  </div>
+                  <div class="mixed-line">
+                    <span class="token file txt"><span class="token-mark">txt</span><span class="token-label">agent:detail.log</span></span>
+                  </div>
+                  <div class="mixed-line">
+                    <span class="token file pdf"><span class="token-mark">pdf</span><span class="token-label">Open API 文档 - 权限管理.pdf</span></span>
+                    <span class="token file py"><span class="token-mark">py</span><span class="token-label">mock.py</span></span>
+                  </div>
+                </div>
+              </div>
+              <div class="user-row">
+                <div class="user-bubble user-bubble--media">
+                  <div class="photo"></div>
+                  <div class="media-copy">
+                    <div>的撒的撒点点滴滴</div>
+                    <div>放大速度</div>
+                    <div>dsa'd'w</div>
+                  </div>
+                </div>
+              </div>
+              <div class="tools"><div class="tool"><span class="dot"></span><span>skill_view</span><span class="arrow">▸</span></div></div>
+              <div class="composer">
+                <div class="placeholder">贴张图给我看看</div>
+                <div class="composer-footer">
+                  <div class="model-pill"><span>gpt-5.4</span><span class="caret"></span></div>
+                  <div class="send-area"><div class="orb"></div><div class="send">↑</div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="notes">
+            <div class="note"><strong>特点：</strong>所有规则都一样，只是整个系统更柔一点。</div>
+            <div class="note"><strong>适合：</strong>如果你怕对比太强，这版最安全。</div>
+          </div>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>

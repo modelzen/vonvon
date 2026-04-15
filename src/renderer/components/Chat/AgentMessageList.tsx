@@ -438,13 +438,13 @@ function renderMessage(
           style={{
             maxWidth: isLongform ? '78%' : 'fit-content',
             minWidth: isLongform ? undefined : 72,
-            padding: isLongform ? '14px 16px' : '10px 15px',
-            borderRadius: isLongform ? 20 : 18,
+            padding: isLongform ? '15px 17px' : '10px 16px',
+            borderRadius: isLongform ? 34 : 999,
             fontSize: 13,
-            background: 'linear-gradient(135deg, #fff4f8, #ffedf4 58%, #ffe7f1)',
-            border: '1px solid rgba(255, 132, 189, 0.42)',
-            boxShadow: '0 12px 22px rgba(255, 164, 205, 0.12)',
-            color: '#7c3156',
+            background: 'linear-gradient(180deg, #ffeff6 0%, #ffe8f1 100%)',
+            boxShadow:
+              '0 12px 24px rgba(203, 188, 232, 0.18), inset 0 1px 0 rgba(255,255,255,0.44)',
+            color: '#915277',
             whiteSpace: 'pre-wrap',
             wordBreak: 'break-word',
             letterSpacing: 'normal',
@@ -460,8 +460,7 @@ function renderMessage(
                   style={{
                     maxWidth: 120,
                     maxHeight: 120,
-                    borderRadius: 6,
-                    border: '1px solid rgba(255,255,255,0.3)',
+                    borderRadius: 12,
                     display: 'block'
                   }}
                 />
@@ -488,7 +487,7 @@ function renderMessage(
         style={{
           marginBottom: 12,
           fontSize: 13,
-          color: '#333',
+          color: '#4f474f',
           lineHeight: 1.55,
           wordBreak: 'break-word'
         }}
@@ -722,7 +721,9 @@ export function AgentMessageList({
         flex: 1,
         overflowY: 'auto',
         padding: `12px 14px ${12 + bottomInset}px`,
-        minHeight: 0
+        minHeight: 0,
+        background:
+          'linear-gradient(180deg, rgba(252,251,255,0.995), rgba(246,243,251,0.982))'
       }}
     >
       {visibleMessages.map((msg) => renderMessage(msg, isLoading, activePlaceholderId))}

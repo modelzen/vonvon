@@ -363,7 +363,7 @@ export function InputArea({
       chip.style.display = 'inline-flex'
       chip.style.alignItems = 'center'
       chip.style.gap = '5px'
-      chip.style.background = hexToRgba(accent, 0.07)
+      chip.style.background = hexToRgba(accent, 0.09)
       chip.style.borderRadius = '10px'
       chip.style.padding = '0 7px'
       chip.style.fontSize = '11.5px'
@@ -374,7 +374,7 @@ export function InputArea({
       chip.style.overflow = 'hidden'
       chip.style.userSelect = 'none'
       chip.style.margin = '0 2px'
-      chip.style.border = `1px solid ${hexToRgba(accent, 0.1)}`
+      chip.style.boxShadow = 'inset 0 1px 0 rgba(255,255,255,0.52)'
 
       const badge = doc.createElement('span')
       badge.textContent = label.toLowerCase()
@@ -438,7 +438,7 @@ export function InputArea({
       chip.style.display = 'inline-flex'
       chip.style.alignItems = 'center'
       chip.style.gap = '5px'
-      chip.style.background = hexToRgba(accent, 0.07)
+      chip.style.background = hexToRgba(accent, 0.09)
       chip.style.borderRadius = '10px'
       chip.style.padding = '0 7px'
       chip.style.fontSize = '11.5px'
@@ -449,7 +449,7 @@ export function InputArea({
       chip.style.overflow = 'hidden'
       chip.style.userSelect = 'none'
       chip.style.margin = '0 2px'
-      chip.style.border = `1px solid ${hexToRgba(accent, 0.1)}`
+      chip.style.boxShadow = 'inset 0 1px 0 rgba(255,255,255,0.52)'
 
       const icon = doc.createElementNS('http://www.w3.org/2000/svg', 'svg')
       icon.setAttribute('width', '12')

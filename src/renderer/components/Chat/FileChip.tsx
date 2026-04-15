@@ -193,13 +193,8 @@ export function FileChip({
   const chipBg = isDisabled
     ? 'rgba(120, 128, 140, 0.12)'
     : isUserTone
-      ? hexToRgba(accent, 0.09)
-      : hexToRgba(accent, 0.09)
-  const chipBorder = isDisabled
-    ? 'rgba(120, 128, 140, 0.18)'
-    : isUserTone
-      ? hexToRgba(accent, 0.16)
-      : hexToRgba(accent, 0.12)
+      ? hexToRgba(accent, 0.13)
+      : hexToRgba(accent, 0.1)
   const labelColor = isDisabled ? '#9ca3af' : accent
   const filenameColor = isDisabled ? '#7d7d7d' : titleColor
   const removeColor = isDisabled ? '#9ca3af' : accent
@@ -224,7 +219,7 @@ export function FileChip({
         userSelect: 'none',
         cursor: isDisabled ? 'default' : 'pointer',
         margin: '0 2px',
-        border: `1px solid ${chipBorder}`,
+        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.52)',
         pointerEvents: onRemove ? 'auto' : 'none',
       }}
     >
@@ -324,8 +319,7 @@ export function SkillChip({
 }: SkillChipProps): React.ReactElement {
   const accent = '#CF4580'
   const titleColor = '#B63C74'
-  const bg = hexToRgba(accent, 0.09)
-  const border = hexToRgba(accent, tone === 'user' ? 0.16 : 0.12)
+  const bg = hexToRgba(accent, tone === 'user' ? 0.14 : 0.1)
   const text = titleColor
   const icon = accent
 
@@ -348,7 +342,7 @@ export function SkillChip({
         flexShrink: 0,
         userSelect: 'none',
         margin: '0 2px',
-        border: `1px solid ${border}`,
+        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.52)',
         pointerEvents: onRemove ? 'auto' : 'none',
       }}
     >

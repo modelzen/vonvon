@@ -138,7 +138,14 @@ function App(): React.ReactElement {
   return (
     <div
       ref={rootRef}
-      style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+      style={{
+        height: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        background:
+          'linear-gradient(180deg, #fffdfd 0%, #fff8fb 44%, #f8f5fb 100%)'
+      }}
     >
       {/* Sidebar entry animation (replayed on kirby:sidebar-show events).
           Anchored to top-LEFT so scaleX(0→1) makes the sidebar appear to

@@ -32,13 +32,25 @@ export function MessageList({ messages, isLoading }: MessageListProps): React.Re
   }
 
   return (
-    <div style={{ height: '100%', overflowY: 'auto', padding: '12px 14px' }}>
+    <div
+      style={{
+        height: '100%',
+        overflowY: 'auto',
+        padding: '12px 14px',
+        background:
+          'linear-gradient(180deg, rgba(252,251,255,0.995), rgba(246,243,251,0.982))'
+      }}
+    >
       {messages.map(msg => <MessageBubble key={msg.id} message={msg} />)}
       {isLoading && messages[messages.length - 1]?.role === 'user' && (
         <div style={{ display: 'flex', marginBottom: 10 }}>
           <div style={{
-            background: 'rgba(255,255,255,0.8)', border: '1px solid #fce4ec',
-            borderRadius: '16px 16px 16px 4px', padding: '8px 14px', display: 'flex', gap: 4
+            background: 'rgba(255,255,255,0.8)',
+            borderRadius: '18px 18px 18px 6px',
+            padding: '8px 14px',
+            display: 'flex',
+            gap: 4,
+            boxShadow: '0 6px 18px rgba(213, 204, 230, 0.12)'
           }}>
             {[0, 150, 300].map(delay => (
               <span key={delay} style={{
