@@ -8,6 +8,7 @@ from pathlib import Path
 # HERMES_HOME env var still takes precedence for local debugging and tests.
 DEFAULT_HERMES_HOME = Path.home() / ".vonvon" / ".hermes"
 os.environ.setdefault("HERMES_HOME", str(DEFAULT_HERMES_HOME))
+os.environ.setdefault("HERMES_PLATFORM", "vonvon")
 HERMES_HOME = Path(os.environ["HERMES_HOME"]).expanduser()
 
 # Default model

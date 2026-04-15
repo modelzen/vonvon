@@ -77,7 +77,7 @@ function InstalledTab({
   skills, onToggle, onUninstall, jobs,
 }: {
   skills: SkillView[]
-  onToggle: (name: string, enabled: boolean, scope: 'vonvon' | 'global') => void
+  onToggle: (name: string, enabled: boolean) => void
   onUninstall: (name: string) => void
   jobs: Record<string, SkillJobStatus>
 }) {
@@ -97,6 +97,7 @@ function InstalledTab({
           <div key={s.name} style={{
             padding: '8px 10px', borderRadius: 6,
             background: '#fafafa', border: '1px solid #eee',
+            opacity: s.enabled ? 1 : 0.72,
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
               <span style={{ fontSize: 12, fontWeight: 600, color: '#333', flex: 1 }}>
@@ -116,22 +117,17 @@ function InstalledTab({
                 {s.description.length > 60 ? `${s.description.slice(0, 60)}…` : s.description}
               </div>
             )}
-            <div style={{ display: 'flex', gap: 12 }}>
-              <label style={{ fontSize: 11, color: '#555', display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              <div style={{ fontSize: 11, color: '#999' }}>
+                {s.enabled ? '在对话页可见，可被选择和触发' : '已停用，不会出现在 / 弹出里，也不会被触发'}
+              </div>
+              <label style={{ fontSize: 11, color: '#555', display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', flexShrink: 0 }}>
                 <input
                   type="checkbox"
-                  checked={s.enabled_vonvon}
-                  onChange={(e) => onToggle(s.name, e.target.checked, 'vonvon')}
+                  checked={s.enabled}
+                  onChange={(e) => onToggle(s.name, e.target.checked)}
                 />
-                vonvon
-              </label>
-              <label style={{ fontSize: 11, color: '#555', display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={s.enabled_global}
-                  onChange={(e) => onToggle(s.name, e.target.checked, 'global')}
-                />
-                全局
+                启用
               </label>
             </div>
           </div>
@@ -515,9 +511,9 @@ export function SkillsPanel(): React.ReactElement {
     }
   }
 
-  const handleToggle = async (name: string, enabled: boolean, scope: 'vonvon' | 'global') => {
+  const handleToggle = async (name: string, enabled: boolean) => {
     try {
-      const updated = await toggleSkill({ name, enabled, scope })
+      const updated = await toggleSkill({ name, enabled, scope: 'both' })
       setSkills((prev) => prev.map((s) => (s.name === name ? { ...s, ...updated } : s)))
     } catch (e: any) {
       setError(e.message)

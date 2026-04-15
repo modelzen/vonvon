@@ -143,6 +143,7 @@ class SkillView(BaseModel):
     install_path: str = ""
     version: Optional[str] = None
     source: Optional[str] = None
+    enabled: bool = True
     enabled_global: bool = True
     enabled_vonvon: bool = True
 

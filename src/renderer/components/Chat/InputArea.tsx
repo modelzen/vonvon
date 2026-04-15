@@ -137,7 +137,7 @@ export function InputArea({
       const skills = await hermesConfig.listSkills()
       setAvailableSkills(
         skills
-          .filter((skill) => skill.enabled_global && skill.enabled_vonvon)
+          .filter((skill) => skill.enabled)
           .sort((a, b) => a.name.localeCompare(b.name))
       )
       setSkillsLoadedOnce(true)
@@ -1139,6 +1139,7 @@ export function InputArea({
               onPaste={handlePaste}
               onFocus={() => {
                 setFocused(true)
+                void refreshSkills()
                 handleSelectionChange()
               }}
               onBlur={() => {

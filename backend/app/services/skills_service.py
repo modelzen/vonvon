@@ -131,7 +131,7 @@ _INLINE_SKILL_RE = re.compile(r'@skill:(?:"([^"]+)"|(\S+))')
 def _find_installed_skills() -> List[Dict[str, Any]]:
     from tools.skills_tool import _find_all_skills
     try:
-        return _find_all_skills(skip_disabled=False)
+        return _find_all_skills(skip_disabled=True)
     except Exception as exc:
         logger.warning("find_all_skills failed: %s", exc)
         return []
@@ -719,6 +719,7 @@ def install_template(identifier: str) -> Dict[str, Any]:
         "install_path": str(dst),
         "version": None,
         "source": "builtin",
+        "enabled": True,
         "enabled_global": True,
         "enabled_vonvon": True,
     }
@@ -731,6 +732,7 @@ def _to_view(
     disabled_vonvon: set,
 ) -> Dict[str, Any]:
     name = skill.get("name", "")
+    enabled = name not in disabled_global and name not in disabled_vonvon
     return {
         "name": name,
         "category": skill.get("category"),
@@ -738,9 +740,37 @@ def _to_view(
         "install_path": skill.get("install_path", "") or "",
         "version": skill.get("version"),
         "source": skill.get("source"),
+        "enabled": enabled,
         "enabled_global": name not in disabled_global,
         "enabled_vonvon": name not in disabled_vonvon,
     }
+
+
+def _get_vonvon_disabled_skill_names(*, config: Optional[dict] = None) -> set[str]:
+    cfg = config if config is not None else load_config()
+    disabled_global = set(get_disabled_skills(cfg, platform=None))
+    disabled_vonvon = set(get_disabled_skills(cfg, platform="vonvon"))
+    return {name.casefold() for name in (disabled_global | disabled_vonvon) if name}
+
+
+def _is_skill_enabled_for_vonvon(
+    identifier: str,
+    *,
+    disabled_names: Optional[set[str]] = None,
+) -> bool:
+    disabled = disabled_names if disabled_names is not None else _get_vonvon_disabled_skill_names()
+    raw_identifier = (identifier or "").strip().lstrip("/")
+    if not raw_identifier:
+        return False
+
+    path_tail = Path(raw_identifier).name
+    stem_tail = Path(path_tail).stem
+    candidates = {
+        raw_identifier.casefold(),
+        path_tail.casefold(),
+        stem_tail.casefold(),
+    }
+    return not any(candidate in disabled for candidate in candidates if candidate)
 
 
 def _job_to_dict(job: SkillJob) -> Dict[str, Any]:
@@ -816,6 +846,7 @@ def build_skill_turn_message(
     loaded_names: List[str] = []
     missing: List[str] = []
     seen: set[str] = set()
+    disabled_for_vonvon = _get_vonvon_disabled_skill_names()
 
     for raw_identifier in skill_identifiers:
         identifier = (raw_identifier or "").strip()
@@ -825,6 +856,10 @@ def build_skill_turn_message(
         if dedupe_key in seen:
             continue
         seen.add(dedupe_key)
+
+        if not _is_skill_enabled_for_vonvon(identifier, disabled_names=disabled_for_vonvon):
+            missing.append(identifier)
+            continue
 
         loaded = _load_skill_payload(identifier, task_id=task_id)
         if not loaded:
@@ -880,20 +915,21 @@ def list_skills() -> List[Dict[str, Any]]:
 
 
 def toggle_skill(*, name: str, enabled: bool, scope: str) -> Dict[str, Any]:
-    if scope not in ("global", "vonvon"):
-        raise ValueError("scope must be global or vonvon")
-    platform = None if scope == "global" else "vonvon"
+    if scope not in ("global", "vonvon", "both"):
+        raise ValueError("scope must be global, vonvon, or both")
+    platforms = [None, "vonvon"] if scope == "both" else [None if scope == "global" else "vonvon"]
 
     # Architect iter-2: cache clear INSIDE the lock so no concurrent
     # build_system_prompt reads stale cache between save and clear.
     with config_store_lock():
         config = load_config()
-        disabled = set(get_disabled_skills(config, platform=platform))
-        if enabled:
-            disabled.discard(name)
-        else:
-            disabled.add(name)
-        save_disabled_skills(config, disabled, platform=platform)  # re-entrant lock OK
+        for platform in platforms:
+            disabled = set(get_disabled_skills(config, platform=platform))
+            if enabled:
+                disabled.discard(name)
+            else:
+                disabled.add(name)
+            save_disabled_skills(config, disabled, platform=platform)  # re-entrant lock OK
         try:
             from agent.prompt_builder import clear_skills_system_prompt_cache
             clear_skills_system_prompt_cache(clear_snapshot=True)
@@ -908,6 +944,7 @@ def toggle_skill(*, name: str, enabled: bool, scope: str) -> Dict[str, Any]:
             return _to_view(s, disabled_global=dg, disabled_vonvon=dv)
     return {
         "name": name,
+        "enabled": name not in dg and name not in dv,
         "enabled_global": name not in dg,
         "enabled_vonvon": name not in dv,
         "description": "",

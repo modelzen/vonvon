@@ -19,6 +19,7 @@ BASE_SKILL = {
     "install_path": "/skills/pptx",
     "version": "1.0",
     "source": "official",
+    "enabled": True,
     "enabled_global": True,
     "enabled_vonvon": True,
 }
@@ -64,15 +65,17 @@ def test_list_skills_empty_on_exception(client):
 # ── POST /api/skills/toggle ────────────────────────────────────────────────────
 
 def test_toggle_skill_200(client):
-    toggled = {**BASE_SKILL, "enabled_vonvon": False}
+    toggled = {**BASE_SKILL, "enabled": False, "enabled_global": False, "enabled_vonvon": False}
     with patch("app.routes.skills.skills_service") as svc:
         svc.toggle_skill.return_value = toggled
         resp = client.post(
             "/api/skills/toggle",
-            json={"name": "pptx", "enabled": False, "scope": "vonvon"},
+            json={"name": "pptx", "enabled": False, "scope": "both"},
         )
     assert resp.status_code == 200
+    assert resp.json()["enabled"] is False
     assert resp.json()["enabled_vonvon"] is False
+    assert resp.json()["enabled_global"] is False
 
 
 def test_toggle_skill_invalid_scope_422(client):

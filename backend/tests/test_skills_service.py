@@ -47,6 +47,7 @@ def test_list_skills_returns_all():
         result = skills_service.list_skills()
     assert len(result) == 2
     assert {r["name"] for r in result} == {"pptx", "git-tools"}
+    assert all(r["enabled"] is True for r in result)
 
 
 def test_list_skills_marks_disabled():
@@ -59,6 +60,7 @@ def test_list_skills_marks_disabled():
         result = skills_service.list_skills()
 
     pptx = next(r for r in result if r["name"] == "pptx")
+    assert pptx["enabled"] is False
     assert pptx["enabled_vonvon"] is False
     assert pptx["enabled_global"] is True
 
@@ -115,6 +117,35 @@ def test_build_skill_turn_message_combines_loaded_skills():
     assert "Selected from composer." in prompt
 
 
+def test_build_skill_turn_message_skips_disabled_vonvon_skill():
+    fake_skill_commands = types.SimpleNamespace()
+    fake_skill_commands._load_skill_payload = MagicMock(
+        return_value=({"content": "browse body"}, None, "Browse")
+    )
+    fake_skill_commands._build_skill_message = MagicMock(
+        side_effect=lambda loaded_skill, _skill_dir, activation_note, runtime_note="": (
+            f"{activation_note}\n{loaded_skill['content']}\n{runtime_note}"
+        ).strip()
+    )
+
+    with patch.dict(sys.modules, {"agent.skill_commands": fake_skill_commands}), \
+         patch.object(
+             skills_service,
+             "_get_vonvon_disabled_skill_names",
+             return_value={"checkpoint"},
+         ):
+        prompt, loaded, missing = skills_service.build_skill_turn_message(
+            ["checkpoint", "browse"],
+            user_instruction="save current state",
+            task_id="session-1",
+        )
+
+    assert loaded == ["Browse"]
+    assert missing == ["checkpoint"]
+    assert "browse body" in prompt
+    fake_skill_commands._load_skill_payload.assert_called_once_with("browse", task_id="session-1")
+
+
 # ── toggle_skill ───────────────────────────────────────────────────────────────
 
 def test_toggle_skill_invalid_scope():
@@ -124,10 +155,10 @@ def test_toggle_skill_invalid_scope():
 
 def test_toggle_skill_calls_cache_clear():
     with patch.object(skills_service, "_find_installed_skills", return_value=FAKE_SKILLS), \
-         patch("hermes_cli.config.load_config", return_value={}), \
-         patch("hermes_cli.skills_config.get_disabled_skills", return_value=set()), \
-         patch("hermes_cli.skills_config.save_disabled_skills"), \
-         patch("hermes_cli.config_lock.config_store_lock") as mock_lock, \
+         patch.object(skills_service, "load_config", return_value={}), \
+         patch.object(skills_service, "get_disabled_skills", return_value=set()), \
+         patch.object(skills_service, "save_disabled_skills"), \
+         patch.object(skills_service, "config_store_lock") as mock_lock, \
          patch("agent.prompt_builder.clear_skills_system_prompt_cache") as mock_clear:
 
         mock_lock.return_value.__enter__ = MagicMock(return_value=None)
@@ -139,10 +170,10 @@ def test_toggle_skill_calls_cache_clear():
 
 def test_toggle_skill_returns_updated_view():
     with patch.object(skills_service, "_find_installed_skills", return_value=FAKE_SKILLS), \
-         patch("hermes_cli.config.load_config", return_value={}), \
-         patch("hermes_cli.skills_config.get_disabled_skills", return_value=set()), \
-         patch("hermes_cli.skills_config.save_disabled_skills"), \
-         patch("hermes_cli.config_lock.config_store_lock") as mock_lock, \
+         patch.object(skills_service, "load_config", return_value={}), \
+         patch.object(skills_service, "get_disabled_skills", return_value=set()), \
+         patch.object(skills_service, "save_disabled_skills"), \
+         patch.object(skills_service, "config_store_lock") as mock_lock, \
          patch("agent.prompt_builder.clear_skills_system_prompt_cache"):
 
         mock_lock.return_value.__enter__ = MagicMock(return_value=None)
@@ -150,6 +181,28 @@ def test_toggle_skill_returns_updated_view():
         result = skills_service.toggle_skill(name="pptx", enabled=False, scope="vonvon")
 
     assert result["name"] == "pptx"
+
+
+def test_toggle_skill_both_updates_global_and_vonvon_lists():
+    with patch.object(skills_service, "_find_installed_skills", return_value=FAKE_SKILLS), \
+         patch.object(skills_service, "load_config", return_value={}), \
+         patch.object(
+             skills_service,
+             "get_disabled_skills",
+             side_effect=[set(), set(), {"pptx"}, {"pptx"}],
+         ), \
+         patch.object(skills_service, "save_disabled_skills") as mock_save, \
+         patch.object(skills_service, "config_store_lock") as mock_lock, \
+         patch("agent.prompt_builder.clear_skills_system_prompt_cache"):
+
+        mock_lock.return_value.__enter__ = MagicMock(return_value=None)
+        mock_lock.return_value.__exit__ = MagicMock(return_value=False)
+        result = skills_service.toggle_skill(name="pptx", enabled=False, scope="both")
+
+    assert result["enabled"] is False
+    assert mock_save.call_count == 2
+    assert mock_save.call_args_list[0].kwargs["platform"] is None
+    assert mock_save.call_args_list[1].kwargs["platform"] == "vonvon"
 
 
 # ── search_hub ─────────────────────────────────────────────────────────────────

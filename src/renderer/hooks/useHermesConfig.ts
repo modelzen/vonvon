@@ -93,6 +93,7 @@ export interface SkillView {
   install_path: string
   version?: string
   source?: string
+  enabled: boolean
   enabled_global: boolean
   enabled_vonvon: boolean
 }
@@ -100,7 +101,7 @@ export interface SkillView {
 export interface SkillToggleRequest {
   name: string
   enabled: boolean
-  scope: 'vonvon' | 'global'
+  scope: 'vonvon' | 'global' | 'both'
 }
 
 export interface SkillSearchResult {
