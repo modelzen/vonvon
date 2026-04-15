@@ -67,6 +67,13 @@ class SkillInstallStartRequest(BaseModel):
     identifier: str
 
 
+class SkillImportStartRequest(BaseModel):
+    source: str
+    name: Optional[str] = None
+    category: Optional[str] = None
+    conflict_strategy: str = Field("error", pattern="^(error|overwrite|rename)$")
+
+
 class SkillJobStatus(BaseModel):
     job_id: str
     kind: str
@@ -139,6 +146,19 @@ async def refresh_discover_skills() -> SkillDiscoverRefreshResponse:
 async def start_install(req: SkillInstallStartRequest) -> SkillJobStatus:
     try:
         return await skills_service.start_install_job(req.identifier)
+    except ValueError as exc:
+        raise HTTPException(429, str(exc))
+
+
+@router.post("/api/skills/import")
+async def start_import(req: SkillImportStartRequest) -> SkillJobStatus:
+    try:
+        return await skills_service.start_import_job(
+            req.source,
+            name=req.name,
+            category=req.category,
+            conflict_strategy=req.conflict_strategy,
+        )
     except ValueError as exc:
         raise HTTPException(429, str(exc))
 

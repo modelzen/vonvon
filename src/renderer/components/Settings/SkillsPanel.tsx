@@ -150,8 +150,10 @@ function DiscoverTab({
   trackJob: (job: SkillJobStatus) => void
   refreshToken: number
 }) {
-  const { listDiscoverSkills, startInstallSkill, installSkillTemplate } = useHermesConfig()
+  const { listDiscoverSkills, startInstallSkill, startImportSkill, installSkillTemplate } = useHermesConfig()
   const [query, setQuery] = useState('')
+  const [importSource, setImportSource] = useState('')
+  const [importingSource, setImportingSource] = useState(false)
   const deferredQuery = useDeferredValue(query.trim())
   const [items, setItems] = useState<SkillDiscoverItem[]>([])
   const [loadingInitial, setLoadingInitial] = useState(true)
@@ -170,9 +172,11 @@ function DiscoverTab({
   // query/source inputs change, not on every state update inside this tab.
   const listDiscoverSkillsRef = useRef(listDiscoverSkills)
   const startInstallSkillRef = useRef(startInstallSkill)
+  const startImportSkillRef = useRef(startImportSkill)
   const installSkillTemplateRef = useRef(installSkillTemplate)
   listDiscoverSkillsRef.current = listDiscoverSkills
   startInstallSkillRef.current = startInstallSkill
+  startImportSkillRef.current = startImportSkill
   installSkillTemplateRef.current = installSkillTemplate
 
   const fetchPage = useCallback(async (requestedOffset: number, reset: boolean) => {
@@ -217,7 +221,11 @@ function DiscoverTab({
   useEffect(() => {
     let shouldRefresh = false
     Object.values(jobs).forEach((job) => {
-      if (job.kind !== 'install' || job.status !== 'success' || completedJobs.current.has(job.job_id)) {
+      if (
+        (job.kind !== 'install' && job.kind !== 'import')
+        || job.status !== 'success'
+        || completedJobs.current.has(job.job_id)
+      ) {
         return
       }
       completedJobs.current.add(job.job_id)
@@ -297,8 +305,68 @@ function DiscoverTab({
     }
   }
 
+  const handleImport = async () => {
+    const source = importSource.trim()
+    if (!source || importingSource) return
+    setImportingSource(true)
+    try {
+      const job = await startImportSkillRef.current({
+        source,
+        conflict_strategy: 'error',
+      })
+      trackJob(job)
+      setImportSource('')
+    } catch (e: any) {
+      onError(e.message ?? '导入失败')
+    } finally {
+      setImportingSource(false)
+    }
+  }
+
   return (
     <div>
+      <div
+        style={{
+          marginBottom: 10,
+          borderRadius: 12,
+          border: `1px solid ${tokens.border}`,
+          background: 'rgba(255, 245, 249, 0.85)',
+          padding: '10px 12px',
+        }}
+      >
+        <div style={{ fontSize: 12, color: tokens.inkSoft, marginBottom: 8, lineHeight: 1.55 }}>
+          从 GitHub repo/tree/raw URL 或本地目录导入 skill。优先复用现成 `SKILL.md`，必要时自动转成 Hermes 兼容格式。
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <input
+            value={importSource}
+            onChange={(e) => setImportSource(e.target.value)}
+            placeholder="例如：https://github.com/alibaba-flyai/flyai-skill 或 ~/Downloads/my-skill"
+            style={{
+              flex: 1,
+              padding: '6px 10px',
+              fontSize: 12,
+              border: '1px solid #fce4ec',
+              borderRadius: 6,
+              outline: 'none',
+              boxSizing: 'border-box',
+            }}
+          />
+          <button
+            onClick={() => void handleImport()}
+            disabled={!importSource.trim() || importingSource}
+            style={{
+              ...BTN_PRIMARY,
+              fontSize: 11,
+              padding: '6px 10px',
+              opacity: !importSource.trim() || importingSource ? 0.6 : 1,
+            }}
+          >
+            {importingSource ? '导入中…' : '导入'}
+          </button>
+        </div>
+      </div>
+
       <div
         style={{
           display: 'flex',

@@ -425,6 +425,39 @@ async def test_start_install_job_creates_job():
     assert status["status"] in ("pending", "running", "success")
 
 
+def test_do_import_maps_import_result():
+    fake_module = types.SimpleNamespace(
+        import_skill_silent=lambda *args, **kwargs: {
+            "name": "flyai",
+            "category": "imports",
+            "description": "FlyAI helpers",
+            "install_path": "/tmp/flyai",
+            "source": "github",
+        }
+    )
+    tools_pkg = sys.modules.get("tools")
+    setattr(tools_pkg, "__path__", [])
+    with patch.dict(sys.modules, {"tools.skill_import_tool": fake_module}):
+        result = skills_service._do_import("https://github.com/alibaba-flyai/flyai-skill")
+
+    assert result["name"] == "flyai"
+    assert result["category"] == "imports"
+    assert result["source"] == "github"
+
+
+@pytest.mark.asyncio
+async def test_start_import_job_creates_job():
+    with patch.object(skills_service, "_do_import", return_value={
+        "name": "flyai", "category": "imports", "description": "",
+        "install_path": "/x", "version": None, "source": "github",
+    }):
+        status = await skills_service.start_import_job("https://github.com/alibaba-flyai/flyai-skill")
+
+    assert status["kind"] == "import"
+    assert "flyai-skill" in status["identifier"]
+    assert status["status"] in ("pending", "running", "success")
+
+
 def test_get_job_status_returns_none_for_unknown():
     result = skills_service.get_job_status("nonexistent-job-id")
     assert result is None

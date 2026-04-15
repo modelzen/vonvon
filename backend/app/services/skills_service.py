@@ -1084,6 +1084,31 @@ def _do_install(identifier: str) -> Dict[str, Any]:
     }
 
 
+def _do_import(
+    source: str,
+    name: str | None = None,
+    category: str | None = None,
+    conflict_strategy: str = "error",
+) -> Dict[str, Any]:
+    from tools.skill_import_tool import import_skill_silent
+
+    imported = import_skill_silent(
+        source=source,
+        name=name or None,
+        category=category or None,
+        conflict_strategy=conflict_strategy,
+        force=False,
+    )
+    return {
+        "name": imported.get("name", ""),
+        "category": imported.get("category"),
+        "description": imported.get("description", "") or "",
+        "install_path": str(imported.get("install_path", "")),
+        "version": None,
+        "source": imported.get("source", ""),
+    }
+
+
 def _do_uninstall(name: str) -> Dict[str, Any]:
     from tools.skills_hub import uninstall_skill
     ok, msg = uninstall_skill(name)
@@ -1142,6 +1167,24 @@ async def _create_job(kind: str, identifier: str, func, *args) -> Dict[str, Any]
 
 async def start_install_job(identifier: str) -> Dict[str, Any]:
     return await _create_job("install", identifier, _do_install, identifier)
+
+
+async def start_import_job(
+    source: str,
+    *,
+    name: str | None = None,
+    category: str | None = None,
+    conflict_strategy: str = "error",
+) -> Dict[str, Any]:
+    return await _create_job(
+        "import",
+        source,
+        _do_import,
+        source,
+        name,
+        category,
+        conflict_strategy,
+    )
 
 
 async def start_uninstall_job(name: str) -> Dict[str, Any]:

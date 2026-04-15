@@ -159,6 +159,13 @@ export interface SkillJobStatus {
   updated_at: number
 }
 
+export interface SkillImportRequest {
+  source: string
+  name?: string
+  category?: string
+  conflict_strategy?: 'error' | 'overwrite' | 'rename'
+}
+
 export interface WorkspaceState {
   path: string
   exists: boolean
@@ -275,6 +282,9 @@ export function useHermesConfig() {
   const startInstallSkill = (identifier: string) =>
     post<SkillJobStatus>('/api/skills/install', { identifier })
 
+  const startImportSkill = (req: SkillImportRequest) =>
+    post<SkillJobStatus>('/api/skills/import', req)
+
   const startUninstallSkill = (name: string) =>
     post<SkillJobStatus>(`/api/skills/uninstall?name=${encodeURIComponent(name)}`)
 
@@ -319,6 +329,7 @@ export function useHermesConfig() {
     listDiscoverSkills,
     refreshDiscoverSkillsSource,
     startInstallSkill,
+    startImportSkill,
     startUninstallSkill,
     pollSkillJob,
     checkSkillUpdates,

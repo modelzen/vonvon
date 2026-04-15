@@ -144,6 +144,7 @@ def _discover_tools():
         "tools.image_generation_tool",
         "tools.skills_tool",
         "tools.skill_manager_tool",
+        "tools.skill_import_tool",
         "tools.browser_tool",
         "tools.cronjob_tools",
         "tools.rl_training_tool",
@@ -207,7 +208,7 @@ _LEGACY_TOOLSET_MAP = {
     "vision_tools": ["vision_analyze"],
     "moa_tools": ["mixture_of_agents"],
     "image_tools": ["image_generate"],
-    "skills_tools": ["skills_list", "skill_view", "skill_manage"],
+    "skills_tools": ["skills_list", "skill_view", "skill_manage", "skill_import"],
     "browser_tools": [
         "browser_navigate", "browser_snapshot", "browser_click",
         "browser_type", "browser_scroll", "browser_back",

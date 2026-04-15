@@ -179,6 +179,27 @@ def test_start_install_429_when_too_many_jobs(client):
     assert resp.status_code == 429
 
 
+def test_start_import_200(client):
+    import_job = {**BASE_JOB, "kind": "import", "identifier": "https://github.com/alibaba-flyai/flyai-skill"}
+    with patch("app.routes.skills.skills_service") as svc:
+        svc.start_import_job = AsyncMock(return_value=import_job)
+        resp = client.post(
+            "/api/skills/import",
+            json={"source": "https://github.com/alibaba-flyai/flyai-skill"},
+        )
+    assert resp.status_code == 200
+    assert resp.json()["kind"] == "import"
+    assert "flyai-skill" in resp.json()["identifier"]
+
+
+def test_start_import_invalid_conflict_strategy_422(client):
+    resp = client.post(
+        "/api/skills/import",
+        json={"source": "https://github.com/alibaba-flyai/flyai-skill", "conflict_strategy": "keep"},
+    )
+    assert resp.status_code == 422
+
+
 # ── GET /api/skills/jobs/{job_id} ──────────────────────────────────────────────
 
 def test_poll_job_200(client):
