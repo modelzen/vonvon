@@ -1,0 +1,738 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vonvon Composer Rotating Tips Showcase</title>
+    <style>
+      :root {
+        --bg-top: #fffafd;
+        --bg-bottom: #fff4f8;
+        --panel: rgba(255, 255, 255, 0.84);
+        --panel-border: rgba(240, 198, 220, 0.72);
+        --text: #342630;
+        --muted: #776871;
+        --soft: #a3949d;
+        --accent: #ee5f9c;
+        --accent-strong: #dc3f85;
+        --accent-faint: rgba(238, 95, 156, 0.14);
+        --shadow: 0 26px 60px rgba(170, 93, 127, 0.12);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+      }
+
+      body {
+        font-family: "Avenir Next", "PingFang SC", "Helvetica Neue", sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(circle at top left, rgba(255, 175, 215, 0.2), transparent 22%),
+          radial-gradient(circle at top right, rgba(255, 216, 232, 0.24), transparent 28%),
+          linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
+      }
+
+      .page {
+        width: min(1400px, calc(100vw - 48px));
+        margin: 0 auto;
+        padding: 42px 0 84px;
+      }
+
+      .hero {
+        display: grid;
+        gap: 14px;
+        margin-bottom: 26px;
+      }
+
+      .eyebrow {
+        font-size: 12px;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--accent-strong);
+      }
+
+      h1 {
+        margin: 0;
+        font-family: "Baskerville", "Times New Roman", serif;
+        font-size: clamp(40px, 5vw, 74px);
+        line-height: 0.92;
+        letter-spacing: -0.06em;
+        font-weight: 600;
+      }
+
+      .hero p {
+        margin: 0;
+        max-width: 860px;
+        font-size: 16px;
+        line-height: 1.72;
+        color: var(--muted);
+      }
+
+      .hero-note {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .pill {
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.74);
+        border: 1px solid rgba(238, 192, 216, 0.82);
+        color: #7a6570;
+        font-size: 12px;
+      }
+
+      .summary {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+        margin-bottom: 22px;
+      }
+
+      .summary-card {
+        padding: 18px;
+        border-radius: 24px;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(255, 248, 252, 0.95));
+        border: 1px solid var(--panel-border);
+        box-shadow: var(--shadow);
+      }
+
+      .summary-card strong {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 14px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--accent-strong);
+      }
+
+      .summary-card p {
+        margin: 0;
+        font-size: 14px;
+        line-height: 1.66;
+        color: var(--muted);
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 20px;
+      }
+
+      .card {
+        position: relative;
+        overflow: hidden;
+        padding: 20px;
+        border-radius: 30px;
+        background: var(--panel);
+        border: 1px solid var(--panel-border);
+        box-shadow: var(--shadow);
+      }
+
+      .card::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+          radial-gradient(circle at top right, rgba(255, 180, 213, 0.16), transparent 30%),
+          linear-gradient(180deg, rgba(255, 255, 255, 0.24), transparent 26%);
+        pointer-events: none;
+      }
+
+      .card > * {
+        position: relative;
+        z-index: 1;
+      }
+
+      .card.recommended {
+        grid-column: span 2;
+      }
+
+      .meta {
+        display: grid;
+        gap: 10px;
+        margin-bottom: 16px;
+      }
+
+      .meta-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .meta-id {
+        font-size: 11px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--accent-strong);
+      }
+
+      .tag {
+        padding: 7px 12px;
+        border-radius: 999px;
+        border: 1px solid rgba(237, 190, 213, 0.82);
+        background: rgba(255, 255, 255, 0.74);
+        color: #7a6270;
+        font-size: 12px;
+      }
+
+      h2 {
+        margin: 0;
+        font-size: 30px;
+        line-height: 1;
+        letter-spacing: -0.06em;
+      }
+
+      .meta p {
+        margin: 0;
+        font-size: 14px;
+        line-height: 1.7;
+        color: var(--muted);
+      }
+
+      .preview {
+        border-radius: 28px;
+        padding: 20px;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(255, 247, 250, 0.94));
+        border: 1px solid rgba(255, 255, 255, 0.84);
+      }
+
+      .stage {
+        min-height: 360px;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+      }
+
+      .composer {
+        border-radius: 34px;
+        padding: 12px;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(255, 247, 251, 0.95));
+        border: 2px solid rgba(245, 173, 208, 0.46);
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.94),
+          0 18px 36px rgba(235, 160, 194, 0.14);
+      }
+
+      .composer.focused {
+        border-color: rgba(238, 95, 156, 0.52);
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.94),
+          0 22px 42px rgba(235, 160, 194, 0.18),
+          0 0 0 6px rgba(255, 230, 239, 0.9);
+      }
+
+      .input-shell {
+        border-radius: 26px;
+        padding: 16px 18px 14px;
+      }
+
+      .placeholder,
+      .helper-line,
+      .tip-text,
+      .tip-bar-main {
+        transition:
+          opacity 220ms ease,
+          transform 220ms ease,
+          filter 220ms ease;
+        will-change: opacity, transform;
+      }
+
+      .placeholder {
+        min-height: 58px;
+        color: #9e94a0;
+        font-size: 17px;
+        line-height: 1.6;
+      }
+
+      .helper-line {
+        min-height: 20px;
+        margin-top: 6px;
+        font-size: 13px;
+        line-height: 1.5;
+        color: #c08aa3;
+      }
+
+      .helper-line.subtle {
+        color: #c7aeb9;
+      }
+
+      .tip-bar {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-top: 10px;
+        padding: 10px 12px;
+        border-radius: 18px;
+        background: rgba(255, 247, 251, 0.88);
+        border: 1px solid rgba(241, 196, 219, 0.78);
+      }
+
+      .tip-bar-label {
+        flex: 0 0 auto;
+        padding: 5px 8px;
+        border-radius: 999px;
+        background: var(--accent-faint);
+        color: var(--accent-strong);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .tip-bar-main {
+        flex: 1;
+        min-height: 20px;
+        color: #8d7080;
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      .tip-bar-count {
+        flex: 0 0 auto;
+        color: #c0a1b0;
+        font-size: 11px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .swap {
+        opacity: 0;
+        transform: translateY(6px);
+        filter: blur(4px);
+      }
+
+      .composer-bottom {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-top: 10px;
+      }
+
+      .model {
+        min-width: 170px;
+        height: 42px;
+        padding: 0 16px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        border-radius: 999px;
+        border: 2px solid rgba(244, 170, 207, 0.48);
+        color: var(--accent-strong);
+        background: rgba(255, 247, 251, 0.95);
+        font-size: 16px;
+        font-weight: 600;
+      }
+
+      .caret {
+        width: 0;
+        height: 0;
+        border-left: 7px solid transparent;
+        border-right: 7px solid transparent;
+        border-top: 8px solid currentColor;
+      }
+
+      .actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .hotkey {
+        min-width: 36px;
+        height: 36px;
+        padding: 0 10px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px;
+        border: 1px solid rgba(237, 196, 218, 0.82);
+        background: rgba(255, 255, 255, 0.86);
+        color: #b89ba9;
+        font-size: 12px;
+      }
+
+      .send {
+        width: 54px;
+        height: 54px;
+        border-radius: 999px;
+        display: grid;
+        place-items: center;
+        background: linear-gradient(180deg, #ff79b6, #ee4f96);
+        color: #fff;
+        box-shadow: 0 16px 24px rgba(236, 86, 149, 0.2);
+        font-size: 28px;
+      }
+
+      .state-stack {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .mini-state {
+        padding: 12px;
+        border-radius: 22px;
+        background: rgba(255, 255, 255, 0.56);
+        border: 1px solid rgba(242, 201, 222, 0.78);
+      }
+
+      .mini-label {
+        margin-bottom: 10px;
+        font-size: 11px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: #af7a94;
+      }
+
+      .mini-state .composer {
+        padding: 10px;
+      }
+
+      .mini-state .placeholder {
+        min-height: 42px;
+        font-size: 15px;
+      }
+
+      .mini-state .helper-line {
+        min-height: 18px;
+        font-size: 12px;
+      }
+
+      .mini-state .model {
+        min-width: 124px;
+        height: 36px;
+        font-size: 14px;
+      }
+
+      .mini-state .send {
+        width: 44px;
+        height: 44px;
+        font-size: 22px;
+      }
+
+      .mini-state .hotkey {
+        min-width: 30px;
+        height: 30px;
+        font-size: 11px;
+      }
+
+      .detail-list {
+        display: grid;
+        gap: 8px;
+        margin-top: 16px;
+      }
+
+      .detail {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--muted);
+      }
+
+      .detail strong {
+        color: var(--text);
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      code {
+        padding: 1px 5px;
+        border-radius: 7px;
+        background: rgba(255, 243, 249, 0.92);
+        color: #d84a8c;
+        font-family: "SFMono-Regular", "SF Mono", "Menlo", monospace;
+        font-size: 0.92em;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .placeholder,
+        .helper-line,
+        .tip-text,
+        .tip-bar-main {
+          transition: none;
+        }
+
+        .swap {
+          opacity: 1;
+          transform: none;
+          filter: none;
+        }
+      }
+
+      @media (max-width: 1080px) {
+        .summary,
+        .grid,
+        .state-stack {
+          grid-template-columns: 1fr;
+        }
+
+        .card.recommended {
+          grid-column: auto;
+        }
+      }
+
+      @media (max-width: 640px) {
+        .page {
+          width: min(100vw - 24px, 100%);
+          padding: 24px 0 48px;
+        }
+
+        h1 {
+          font-size: 42px;
+        }
+
+        .card,
+        .summary-card,
+        .preview {
+          padding: 16px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <header class="hero">
+        <div class="eyebrow">Rotating Composer Tips</div>
+        <h1>把输入区做成会轮换的 tips，<br />但别让它变吵。</h1>
+        <p>
+          我把“像游戏里的 tips”拆成 4 种不同气质的做法。
+          差别不只是文案本身，更是提示出现的位置和节奏:
+          是直接轮换 placeholder，还是把主文案固定，让副提示轻轻流动。
+        </p>
+        <div class="hero-note">
+          <span class="pill">一条 tips 只说一件事</span>
+          <span class="pill">2.6s - 3.2s 慢切</span>
+          <span class="pill">推荐轮换副提示，不推荐主文案一直跳</span>
+        </div>
+      </header>
+
+      <section class="summary">
+        <article class="summary-card">
+          <strong>推荐</strong>
+          <p>方案 B。主 placeholder 固定，底下 tips 慢慢轮换，既像游戏提示，又不会影响输入稳定感。</p>
+        </article>
+        <article class="summary-card">
+          <strong>最像游戏</strong>
+          <p>方案 D。底部单独做一条 tip bar，信息像 HUD 一样更新，氛围感最强。</p>
+        </article>
+        <article class="summary-card">
+          <strong>最冒险</strong>
+          <p>方案 A。直接轮换 placeholder，视觉记忆点强，但如果节奏没收住，会显得有点躁。</p>
+        </article>
+      </section>
+
+      <section class="grid">
+        <article class="card">
+          <div class="meta">
+            <div class="meta-top">
+              <span class="meta-id">Option A</span>
+              <span class="tag">直接轮换 placeholder</span>
+            </div>
+            <h2>主文案轮换</h2>
+            <p>每次只出现一句，像游戏加载页 tips 一样，最直接地把能力露出来。</p>
+          </div>
+          <div class="preview">
+            <div class="stage">
+              <div class="composer">
+                <div class="input-shell">
+                  <div class="placeholder tip-text" data-rotator='["输入消息…","输入 / 选择 skill","粘贴图片也可以","拖入文件继续"]' data-interval="2600">输入消息…</div>
+                  <div class="helper-line subtle">优点是记忆点最强，代价是输入区会更活跃。</div>
+                </div>
+                <div class="composer-bottom">
+                  <div class="model">gpt-5.4 <span class="caret"></span></div>
+                  <div class="actions">
+                    <div class="hotkey">Enter</div>
+                    <div class="send">↑</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="detail-list">
+            <div class="detail"><strong>适合</strong><span>你希望新用户快速知道所有入口，而且产品整体允许更活一点。</span></div>
+            <div class="detail"><strong>风险</strong><span>如果打字前停留时间短，用户可能刚看到一半就切走。</span></div>
+          </div>
+        </article>
+
+        <article class="card recommended">
+          <div class="meta">
+            <div class="meta-top">
+              <span class="meta-id">Option B</span>
+              <span class="tag">推荐</span>
+            </div>
+            <h2>固定主文案，轮换副提示</h2>
+            <p>让 placeholder 保持稳定，把能力教育放进一条轻提示里。整体最稳，也最像成熟产品做法。</p>
+          </div>
+          <div class="preview">
+            <div class="stage">
+              <div class="composer focused">
+                <div class="input-shell">
+                  <div class="placeholder">输入消息…</div>
+                  <div class="helper-line tip-text" data-rotator='["输入 / 选择 skill","可粘贴图片","可拖入文件","Enter 发送"]' data-interval="3000">输入 / 选择 skill</div>
+                </div>
+                <div class="composer-bottom">
+                  <div class="model">gpt-5.4 <span class="caret"></span></div>
+                  <div class="actions">
+                    <div class="hotkey">Enter</div>
+                    <div class="send">↑</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="detail-list">
+            <div class="detail"><strong>适合</strong><span>你想要 tips 感，但不想牺牲输入区的稳定与高级感。</span></div>
+            <div class="detail"><strong>优点</strong><span>用户始终知道这是输入框，能力信息则像 HUD 一样轻轻流过。</span></div>
+          </div>
+        </article>
+
+        <article class="card">
+          <div class="meta">
+            <div class="meta-top">
+              <span class="meta-id">Option C</span>
+              <span class="tag">只在聚焦后轮换</span>
+            </div>
+            <h2>默认安静，聚焦再提示</h2>
+            <p>默认态一句不多说，只有准备输入的时候才开始轮换 tips。这种节奏会更克制。</p>
+          </div>
+          <div class="preview">
+            <div class="state-stack">
+              <div class="mini-state">
+                <div class="mini-label">默认态</div>
+                <div class="composer">
+                  <div class="input-shell">
+                    <div class="placeholder">想让它帮你做什么？</div>
+                    <div class="helper-line subtle"></div>
+                  </div>
+                  <div class="composer-bottom">
+                    <div class="model">gpt-5.4 <span class="caret"></span></div>
+                    <div class="actions">
+                      <div class="send">↑</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="mini-state">
+                <div class="mini-label">聚焦态</div>
+                <div class="composer focused">
+                  <div class="input-shell">
+                    <div class="placeholder">想让它帮你做什么？</div>
+                    <div class="helper-line tip-text" data-rotator='["/ 选择 skill","粘贴图片","拖入文件","Shift + Enter 换行"]' data-interval="2800">/ 选择 skill</div>
+                  </div>
+                  <div class="composer-bottom">
+                    <div class="model">gpt-5.4 <span class="caret"></span></div>
+                    <div class="actions">
+                      <div class="hotkey">Enter</div>
+                      <div class="send">↑</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="detail-list">
+            <div class="detail"><strong>适合</strong><span>你特别在意默认态纯净，同时又想在交互态引导用户。</span></div>
+            <div class="detail"><strong>优点</strong><span>默认态和聚焦态的信息层级最清楚。</span></div>
+          </div>
+        </article>
+
+        <article class="card">
+          <div class="meta">
+            <div class="meta-top">
+              <span class="meta-id">Option D</span>
+              <span class="tag">最像游戏 tips</span>
+            </div>
+            <h2>底部 Tip Bar</h2>
+            <p>把 tips 从 placeholder 里拿出来，做成一条独立的小 HUD。游戏感最强，也最不干扰打字。</p>
+          </div>
+          <div class="preview">
+            <div class="stage">
+              <div class="composer">
+                <div class="input-shell">
+                  <div class="placeholder">输入消息…</div>
+                  <div class="tip-bar">
+                    <div class="tip-bar-label">TIP</div>
+                    <div class="tip-bar-main tip-text" data-rotator='["输入 / 选择 skill","图片可直接粘贴","文件拖进来就行","选中模型后直接发送"]' data-interval="3200">输入 / 选择 skill</div>
+                    <div class="tip-bar-count" data-counter></div>
+                  </div>
+                </div>
+                <div class="composer-bottom">
+                  <div class="model">gpt-5.4 <span class="caret"></span></div>
+                  <div class="actions">
+                    <div class="hotkey">Enter</div>
+                    <div class="send">↑</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="detail-list">
+            <div class="detail"><strong>适合</strong><span>你真想要“游戏 tips”那种感觉，而不是普通聊天输入框的 placeholder 轮播。</span></div>
+            <div class="detail"><strong>优点</strong><span>提示和输入本身解耦，后面要加更多系统提示也更方便。</span></div>
+          </div>
+        </article>
+      </section>
+    </main>
+
+    <script>
+      const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+
+      function updateCounter(node, index, total) {
+        const counter = node.parentElement?.querySelector("[data-counter]")
+        if (!counter) return
+        const current = String(index + 1).padStart(2, "0")
+        const size = String(total).padStart(2, "0")
+        counter.textContent = current + " / " + size
+      }
+
+      function attachRotator(node) {
+        const source = node.getAttribute("data-rotator")
+        if (!source) return
+
+        let items
+        try {
+          items = JSON.parse(source)
+        } catch {
+          return
+        }
+
+        if (!Array.isArray(items) || items.length === 0) return
+
+        const interval = Number(node.getAttribute("data-interval") || 3000)
+        let index = 0
+
+        node.textContent = items[index]
+        updateCounter(node, index, items.length)
+
+        if (items.length === 1 || prefersReducedMotion) return
+
+        window.setInterval(() => {
+          node.classList.add("swap")
+
+          window.setTimeout(() => {
+            index = (index + 1) % items.length
+            node.textContent = items[index]
+            updateCounter(node, index, items.length)
+            node.classList.remove("swap")
+          }, 220)
+        }, interval)
+      }
+
+      document.querySelectorAll("[data-rotator]").forEach(attachRotator)
+    </script>
+  </body>
+</html>

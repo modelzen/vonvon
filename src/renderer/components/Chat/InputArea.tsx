@@ -27,6 +27,20 @@ interface InputAreaProps {
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024
 const MAX_ATTACHMENTS = 4
 const MAX_SKILL_SUGGESTIONS = 8
+const PLACEHOLDER_TIP_INTERVAL_MS = 4200
+const PLACEHOLDER_TIP_FADE_MS = 220
+const PLACEHOLDER_TIPS_WITH_ATTACHMENTS = [
+  '今天想聊点什么？',
+  '输个 /，我来找 skill',
+  '贴张图给我看看',
+  '把文件拖进来，我接着做',
+]
+const PLACEHOLDER_TIPS_FILES_ONLY = [
+  '今天想聊点什么？',
+  '输个 /，我来找 skill',
+  '把文件拖进来，我接着做',
+]
+const FOCUSED_PLACEHOLDER_TEXT = '想让我怎么帮你？试试 /'
 
 const hexToRgba = (hex: string, alpha: number): string => {
   const raw = hex.replace('#', '')
@@ -104,6 +118,8 @@ export function InputArea({
   const [slashState, setSlashState] = useState<SlashState | null>(null)
   const [slashIndex, setSlashIndex] = useState(0)
   const [skillsLoadedOnce, setSkillsLoadedOnce] = useState(false)
+  const [placeholderTipIndex, setPlaceholderTipIndex] = useState(0)
+  const [placeholderTipLeaving, setPlaceholderTipLeaving] = useState(false)
   const editorRef = useRef<HTMLDivElement>(null)
 
   interface QueuedMsg {
@@ -740,13 +756,46 @@ export function InputArea({
   const canSend = hasInput
   const isQueueing = isLoading && hasInput
   const showSlashMenu = focused && slashState !== null
+  const placeholderTips = attachmentsEnabled
+    ? PLACEHOLDER_TIPS_WITH_ATTACHMENTS
+    : PLACEHOLDER_TIPS_FILES_ONLY
+
+  useEffect(() => {
+    if (focused) {
+      setPlaceholderTipLeaving(false)
+      return
+    }
+    setPlaceholderTipIndex(0)
+    setPlaceholderTipLeaving(false)
+  }, [focused, attachmentsEnabled])
+
+  useEffect(() => {
+    if (focused || value.length > 0 || queue.length > 0 || placeholderTips.length <= 1) {
+      setPlaceholderTipLeaving(false)
+      return
+    }
+
+    let timeoutId: number | undefined
+    const intervalId = window.setInterval(() => {
+      setPlaceholderTipLeaving(true)
+      timeoutId = window.setTimeout(() => {
+        setPlaceholderTipIndex((prev) => (prev + 1) % placeholderTips.length)
+        setPlaceholderTipLeaving(false)
+      }, PLACEHOLDER_TIP_FADE_MS)
+    }, PLACEHOLDER_TIP_INTERVAL_MS)
+
+    return () => {
+      window.clearInterval(intervalId)
+      if (timeoutId) window.clearTimeout(timeoutId)
+    }
+  }, [focused, placeholderTips.length, queue.length, value.length])
 
   const placeholderText =
     queue.length > 0
       ? `已排队 ${queue.length} 条，回复结束后依次发送…`
-      : attachmentsEnabled
-        ? '输入消息... (输入 / 选择 skill，Enter 发送，可粘贴图片 / 拖拽图片和文件)'
-        : '输入消息... (输入 / 选择 skill，Enter 发送，可拖拽文件)'
+      : focused
+        ? FOCUSED_PLACEHOLDER_TEXT
+        : placeholderTips[placeholderTipIndex] ?? '输入消息...'
 
   return (
     <div
@@ -1060,6 +1109,19 @@ export function InputArea({
                   lineHeight: 1.5,
                   fontSize: 13,
                   fontFamily: 'inherit',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  opacity: placeholderTipLeaving && !focused && queue.length === 0 ? 0 : 1,
+                  transform:
+                    placeholderTipLeaving && !focused && queue.length === 0
+                      ? 'translateY(6px)'
+                      : 'translateY(0)',
+                  filter:
+                    placeholderTipLeaving && !focused && queue.length === 0
+                      ? 'blur(4px)'
+                      : 'blur(0)',
+                  transition: `opacity ${PLACEHOLDER_TIP_FADE_MS}ms ease, transform ${PLACEHOLDER_TIP_FADE_MS}ms ease, filter ${PLACEHOLDER_TIP_FADE_MS}ms ease`,
                 }}
               >
                 {placeholderText}
