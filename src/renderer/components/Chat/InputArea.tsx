@@ -1,4 +1,11 @@
-import React, { useEffect, useRef, useState, KeyboardEvent, ClipboardEvent, DragEvent } from 'react'
+import React, {
+  useEffect,
+  useRef,
+  useState,
+  KeyboardEvent,
+  ClipboardEvent,
+  DragEvent,
+} from 'react'
 import {
   FileChipRenderer,
   buildFileReference,
@@ -57,6 +64,8 @@ interface SlashState {
   end: number
   query: string
 }
+
+const TRAILING_BREAK_PLACEHOLDER_ATTR = 'data-trailing-break-placeholder'
 
 const skillSlug = (name: string): string =>
   name
@@ -205,6 +214,13 @@ export function InputArea({
   }
 
   const getChildRawLength = (node: ChildNode): number => {
+    if (
+      node instanceof HTMLElement &&
+      node.nodeName === 'BR' &&
+      node.hasAttribute(TRAILING_BREAK_PLACEHOLDER_ATTR)
+    ) {
+      return 0
+    }
     if (node.nodeType === Node.TEXT_NODE) return node.textContent?.length ?? 0
     if (node instanceof HTMLElement && node.dataset.filePath) {
       return buildFileReference(node.dataset.filePath).length
@@ -228,10 +244,22 @@ export function InputArea({
         if (child instanceof HTMLElement && child.dataset.skillName) {
           return buildSkillReference(child.dataset.skillName)
         }
+        if (
+          child instanceof HTMLElement &&
+          child.nodeName === 'BR' &&
+          child.hasAttribute(TRAILING_BREAK_PLACEHOLDER_ATTR)
+        ) {
+          return ''
+        }
         if (child.nodeName === 'BR') return '\n'
         return child.textContent ?? ''
       })
       .join('')
+  }
+
+  const getCurrentRawValue = (): string => {
+    const root = editorRef.current
+    return root ? serializeEditor() : value
   }
 
   const getSelectionOffsets = () => {
@@ -316,7 +344,13 @@ export function InputArea({
 
     const appendText = (text: string) => {
       if (!text) return
-      fragment.appendChild(doc.createTextNode(text))
+      const parts = text.split('\n')
+      parts.forEach((part, index) => {
+        if (part) fragment.appendChild(doc.createTextNode(part))
+        if (index < parts.length - 1) {
+          fragment.appendChild(doc.createElement('br'))
+        }
+      })
     }
 
     const removeChipNode = (chip: HTMLElement) => {
@@ -521,6 +555,11 @@ export function InputArea({
       cursor = ref.end
     }
     appendText(rawValue.slice(cursor))
+    if (rawValue.endsWith('\n')) {
+      const trailingPlaceholder = doc.createElement('br')
+      trailingPlaceholder.setAttribute(TRAILING_BREAK_PLACEHOLDER_ATTR, 'true')
+      fragment.appendChild(trailingPlaceholder)
+    }
     root.replaceChildren(fragment)
   }
 
@@ -535,9 +574,10 @@ export function InputArea({
   }
 
   const insertPlainText = (text: string) => {
+    const currentValue = getCurrentRawValue()
     const { start, end } = getSelectionOffsets()
-    const before = value.slice(0, start)
-    const after = value.slice(end)
+    const before = currentValue.slice(0, start)
+    const after = currentValue.slice(end)
     const nextValue = `${before}${text}${after}`
     const nextCursor = before.length + text.length
     applyEditorValue(nextValue, nextCursor)
@@ -546,9 +586,10 @@ export function InputArea({
   const insertFileReferences = (paths: string[]) => {
     const validPaths = paths.filter(Boolean)
     if (validPaths.length === 0) return
+    const currentValue = getCurrentRawValue()
     const { start, end } = getSelectionOffsets()
-    const before = value.slice(0, start)
-    const after = value.slice(end)
+    const before = currentValue.slice(0, start)
+    const after = currentValue.slice(end)
     const prefix = before && !/\s$/.test(before) ? ' ' : ''
     const suffix = after && !/^\s/.test(after) ? ' ' : ''
     const inserted = validPaths.map(buildFileReference).join(' ')
@@ -558,12 +599,13 @@ export function InputArea({
   }
 
   const insertSkillReference = (skill: SkillView) => {
+    const currentValue = getCurrentRawValue()
     const { start, end } = getSelectionOffsets()
-    const activeSlash = slashState ?? findSlashState(value, start)
+    const activeSlash = slashState ?? findSlashState(currentValue, start)
     const replaceStart = activeSlash?.start ?? start
     const replaceEnd = activeSlash?.end ?? end
-    const before = value.slice(0, replaceStart)
-    const after = value.slice(replaceEnd)
+    const before = currentValue.slice(0, replaceStart)
+    const after = currentValue.slice(replaceEnd)
     const prefix = before && !/\s$/.test(before) ? ' ' : ''
     const suffix = after && !/^\s/.test(after) ? ' ' : ''
     const inserted = buildSkillReference(skill.name)
@@ -606,7 +648,8 @@ export function InputArea({
   }, [slashState, skillsLoadedOnce, availableSkills.length])
 
   const handleSend = () => {
-    const trimmed = value.trim()
+    const rawValue = getCurrentRawValue()
+    const trimmed = rawValue.trim()
     const hasAttachments = attachments.length > 0
     if (!trimmed && !hasAttachments) return
 
@@ -654,7 +697,8 @@ export function InputArea({
         }
         return
       }
-      if ((e.key === 'Enter' || e.key === 'Tab') && slashSuggestions.length > 0) {
+      if ((e.key === 'Enter' && !e.shiftKey) || e.key === 'Tab') {
+        if (slashSuggestions.length === 0) return
         e.preventDefault()
         insertSkillReference(slashSuggestions[slashIndex]?.skill ?? slashSuggestions[0].skill)
         return
