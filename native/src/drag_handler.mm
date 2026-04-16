@@ -7,6 +7,10 @@
 // gesture as a drag (instead of a click). Used to disambiguate click-to-
 // expand (in dockedCollapsed) from drag-to-detach (in any docked state).
 static const CGFloat kDragStartThreshold = 8.0;
+// Keep single-click collapse feeling responsive, but leave a short grace
+// window so an intended double-click inspect can cancel it before any
+// sidebar-hide animation starts.
+static const NSTimeInterval kDockedToggleGraceCap = 0.16;
 
 // Shared dock-aware hit test against the currently visible/exposed mascot area.
 // Docked states convert the mouse point through the shifted art canvas so the
@@ -32,6 +36,9 @@ static BOOL PointInBallHitArea(NSPoint mouse, KirbyWindow *k) {
 @property (nonatomic, assign) BOOL  mouseIsDown;
 // Drag threshold already crossed for the current mouseDown.
 @property (nonatomic, assign) BOOL  isDragging;
+// Pending expanded-state single-click toggle while we wait for a possible
+// second click that should become docked inspect instead.
+@property (nonatomic, strong) NSTimer *pendingDockedClickTimer;
 @property (nonatomic, assign) NSPoint dragOffset;
 @property (nonatomic, assign) NSPoint mouseDownPoint;
 @end
@@ -61,6 +68,8 @@ static BOOL PointInBallHitArea(NSPoint mouse, KirbyWindow *k) {
             NSPoint mouse = [NSEvent mouseLocation];
             NSRect  frame = k.panel.frame;
             if (PointInBallHitArea(mouse, k)) {
+                [s.pendingDockedClickTimer invalidate];
+                s.pendingDockedClickTimer = nil;
                 s.mouseIsDown     = YES;
                 s.isDragging      = NO;
                 s.mouseDownPoint  = mouse;
@@ -125,13 +134,15 @@ static BOOL PointInBallHitArea(NSPoint mouse, KirbyWindow *k) {
                 return event;
             }
 
-            // Click (no drag). Single-click toggles immediately so collapse
-            // feels snappy. Double-click still triggers inspect; if the first
-            // click already collapsed the ball, we expand again before
-            // inspecting on the second click.
+            // Click (no drag). In dockedCollapsed we expand immediately. In
+            // dockedExpanded we wait only a short, capped grace interval so
+            // double-click inspect can cancel the pending collapse without
+            // making single-click collapse feel sluggish.
             KirbyWindow *k = [KirbyWindow shared];
             if (KirbyStateIsDocked(k.state)) {
                 if (event.clickCount >= 2) {
+                    [s.pendingDockedClickTimer invalidate];
+                    s.pendingDockedClickTimer = nil;
                     if (k.state == KirbyStateDockedCollapsed) {
                         [k applyState:KirbyStateDockedExpanded preservingAnchor:YES];
                         [k setForm:@"dockedExpanded"];
@@ -141,8 +152,21 @@ static BOOL PointInBallHitArea(NSPoint mouse, KirbyWindow *k) {
                     if (k.state == KirbyStateDockedCollapsed) {
                         [k applyState:KirbyStateDockedExpanded preservingAnchor:YES];
                         [k setForm:@"dockedExpanded"];
+                        if (s.onDockedClick) s.onDockedClick();
+                    } else {
+                        [s.pendingDockedClickTimer invalidate];
+                        __weak typeof(s) weakSelf = s;
+                        NSTimeInterval grace = MIN([NSEvent doubleClickInterval], kDockedToggleGraceCap);
+                        s.pendingDockedClickTimer = [NSTimer
+                            scheduledTimerWithTimeInterval:grace
+                                                    repeats:NO
+                                                      block:^(__unused NSTimer *timer) {
+                            DragHandler *strongSelf = weakSelf;
+                            if (!strongSelf) return;
+                            strongSelf.pendingDockedClickTimer = nil;
+                            if (strongSelf.onDockedClick) strongSelf.onDockedClick();
+                        }];
                     }
-                    if (s.onDockedClick) s.onDockedClick();
                 }
             }
             // Floating/snapping states still swallow the click silently.
@@ -235,6 +259,8 @@ static BOOL PointInBallHitArea(NSPoint mouse, KirbyWindow *k) {
     }
     self.isDragging = NO;
     self.mouseIsDown = NO;
+    [self.pendingDockedClickTimer invalidate];
+    self.pendingDockedClickTimer = nil;
 }
 
 @end

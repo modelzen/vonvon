@@ -101,3 +101,23 @@ def test_sync_hidden_wrappers_keeps_official_lark_skill_names(tmp_path, monkeypa
     assert "feishu-calendar" not in manifest
     assert '"name": "vonvon-inspect"' in manifest
     assert '"name": "lark-calendar"' in manifest
+
+
+def test_vonvon_inspect_wrapper_includes_auth_and_degradation_constraints(tmp_path, monkeypatch):
+    monkeypatch.setattr(feishu_integration_service, "SKILL_BRIDGE_ROOT", tmp_path / "skills")
+    monkeypatch.setattr(feishu_integration_service, "PACK_ROOT", tmp_path / "pack")
+    monkeypatch.setattr(
+        feishu_integration_service,
+        "_current_cli_path",
+        lambda: Path("/tmp/fake-lark-cli"),
+    )
+
+    feishu_integration_service._sync_hidden_wrappers()
+    skill_text = (tmp_path / "skills" / "vonvon-inspect" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert "必须先确认飞书集成登录状态正常" in skill_text
+    assert "不要把它写成“我顺手做了一个最小补充”或额外贡献" in skill_text
+    assert "本回答当前仅基于截图可见内容" in skill_text
+    assert "是否要继续查看这份文档的详细内容" in skill_text

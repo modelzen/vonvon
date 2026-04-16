@@ -13,6 +13,7 @@ import {
 import { UsageRing } from './components/Chat/UsageRing'
 import { AgentModelSelector } from './components/Chat/AgentModelSelector'
 import { VONVON_INSPECT_MESSAGE } from './lib/vonvonInspect'
+import { FeishuIntegrationState, useHermesConfig } from './hooks/useHermesConfig'
 
 // `#floating` is set by windows.ts when opening the standalone chat window;
 // we use it to (a) leave room for macOS traffic lights in the header and
@@ -44,8 +45,36 @@ interface InspectBannerState {
   message: string
 }
 
+function isFeishuInspectReady(state: FeishuIntegrationState | null | undefined): boolean {
+  return !!state && state.runtime_status === 'ready' && state.authenticated && state.feature_enabled
+}
+
+function buildFeishuInspectBlockedMessage(
+  state: FeishuIntegrationState | null | undefined
+): string {
+  if (!state) {
+    return '现在还无法确认飞书集成状态，请打开 设置 > 飞书集成 检查登录状态后再试。'
+  }
+  if (state.runtime_status === 'not_installed') {
+    return '飞书集成还没有初始化，请打开 设置 > 飞书集成 完成安装、配置和登录后再试。'
+  }
+  if (!state.config_initialized) {
+    return '飞书集成还没完成初始化，请打开 设置 > 飞书集成 先完成应用配置。'
+  }
+  if (!state.feature_enabled) {
+    return '飞书集成当前还没启用，请打开 设置 > 飞书集成 打开总开关后再试。'
+  }
+  if (!state.authenticated || state.runtime_status !== 'ready') {
+    return `${
+      state.auth_note?.trim() || '飞书集成当前未登录或登录已过期'
+    }。请打开 设置 > 飞书集成 重新登录或刷新登录后再试。`
+  }
+  return '飞书集成当前还没准备好，请打开 设置 > 飞书集成 检查状态后再试。'
+}
+
 function App(): React.ReactElement {
   const { activeSession, newTab, updateSessionName, touchSession } = useSession()
+  const feishuApi = useHermesConfig()
   const { messages: agentMessages, isLoading, usagePercent, sendMessage, thinking, stop } =
     useAgentChat(activeSession?.id, {
       sessionName: activeSession?.name,
@@ -71,8 +100,11 @@ function App(): React.ReactElement {
   const todoOverlayRef = useRef<HTMLDivElement>(null)
   const activeSessionIdRef = useRef<string | null>(activeSession?.id ?? null)
   const inspectInFlightRef = useRef(false)
+  const feishuApiRef = useRef(feishuApi)
   const latestTodoMessage = getLatestTodoMessage(agentMessages)
   const todoOverlapPx = todoCollapsed ? TODO_COLLAPSED_OVERLAP_PX : TODO_EXPANDED_OVERLAP_PX
+
+  feishuApiRef.current = feishuApi
 
   useEffect(() => { setDisplayPercent(usagePercent) }, [usagePercent])
   useEffect(() => {
@@ -109,10 +141,31 @@ function App(): React.ReactElement {
 
       const windowInfo = payload as LarkInspectWindow
       inspectInFlightRef.current = true
-      setInspectBanner({ tone: 'loading', message: '正在发送当前 Lark 窗口截图…' })
+      setInspectBanner({ tone: 'loading', message: '正在检查飞书集成状态…' })
 
       void (async () => {
         try {
+          let integrationState: FeishuIntegrationState | null = null
+          try {
+            integrationState = await feishuApiRef.current.getFeishuIntegrationState()
+          } catch {}
+          if (!isFeishuInspectReady(integrationState)) {
+            try {
+              integrationState = await feishuApiRef.current.verifyFeishuRuntime()
+            } catch (error) {
+              throw new Error(
+                integrationState
+                  ? buildFeishuInspectBlockedMessage(integrationState)
+                  : `检查飞书集成状态失败：${(error as Error).message}`
+              )
+            }
+          }
+          if (!isFeishuInspectReady(integrationState)) {
+            throw new Error(buildFeishuInspectBlockedMessage(integrationState))
+          }
+          if (activeSessionIdRef.current !== sessionId) return
+
+          setInspectBanner({ tone: 'loading', message: '正在发送当前 Lark 窗口截图…' })
           const screenshotDataUrl = await window.electron.captureLarkWindow(windowInfo.windowId)
           if (!screenshotDataUrl) {
             throw new Error('还没有拿到 Lark 窗口截图，请先确认录屏权限已经授予')
