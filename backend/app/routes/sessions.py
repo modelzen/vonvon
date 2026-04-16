@@ -20,6 +20,12 @@ class SummarizeRequest(BaseModel):
 router = APIRouter()
 
 
+def _raise_title_http_error(exc: ValueError) -> None:
+    detail = str(exc)
+    status_code = 409 if "already in use" in detail else 422
+    raise HTTPException(status_code=status_code, detail=detail)
+
+
 @router.get("/api/sessions")
 async def list_sessions(
     include_archived: bool = False,
@@ -35,7 +41,10 @@ async def list_sessions(
 async def create_session(req: SessionRequest):
     # DELTA-5: defensive TERMINAL_CWD reset before session creation
     os.environ["TERMINAL_CWD"] = workspace_service.current_state()["path"]
-    return session_service.create_session(req.name)
+    try:
+        return session_service.create_session(req.name)
+    except ValueError as exc:
+        _raise_title_http_error(exc)
 
 
 @router.delete("/api/sessions/{session_id}", status_code=204)
@@ -74,15 +83,21 @@ async def get_usage(session_id: str):
 
 @router.patch("/api/sessions/{session_id}")
 async def rename_session(session_id: str, req: RenameRequest):
-    session_service.rename_session(session_id, req.name)
+    try:
+        session_service.rename_session(session_id, req.name)
+    except ValueError as exc:
+        _raise_title_http_error(exc)
     return {"id": session_id, "name": req.name}
 
 
 @router.post("/api/sessions/{session_id}/summarize")
 async def summarize_session_title(session_id: str, req: SummarizeRequest = SummarizeRequest()):
-    title = await session_service.summarize_title(
-        session_id, model=req.model, provider=req.provider
-    )
+    try:
+        title = await session_service.summarize_title(
+            session_id, model=req.model, provider=req.provider
+        )
+    except ValueError as exc:
+        _raise_title_http_error(exc)
     if not title:
         raise HTTPException(status_code=422, detail="Could not generate title")
     return {"id": session_id, "name": title}

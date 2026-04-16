@@ -45,13 +45,6 @@ export function SettingsPanel(): React.ReactElement {
         ),
       },
       {
-        id: 'mcp',
-        title: 'MCP 服务',
-        description: '连接外部工具服务，让 agent 能调用更多上下文能力。',
-        accent: '#ff7c9e',
-        render: () => <McpServerPanel />,
-      },
-      {
         id: 'feishu',
         title: '飞书集成',
         description: '托管官方 Lark CLI，统一处理安装、登录、升级和 vonvon 内部能力开关。',
@@ -64,6 +57,13 @@ export function SettingsPanel(): React.ReactElement {
         description: '查看已装技能，并按需同步、发现和安装更多 skill。',
         accent: '#ff4f86',
         render: () => <SkillsPanel />,
+      },
+      {
+        id: 'mcp',
+        title: 'MCP 服务',
+        description: '连接外部工具服务，让 agent 能调用更多上下文能力。',
+        accent: '#ff7c9e',
+        render: () => <McpServerPanel />,
       },
       {
         id: 'about',

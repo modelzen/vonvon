@@ -1,5 +1,12 @@
 """Tests for session CRUD endpoints."""
 
+import asyncio
+from unittest.mock import call
+
+import pytest
+
+from app.services import agent_service, session_service
+
 def test_list_sessions(client):
     resp = client.get("/api/sessions")
     assert resp.status_code == 200
@@ -87,3 +94,41 @@ def test_get_usage(client):
     assert "usage_percent" in data
     assert "total_tokens" in data
     assert "context_size" in data
+
+
+def test_rename_session_conflict_returns_409(client, mock_session_db):
+    mock_session_db.set_session_title.side_effect = ValueError(
+        "Title 'Taken Title' is already in use by session other-session"
+    )
+
+    resp = client.patch("/api/sessions/session-1", json={"name": "Taken Title"})
+
+    assert resp.status_code == 409
+    assert "already in use" in resp.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_summarize_title_conflict_gets_numbered(mock_session_db, mock_agent):
+    agent_service._agent_lock = asyncio.Lock()
+    mock_agent.run_conversation.return_value = {
+        "final_response": "飞书上下文识别",
+    }
+    mock_session_db.get_next_title_in_lineage.return_value = "飞书上下文识别 #2"
+
+    def set_title(session_id, title):
+        if session_id == "session-1" and title == "飞书上下文识别":
+            raise ValueError(
+                "Title '飞书上下文识别' is already in use by session existing-session"
+            )
+        return True
+
+    mock_session_db.set_session_title.side_effect = set_title
+
+    title = await session_service.summarize_title("session-1")
+
+    assert title == "飞书上下文识别 #2"
+    mock_session_db.get_next_title_in_lineage.assert_called_once_with("飞书上下文识别")
+    assert mock_session_db.set_session_title.call_args_list == [
+        call("session-1", "飞书上下文识别"),
+        call("session-1", "飞书上下文识别 #2"),
+    ]

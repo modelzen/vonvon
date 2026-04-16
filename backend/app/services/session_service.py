@@ -9,6 +9,24 @@ def get_session_db():
     return agent_service.get_session_db()
 
 
+def _is_title_conflict(exc: ValueError) -> bool:
+    return "already in use" in str(exc)
+
+
+def _set_summarized_title(db, session_id: str, title: str) -> str:
+    """Persist an auto-generated title, numbering it when the base is taken."""
+    try:
+        db.set_session_title(session_id, title)
+        return title
+    except ValueError as exc:
+        if not _is_title_conflict(exc):
+            raise
+
+    unique_title = db.get_next_title_in_lineage(title)
+    db.set_session_title(session_id, unique_title)
+    return unique_title
+
+
 def list_sessions(
     *,
     include_archived: bool = False,
@@ -176,7 +194,7 @@ async def summarize_title(session_id: str,
         title = first_user_text[:15].rstrip()
 
     if title:
-        db.set_session_title(session_id, title)
+        title = _set_summarized_title(db, session_id, title)
     return title
 
 
