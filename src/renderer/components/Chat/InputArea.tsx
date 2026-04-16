@@ -646,16 +646,19 @@ export function InputArea({
   const larkQuery = isLarkFocusedQuery(slashState?.query ?? '')
   const larkSuggestions = rankedSlashSuggestions.filter(({ skill }) => isOfficialLarkSkill(skill))
   const otherSuggestions = rankedSlashSuggestions.filter(({ skill }) => !isOfficialLarkSkill(skill))
+  const shouldFullyShowLarkSuggestions = larkQuery || larkGroupExpanded
   const visibleOtherSuggestions = otherSuggestions.slice(
     0,
-    larkQuery || larkGroupExpanded ? 3 : MAX_OTHER_SKILL_SUGGESTIONS
+    shouldFullyShowLarkSuggestions ? 3 : MAX_OTHER_SKILL_SUGGESTIONS
   )
-  const remainingSkillSlots = Math.max(0, MAX_SKILL_SUGGESTIONS - visibleOtherSuggestions.length)
   const visibleLarkSuggestions = larkSuggestions.slice(
     0,
-    larkQuery || larkGroupExpanded
-      ? remainingSkillSlots
-      : Math.min(MAX_LARK_SKILL_PREVIEW, remainingSkillSlots)
+    shouldFullyShowLarkSuggestions
+      ? larkSuggestions.length
+      : Math.min(
+          MAX_LARK_SKILL_PREVIEW,
+          Math.max(0, MAX_SKILL_SUGGESTIONS - visibleOtherSuggestions.length)
+        )
   )
   const slashSuggestions = [...visibleOtherSuggestions, ...visibleLarkSuggestions]
   const hiddenLarkSkillCount = Math.max(0, larkSuggestions.length - visibleLarkSuggestions.length)
@@ -1100,6 +1103,9 @@ export function InputArea({
             background: 'rgba(255,255,255,0.98)',
             boxShadow: '0 18px 40px -28px rgba(42, 16, 29, 0.35)',
             overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
+            maxHeight: 'min(420px, 46vh)',
           }}
         >
           <div
@@ -1109,6 +1115,7 @@ export function InputArea({
               fontWeight: 600,
               color: '#8E6C79',
               letterSpacing: '0.02em',
+              flexShrink: 0,
             }}
           >
             技能
@@ -1116,7 +1123,14 @@ export function InputArea({
           {skillsLoading ? (
             <div style={{ padding: '0 16px 16px', fontSize: 12, color: '#A1A1AA' }}>加载中…</div>
           ) : slashSuggestions.length > 0 ? (
-            <div style={{ padding: '0 8px 8px' }}>
+            <div
+              style={{
+                padding: '0 8px 8px',
+                overflowY: 'auto',
+                minHeight: 0,
+                overscrollBehavior: 'contain',
+              }}
+            >
               {visibleOtherSuggestions.map(({ skill }, index) =>
                 renderSkillSuggestion(skill, index)
               )}
