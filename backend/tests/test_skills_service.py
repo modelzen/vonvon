@@ -67,10 +67,10 @@ def test_list_skills_marks_disabled():
 
 def test_list_skills_hides_vonvon_internal_wrappers():
     hidden = {
-        "name": "feishu-calendar",
+        "name": "lark-calendar",
         "category": "communication",
         "description": "Hidden wrapper",
-        "install_path": "/tmp/.hermes/skills/.vonvon-integrations/feishu/feishu-calendar",
+        "install_path": "/tmp/.hermes/skills/.vonvon-integrations/feishu/lark-calendar",
         "version": None,
         "source": "builtin",
     }

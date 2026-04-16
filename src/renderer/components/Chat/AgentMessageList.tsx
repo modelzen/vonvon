@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { AgentMessage } from '../../hooks/useAgentChat'
 import { FileChipRenderer } from './FileChip'
+import { parseVonvonInspectCard } from '../../lib/vonvonInspect'
 
 interface Props {
   messages: AgentMessage[]
@@ -419,6 +420,109 @@ function renderMessage(
   activePlaceholderId?: string
 ): React.ReactElement | null {
   if (msg.role === 'user') {
+    const inspectCard = parseVonvonInspectCard(msg.content)
+    if (inspectCard) {
+      return (
+        <div
+          key={msg.id}
+          style={{
+            display: 'flex',
+            justifyContent: 'flex-end',
+            marginBottom: 10
+          }}
+        >
+          <div
+            style={{
+              width: 'min(86%, 420px)',
+              padding: '14px 16px',
+              borderRadius: 24,
+              background: 'linear-gradient(180deg, #fff4fa 0%, #ffeef6 100%)',
+              border: '1px solid rgba(241, 170, 205, 0.85)',
+              boxShadow:
+                '0 14px 28px rgba(215, 154, 193, 0.18), inset 0 1px 0 rgba(255,255,255,0.6)',
+              color: '#6f4660',
+            }}
+          >
+            {msg.attachments && msg.attachments.length > 0 && (
+              <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+                {msg.attachments.map((a, i) => (
+                  <img
+                    key={i}
+                    src={a.dataUrl}
+                    alt={a.name || 'inspect image'}
+                    style={{
+                      width: '100%',
+                      maxWidth: 320,
+                      maxHeight: 220,
+                      objectFit: 'cover',
+                      borderRadius: 18,
+                      display: 'block',
+                      border: '1px solid rgba(241, 170, 205, 0.7)',
+                      background: 'rgba(255,255,255,0.75)',
+                    }}
+                  />
+                ))}
+              </div>
+            )}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                marginBottom: 8,
+                flexWrap: 'wrap',
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 800,
+                  letterSpacing: '0.05em',
+                  color: '#d35b98',
+                  textTransform: 'uppercase',
+                }}
+              >
+                {inspectCard.title}
+              </span>
+              <span
+                style={{
+                  fontSize: 12,
+                  color: '#a85d80',
+                  padding: '2px 8px',
+                  borderRadius: 999,
+                  background: 'rgba(255,255,255,0.72)',
+                }}
+              >
+                自动截图
+              </span>
+            </div>
+            <div
+              style={{
+                fontSize: 15,
+                fontWeight: 700,
+                color: '#3f2d36',
+                marginBottom: 6,
+                lineHeight: 1.35,
+                wordBreak: 'break-word',
+              }}
+            >
+              当前协同上下文
+            </div>
+            <div
+              style={{
+                fontSize: 13,
+                lineHeight: 1.6,
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+              }}
+            >
+              {inspectCard.body}
+            </div>
+          </div>
+        </div>
+      )
+    }
+
     const isLongform =
       !!msg.attachments?.length ||
       msg.content.includes('```') ||

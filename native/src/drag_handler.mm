@@ -8,14 +8,13 @@
 // expand (in dockedCollapsed) from drag-to-detach (in any docked state).
 static const CGFloat kDragStartThreshold = 8.0;
 
-// Circular hit test against the ball art. Panel is 120×120; ball is drawn
-// centered on (60, 60) with radius 40. `panelFrame` is in screen NS coords.
-static BOOL PointInBallHitArea(NSPoint mouse, NSRect panelFrame) {
-    CGFloat cx = panelFrame.origin.x + kKirbyPanelSize / 2;
-    CGFloat cy = panelFrame.origin.y + kKirbyPanelSize / 2;
-    CGFloat dx = mouse.x - cx;
-    CGFloat dy = mouse.y - cy;
-    return (dx * dx + dy * dy) <= (kKirbyBallRadius * kKirbyBallRadius);
+// Shared dock-aware hit test against the currently visible/exposed ball area.
+// In docked states, Feishu's interior quadrant is intentionally excluded so
+// the app's own top-right title-bar controls remain clickable.
+static BOOL PointInBallHitArea(NSPoint mouse, KirbyWindow *k) {
+    if (!k.panel) return NO;
+    NSPoint topLeft = KirbyTopLeftPointFromScreenPoint(mouse, k.panel.frame);
+    return KirbyPointInHitArea(topLeft, k.state);
 }
 
 @interface DragHandler ()
@@ -56,7 +55,7 @@ static BOOL PointInBallHitArea(NSPoint mouse, NSRect panelFrame) {
 
             NSPoint mouse = [NSEvent mouseLocation];
             NSRect  frame = k.panel.frame;
-            if (PointInBallHitArea(mouse, frame)) {
+            if (PointInBallHitArea(mouse, k)) {
                 s.mouseIsDown     = YES;
                 s.isDragging      = NO;
                 s.mouseDownPoint  = mouse;
@@ -121,15 +120,19 @@ static BOOL PointInBallHitArea(NSPoint mouse, NSRect panelFrame) {
                 return event;
             }
 
-            // Click (no drag). Only meaningful in dockedCollapsed:
-            // transition to dockedExpanded so JS shows the sidebar.
+            // Click (no drag). When dockedCollapsed, transition to
+            // dockedExpanded so JS shows the sidebar. When already
+            // dockedExpanded, keep the state and let JS treat this as the
+            // explicit "inspect current Lark context" gesture.
             KirbyWindow *k = [KirbyWindow shared];
-            if (k.state == KirbyStateDockedCollapsed) {
-                k.state = KirbyStateDockedExpanded;
-                [k setForm:@"dockedExpanded"];
+            if (KirbyStateIsDocked(k.state)) {
+                if (k.state == KirbyStateDockedCollapsed) {
+                    k.state = KirbyStateDockedExpanded;
+                    [k setForm:@"dockedExpanded"];
+                }
                 if (s.onDockedClick) s.onDockedClick();
             }
-            // Other states swallow the click silently.
+            // Floating/snapping states still swallow the click silently.
             return event;
         }];
 
@@ -169,7 +172,7 @@ static BOOL PointInBallHitArea(NSPoint mouse, NSRect panelFrame) {
         NSRect  frame = k.panel.frame;
         NSLog(@"[kirby] right-click [%@]: mouse=(%.1f,%.1f) frame=(%.1f,%.1f,%.1f,%.1f)",
               source, mouse.x, mouse.y, frame.origin.x, frame.origin.y, frame.size.width, frame.size.height);
-        if (PointInBallHitArea(mouse, frame)) {
+        if (PointInBallHitArea(mouse, k)) {
             NSLog(@"[kirby] right-click [%@]: HIT, onRightClick=%@", source, s.onRightClick ? @"set" : @"nil");
             if (s.onRightClick) s.onRightClick();
             return YES;

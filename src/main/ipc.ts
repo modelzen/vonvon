@@ -1,9 +1,58 @@
-import { app, ipcMain, dialog, shell } from 'electron'
+import { app, ipcMain, dialog, shell, systemPreferences, desktopCapturer } from 'electron'
 import { existsSync } from 'fs'
 import { chatStore } from './store'
 import { registry } from './providers/registry'
 import { registerKirbyIpcHandlers } from './native/kirby'
 import { openSettingsWindow, closeSettingsWindow } from './windows'
+
+type LarkPermissionState = {
+  screen_recording: string
+  accessibility: string
+}
+
+const ACCESSIBILITY_SETTINGS_URL =
+  'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility'
+const SCREEN_CAPTURE_SETTINGS_URL =
+  'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'
+
+function larkWindowSourceId(windowId: number): string | null {
+  const normalized = Math.trunc(Number(windowId) || 0)
+  return normalized > 0 ? `window:${normalized}:0` : null
+}
+
+function getLarkPermissionState(): LarkPermissionState {
+  if (process.platform !== 'darwin') {
+    return {
+      screen_recording: 'unsupported',
+      accessibility: 'unsupported',
+    }
+  }
+
+  return {
+    screen_recording: systemPreferences.getMediaAccessStatus('screen'),
+    accessibility: systemPreferences.isTrustedAccessibilityClient(false) ? 'granted' : 'denied',
+  }
+}
+
+async function requestLarkPermissions(): Promise<LarkPermissionState> {
+  const before = getLarkPermissionState()
+  if (process.platform !== 'darwin') return before
+
+  const accessibilityGranted = systemPreferences.isTrustedAccessibilityClient(true)
+  const screenRecording = systemPreferences.getMediaAccessStatus('screen')
+
+  if (!accessibilityGranted) {
+    await shell.openExternal(ACCESSIBILITY_SETTINGS_URL)
+  }
+  if (screenRecording !== 'granted') {
+    await shell.openExternal(SCREEN_CAPTURE_SETTINGS_URL)
+  }
+
+  return {
+    screen_recording: screenRecording,
+    accessibility: accessibilityGranted ? 'granted' : 'denied',
+  }
+}
 
 export function registerIpcHandlers(): void {
   // Chat: send message with streaming response
@@ -218,6 +267,34 @@ export function registerIpcHandlers(): void {
     } catch {
       return false
     }
+  })
+
+  ipcMain.handle('lark:permissions:get', () => {
+    return getLarkPermissionState()
+  })
+
+  ipcMain.handle('lark:permissions:request', async () => {
+    return requestLarkPermissions()
+  })
+
+  ipcMain.handle('lark:captureWindow', async (_event, windowId: number) => {
+    const sourceId = larkWindowSourceId(windowId)
+    if (!sourceId) return null
+
+    const sources = await desktopCapturer.getSources({
+      types: ['window'],
+      fetchWindowIcons: false,
+      thumbnailSize: {
+        width: 1680,
+        height: 1200,
+      },
+    })
+    const source = sources.find((item) => item.id === sourceId)
+    if (!source) return null
+
+    const thumbnail = source.thumbnail
+    if (thumbnail.isEmpty()) return null
+    return thumbnail.toDataURL()
   })
 
   // Kirby/native handlers — Stage 2

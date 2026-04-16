@@ -11,8 +11,6 @@ BASE_STATE = {
     "state_version": 1,
     "provider": "feishu",
     "feature_enabled": False,
-    "skills_enabled": False,
-    "orb_inspect_enabled": False,
     "runtime_status": "installed_needs_config",
     "config_initialized": False,
     "authenticated": False,

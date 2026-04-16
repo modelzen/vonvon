@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  FeishuPermissionState,
   FeishuFlowStatus,
   FeishuIntegrationState,
   useHermesConfig,
@@ -29,6 +30,8 @@ const FLOW_STATUS_LABELS: Record<string, string> = {
   success: '已完成',
   error: '失败',
 }
+
+const LARK_SKILL_SAMPLES = ['lark-im', 'lark-doc', 'lark-calendar']
 
 function Spinner(): React.ReactElement {
   return (
@@ -172,6 +175,10 @@ export function FeishuIntegrationPanel(): React.ReactElement {
   const [error, setError] = useState<string | null>(null)
   const [hint, setHint] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [permissions, setPermissions] = useState<FeishuPermissionState>({
+    screen_recording: 'unknown',
+    accessibility: 'unknown',
+  })
 
   const openedBrowserLinks = useRef(new Set<string>())
   const autoResumedAuthFlows = useRef(new Set<string>())
@@ -194,9 +201,20 @@ export function FeishuIntegrationPanel(): React.ReactElement {
     }
   }, [])
 
+  const loadPermissions = useCallback(async () => {
+    try {
+      const next = await window.electron.getLarkPermissions()
+      setPermissions(next)
+      return next
+    } catch {
+      return null
+    }
+  }, [])
+
   useEffect(() => {
     void loadState()
-  }, [loadState])
+    void loadPermissions()
+  }, [loadPermissions, loadState])
 
   const runStateAction = useCallback(
     async (
@@ -298,6 +316,45 @@ export function FeishuIntegrationPanel(): React.ReactElement {
 
     await startAuthFlow()
   }, [runStateAction, startAuthFlow, startConfigFlow, state])
+
+  const handleIntegrationToggle = useCallback(
+    async (enabled: boolean) => {
+      if (!state) return
+
+      if (enabled) {
+        const permissionState = await window.electron.requestLarkPermissions()
+        setPermissions(permissionState)
+
+        const next = await runStateAction(
+          'toggle-feature',
+          () => apiRef.current.setFeishuFeatureEnabled(true),
+          '已启用飞书深度集成。vonvon 现在可以接入官方 Lark skills，并为点击粉球读取飞书上下文做好准备。'
+        )
+        if (!next) return
+
+        const missingPermissions = []
+        if (permissionState.accessibility !== 'granted') {
+          missingPermissions.push('辅助功能')
+        }
+        if (permissionState.screen_recording !== 'granted') {
+          missingPermissions.push('屏幕录制')
+        }
+        if (missingPermissions.length > 0) {
+          setHint(
+            `已尝试申请 ${missingPermissions.join('、')} 权限。你可以在系统设置里授权后回到这里刷新状态。`
+          )
+        }
+        return
+      }
+
+      await runStateAction(
+        'toggle-feature',
+        () => apiRef.current.setFeishuFeatureEnabled(false),
+        '已关闭飞书深度集成。vonvon 不会再进入飞书相关能力链路。'
+      )
+    },
+    [runStateAction, state]
+  )
 
   useEffect(() => {
     const link = activeFlow?.verification_url?.trim()
@@ -528,11 +585,13 @@ export function FeishuIntegrationPanel(): React.ReactElement {
                   background: '#fff',
                 }}
               >
-                <div style={{ fontSize: 12, fontWeight: 700, color: tokens.ink }}>内部桥接</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: tokens.ink }}>官方 Lark skills</div>
                 <div style={{ marginTop: 8, fontSize: 12, color: tokens.inkSoft, lineHeight: 1.6 }}>
-                  {state.internal_skills_synced ? `已同步 ${state.internal_skill_count} 个内部 skill` : '未同步'}
+                  {state.internal_skills_synced
+                    ? `已接入 ${state.internal_skill_count} 个官方 Lark skills`
+                    : '启用后会接入官方 Lark skills'}
                   <br />
-                  最新版本 {state.latest_available_version ?? '未检查'}
+                  例如 {LARK_SKILL_SAMPLES.join(' / ')}
                 </div>
               </div>
             </div>
@@ -728,79 +787,33 @@ export function FeishuIntegrationPanel(): React.ReactElement {
       </SectionCard>
 
       <SectionCard
-        title="飞书能力"
-        subtitle="登录完成后，再控制 vonvon 是否启用飞书相关能力。"
+        title="飞书深度集成"
+        subtitle="这是一个总开关。启用后，vonvon 会一起接入官方 Lark skills，并打开点击粉球读取飞书上下文所需的能力通道。"
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <ToggleRow
             title="启用飞书深度集成"
-            description="控制 vonvon 是否允许进入飞书相关能力链路。"
+            description="启用后，vonvon 会接入官方 Lark skills，并在需要时尝试读取当前飞书会话、文档或日历上下文。这些能力会在这里聚合管理，不会散落到普通 Skills 设置列表。首次启用会申请辅助功能和屏幕录制权限。"
             checked={!!state?.feature_enabled}
             disabled={!state || busyAction === 'toggle-feature' || state.runtime_status !== 'ready'}
-            onChange={(enabled) =>
-              void runStateAction(
-                'toggle-feature',
-                () => apiRef.current.setFeishuFeatureEnabled(enabled),
-                enabled ? '已启用飞书深度集成。' : '已关闭飞书深度集成。'
-              )
-            }
+            onChange={(enabled) => void handleIntegrationToggle(enabled)}
           />
-          <ToggleRow
-            title="启用飞书内部 Skills"
-            description="让 Hermes 可以调度 vonvon 内部封装的飞书能力，不会出现在普通 Skills 列表。"
-            checked={!!state?.skills_enabled}
-            disabled={!state || !state.feature_enabled || busyAction === 'toggle-skills'}
-            onChange={(enabled) =>
-              void runStateAction(
-                'toggle-skills',
-                () => apiRef.current.setFeishuSkillsEnabled(enabled),
-                enabled ? '已启用飞书内部 Skills。' : '已关闭飞书内部 Skills。'
-              )
-            }
-          />
-          <ToggleRow
-            title="允许粉球触发飞书 inspect"
-            description="Phase 1 先保留 gate；下一步再把点击 vonvon 后的截图、识别和上下文注入接上。"
-            checked={!!state?.orb_inspect_enabled}
-            disabled={!state || !state.feature_enabled || busyAction === 'toggle-orb'}
-            onChange={(enabled) =>
-              void runStateAction(
-                'toggle-orb',
-                () => apiRef.current.setFeishuOrbInspectEnabled(enabled),
-                enabled ? '已允许粉球触发飞书 inspect。' : '已关闭粉球触发飞书 inspect。'
-              )
-            }
-          />
-        </div>
-      </SectionCard>
-
-      <SectionCard title="权限状态" subtitle="后续飞书窗口识别会依赖这些系统权限。">
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
           <div
             style={{
-              padding: '12px 14px',
+              padding: '14px 16px',
               borderRadius: 12,
               border: `1px solid ${tokens.border}`,
-              background: '#fff',
+              background: tokens.cardSoft,
+              fontSize: 12,
+              color: tokens.inkSoft,
+              lineHeight: 1.7,
             }}
           >
-            <div style={{ fontSize: 12, fontWeight: 700, color: tokens.ink }}>Screen Recording</div>
-            <div style={{ marginTop: 6, fontSize: 12, color: tokens.inkSoft }}>
-              {state?.permissions.screen_recording ?? 'unknown'}
-            </div>
-          </div>
-          <div
-            style={{
-              padding: '12px 14px',
-              borderRadius: 12,
-              border: `1px solid ${tokens.border}`,
-              background: '#fff',
-            }}
-          >
-            <div style={{ fontSize: 12, fontWeight: 700, color: tokens.ink }}>Accessibility</div>
-            <div style={{ marginTop: 6, fontSize: 12, color: tokens.inkSoft }}>
-              {state?.permissions.accessibility ?? 'unknown'}
-            </div>
+            当前权限：
+            <br />
+            辅助功能 {permissions.accessibility}
+            <br />
+            屏幕录制 {permissions.screen_recording}
           </div>
         </div>
       </SectionCard>

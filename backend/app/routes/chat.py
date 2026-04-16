@@ -13,7 +13,12 @@ from agent.context_compressor import ContextCompressor
 import os
 
 from app.schemas import ChatRequest, CompressRequest, StopRequest
-from app.services import agent_service, session_service, skills_service, workspace_service
+from app.services import (
+    agent_service,
+    session_service,
+    skills_service,
+    workspace_service,
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -96,7 +101,6 @@ async def send_message(req: ChatRequest, request: Request):
         # ── Agent execution ──────────────────────────────────────────────────
 
         history = session_service.get_messages(req.session_id)
-
         # Build effective user_message.
         #
         # When the user attaches images we pass a multimodal content list to

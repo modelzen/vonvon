@@ -17,6 +17,7 @@ declare module 'vonvon-native' {
     width: number
     height: number
     windowId: number
+    windowTitle?: string
   }
 
   /** Create the Kirby floating NSPanel at screen position (x, y). */
@@ -45,9 +46,10 @@ declare module 'vonvon-native' {
    *  mode via performDetachAnimation (Feishu disappeared). */
   export function onDetach(callback: () => void): void
 
-  /** Register a callback fired when the user clicks the ball while
-   *  dockedCollapsed. Native has already transitioned state to
-   *  dockedExpanded and switched the SVG form; JS re-shows the sidebar. */
+  /** Register a callback fired when the user clicks the ball while docked.
+   *  In dockedCollapsed, native has already transitioned state to
+   *  dockedExpanded and switched the SVG form. In dockedExpanded, JS can
+   *  treat the callback as the explicit inspect gesture. */
   export function onDockedClick(callback: (bounds: FeishuBounds) => void): void
 
   /** Register a callback fired when the user drags the ball past 8px

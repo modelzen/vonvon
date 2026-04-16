@@ -1,5 +1,25 @@
 #import "kirby_window.h"
 
+@interface KirbyContentView : NSView
+@end
+
+@implementation KirbyContentView
+
+- (BOOL)isOpaque {
+    return NO;
+}
+
+- (NSView *)hitTest:(NSPoint)point {
+    KirbyWindow *k = [KirbyWindow shared];
+    NSPoint topLeft = KirbyTopLeftPointFromPanelPoint(point, self.bounds);
+    if (!KirbyPointInHitArea(topLeft, k.state)) {
+        return nil;
+    }
+    return [super hitTest:point];
+}
+
+@end
+
 @implementation KirbyWindow
 
 + (instancetype)shared {
@@ -31,10 +51,14 @@
                                             NSWindowCollectionBehaviorStationary);
         self.panel.movableByWindowBackground = NO;
 
+        KirbyContentView *contentView = [[KirbyContentView alloc]
+            initWithFrame:NSMakeRect(0, 0, kKirbyPanelSize, kKirbyPanelSize)];
+
         // WKWebView fills the panel
         WKWebViewConfiguration *cfg = [[WKWebViewConfiguration alloc] init];
-        self.webView = [[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, kKirbyPanelSize, kKirbyPanelSize)
+        self.webView = [[WKWebView alloc] initWithFrame:contentView.bounds
                                           configuration:cfg];
+        self.webView.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
         // Transparent background. No corner-radius clip — the SVG draws the
         // ball shape directly, and clipping to a circle would hide dock-mode
         // arms/feet that poke outside the ball's nominal outline.
@@ -43,7 +67,8 @@
         self.webView.layer.masksToBounds = NO;
         self.webView.wantsLayer          = YES;
 
-        self.panel.contentView = self.webView;
+        [contentView addSubview:self.webView];
+        self.panel.contentView = contentView;
         self.state = KirbyStateFloating;
 
         [self.panel orderFrontRegardless];

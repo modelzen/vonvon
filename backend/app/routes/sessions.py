@@ -16,6 +16,7 @@ class SummarizeRequest(BaseModel):
     model: str | None = None
     provider: str | None = None
 
+
 router = APIRouter()
 
 

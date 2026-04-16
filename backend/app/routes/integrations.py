@@ -4,7 +4,6 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-
 from app.services import feishu_integration_service
 
 router = APIRouter()
@@ -27,8 +26,6 @@ class FeishuIntegrationState(BaseModel):
     state_version: int
     provider: str
     feature_enabled: bool
-    skills_enabled: bool
-    orb_inspect_enabled: bool
     runtime_status: str
     config_initialized: bool
     authenticated: bool
@@ -154,22 +151,6 @@ async def get_feishu_flow(flow_id: str) -> FeishuFlowView:
 async def set_feishu_feature(req: FeishuToggleRequest) -> FeishuIntegrationState:
     try:
         return feishu_integration_service.set_feature_enabled(req.enabled)
-    except (RuntimeError, ValueError) as exc:
-        raise _handle_runtime_error(exc)
-
-
-@router.post("/api/integrations/feishu/skills")
-async def set_feishu_skills(req: FeishuToggleRequest) -> FeishuIntegrationState:
-    try:
-        return feishu_integration_service.set_skills_enabled(req.enabled)
-    except (RuntimeError, ValueError) as exc:
-        raise _handle_runtime_error(exc)
-
-
-@router.post("/api/integrations/feishu/orb-inspect")
-async def set_feishu_orb_inspect(req: FeishuToggleRequest) -> FeishuIntegrationState:
-    try:
-        return feishu_integration_service.set_orb_inspect_enabled(req.enabled)
     except (RuntimeError, ValueError) as exc:
         raise _handle_runtime_error(exc)
 

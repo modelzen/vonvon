@@ -39,6 +39,7 @@ static const NSTimeInterval kDockedTrackingInterval = 1.0 / 30.0;
     CGRect best = CGRectZero;
     CGFloat bestArea = 0;
     CGWindowID bestID = kCGNullWindowID;
+    NSString *bestTitle = @"";
     NSArray *windows = (__bridge_transfer NSArray *)list;
     for (NSDictionary *info in windows) {
         NSString *owner = info[(__bridge NSString *)kCGWindowOwnerName];
@@ -60,9 +61,12 @@ static const NSTimeInterval kDockedTrackingInterval = 1.0 / 30.0;
             bestArea = area;
             NSNumber *wid = info[(__bridge NSString *)kCGWindowNumber];
             bestID = wid ? (CGWindowID)[wid unsignedIntValue] : kCGNullWindowID;
+            NSString *title = info[(__bridge NSString *)kCGWindowName];
+            bestTitle = [title isKindOfClass:[NSString class]] ? title : @"";
         }
     }
     self.lastFeishuWindowID = bestID;
+    self.lastFeishuWindowTitle = bestTitle;
     return best;
 }
 

@@ -1,5 +1,6 @@
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
+#include <string>
 #include <napi.h>
 #include <node_api.h>
 
@@ -44,6 +45,7 @@ static void CallNoArgs(napi_env env, napi_value jsCb,
 struct FeishuBounds {
     double x, y, width, height;
     double windowId;
+    std::string windowTitle;
 };
 
 // CallJs: snap-complete with feishu bounds
@@ -66,6 +68,9 @@ static void CallSnapCompleteWithBounds(napi_env env, napi_value jsCb,
     napi_set_named_property(env, obj, "height", val);
     napi_create_double(env, b->windowId, &val);
     napi_set_named_property(env, obj, "windowId", val);
+    napi_value title;
+    napi_create_string_utf8(env, b->windowTitle.c_str(), NAPI_AUTO_LENGTH, &title);
+    napi_set_named_property(env, obj, "windowTitle", title);
 
     delete b;
 
@@ -189,7 +194,8 @@ Napi::Value OnSnapComplete(const Napi::CallbackInfo& info) {
             CGRect fb = [SnapEngine shared].targetFeishuBounds;
             FeishuBounds *b = new FeishuBounds{
                 fb.origin.x, fb.origin.y, fb.size.width, fb.size.height,
-                (double)[SnapEngine shared].lastFeishuWindowID};
+                (double)[SnapEngine shared].lastFeishuWindowID,
+                std::string([[[SnapEngine shared].lastFeishuWindowTitle ?: @"" description] UTF8String] ?: "")};
             napi_call_threadsafe_function(g_completeFn, b, napi_tsfn_nonblocking);
         }
     };
@@ -253,7 +259,8 @@ Napi::Value OnDockedClick(const Napi::CallbackInfo& info) {
             CGRect fb = [SnapEngine shared].targetFeishuBounds;
             FeishuBounds *b = new FeishuBounds{
                 fb.origin.x, fb.origin.y, fb.size.width, fb.size.height,
-                (double)[SnapEngine shared].lastFeishuWindowID};
+                (double)[SnapEngine shared].lastFeishuWindowID,
+                std::string([[[SnapEngine shared].lastFeishuWindowTitle ?: @"" description] UTF8String] ?: "")};
             napi_call_threadsafe_function(g_dockedClickFn, b, napi_tsfn_nonblocking);
         }
     };
@@ -310,7 +317,8 @@ Napi::Value OnFeishuMoved(const Napi::CallbackInfo& info) {
             FeishuBounds *b = new FeishuBounds{
                 newBounds.origin.x, newBounds.origin.y,
                 newBounds.size.width, newBounds.size.height,
-                (double)[SnapEngine shared].lastFeishuWindowID};
+                (double)[SnapEngine shared].lastFeishuWindowID,
+                std::string([[[SnapEngine shared].lastFeishuWindowTitle ?: @"" description] UTF8String] ?: "")};
             napi_call_threadsafe_function(g_feishuMovedFn, b, napi_tsfn_nonblocking);
         }
     };

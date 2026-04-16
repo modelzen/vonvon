@@ -34,6 +34,8 @@ interface InputAreaProps {
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024
 const MAX_ATTACHMENTS = 4
 const MAX_SKILL_SUGGESTIONS = 8
+const MAX_OTHER_SKILL_SUGGESTIONS = 5
+const MAX_LARK_SKILL_PREVIEW = 3
 const PLACEHOLDER_TIP_INTERVAL_MS = 4200
 const PLACEHOLDER_TIP_FADE_MS = 220
 const PLACEHOLDER_TIPS_WITH_ATTACHMENTS = [
@@ -83,6 +85,14 @@ const getSkillSourceLabel = (skill: SkillView): string => {
   return skill.source || 'skill'
 }
 
+const isOfficialLarkSkill = (skill: SkillView): boolean =>
+  skill.name.trim().toLowerCase().startsWith('lark-')
+
+const isLarkFocusedQuery = (query: string): boolean => {
+  const lowered = query.trim().toLowerCase()
+  return lowered.startsWith('lark') || lowered.includes('飞书') || lowered.includes('feishu')
+}
+
 const findSlashState = (text: string, cursor: number): SlashState | null => {
   if (cursor < 0 || cursor > text.length) return null
   const before = text.slice(0, cursor)
@@ -126,6 +136,7 @@ export function InputArea({
   const [skillsLoading, setSkillsLoading] = useState(false)
   const [slashState, setSlashState] = useState<SlashState | null>(null)
   const [slashIndex, setSlashIndex] = useState(0)
+  const [larkGroupExpanded, setLarkGroupExpanded] = useState(false)
   const [skillsLoadedOnce, setSkillsLoadedOnce] = useState(false)
   const [placeholderTipIndex, setPlaceholderTipIndex] = useState(0)
   const [placeholderTipLeaving, setPlaceholderTipLeaving] = useState(false)
@@ -618,7 +629,7 @@ export function InputArea({
     parseSkillReferences(value).map((skill) => skill.name.trim().toLowerCase())
   )
 
-  const slashSuggestions = (slashState ? availableSkills : [])
+  const rankedSlashSuggestions = (slashState ? availableSkills : [])
     .filter((skill) => !inlineSkillNames.has(skill.name.trim().toLowerCase()))
     .map((skill) => ({
       skill,
@@ -629,7 +640,23 @@ export function InputArea({
       if (a.score !== b.score) return a.score - b.score
       return a.skill.name.localeCompare(b.skill.name)
     })
-    .slice(0, MAX_SKILL_SUGGESTIONS)
+
+  const larkQuery = isLarkFocusedQuery(slashState?.query ?? '')
+  const larkSuggestions = rankedSlashSuggestions.filter(({ skill }) => isOfficialLarkSkill(skill))
+  const otherSuggestions = rankedSlashSuggestions.filter(({ skill }) => !isOfficialLarkSkill(skill))
+  const visibleOtherSuggestions = otherSuggestions.slice(
+    0,
+    larkQuery || larkGroupExpanded ? 3 : MAX_OTHER_SKILL_SUGGESTIONS
+  )
+  const remainingSkillSlots = Math.max(0, MAX_SKILL_SUGGESTIONS - visibleOtherSuggestions.length)
+  const visibleLarkSuggestions = larkSuggestions.slice(
+    0,
+    larkQuery || larkGroupExpanded
+      ? remainingSkillSlots
+      : Math.min(MAX_LARK_SKILL_PREVIEW, remainingSkillSlots)
+  )
+  const slashSuggestions = [...visibleOtherSuggestions, ...visibleLarkSuggestions]
+  const hiddenLarkSkillCount = Math.max(0, larkSuggestions.length - visibleLarkSuggestions.length)
 
   useEffect(() => {
     if (slashSuggestions.length === 0) {
@@ -640,12 +667,105 @@ export function InputArea({
   }, [slashSuggestions.length])
 
   useEffect(() => {
+    if (!slashState) {
+      setLarkGroupExpanded(false)
+      return
+    }
+    if (isLarkFocusedQuery(slashState.query)) {
+      setLarkGroupExpanded(true)
+    }
+  }, [slashState])
+
+  useEffect(() => {
     if (!slashState) return
     if (!skillsLoadedOnce || availableSkills.length === 0) {
       void refreshSkills()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slashState, skillsLoadedOnce, availableSkills.length])
+
+  const renderSkillSuggestion = (
+    skill: SkillView,
+    index: number,
+    options?: {
+      inset?: number
+    }
+  ): React.ReactElement => {
+    const inset = options?.inset ?? 0
+    const active = index === slashIndex
+    return (
+      <button
+        key={skill.name}
+        type="button"
+        onMouseEnter={() => setSlashIndex(index)}
+        onMouseDown={(e) => {
+          e.preventDefault()
+          insertSkillReference(skill)
+        }}
+        style={{
+          width: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          border: 'none',
+          background: active ? '#F6F5F7' : 'transparent',
+          borderRadius: 16,
+          padding: '10px 12px',
+          paddingLeft: 12 + inset,
+          cursor: 'pointer',
+          textAlign: 'left',
+          transition: 'background 0.15s ease, color 0.15s ease',
+        }}
+      >
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke={active ? '#202127' : '#6C6C73'}
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          style={{ flexShrink: 0 }}
+        >
+          <path d="M12 3 5.5 6.75v10.5L12 21l6.5-3.75V6.75L12 3Z" />
+          <path d="M12 3v7.5m0 0 6.5-3.75M12 10.5 5.5 6.75" />
+        </svg>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div
+            style={{
+              fontSize: 13,
+              fontWeight: 600,
+              color: active ? '#202127' : '#35353A',
+              marginBottom: 2,
+            }}
+          >
+            {skill.name}
+          </div>
+          <div
+            style={{
+              fontSize: 12,
+              color: '#9A98A1',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+          >
+            {skill.description || '已安装 skill'}
+          </div>
+        </div>
+        <div
+          style={{
+            flexShrink: 0,
+            fontSize: 12,
+            color: '#A1A1AA',
+          }}
+        >
+          {getSkillSourceLabel(skill)}
+        </div>
+      </button>
+    )
+  }
 
   const handleSend = () => {
     const rawValue = getCurrentRawValue()
@@ -991,80 +1111,104 @@ export function InputArea({
             <div style={{ padding: '0 16px 16px', fontSize: 12, color: '#A1A1AA' }}>加载中…</div>
           ) : slashSuggestions.length > 0 ? (
             <div style={{ padding: '0 8px 8px' }}>
-              {slashSuggestions.map(({ skill }, index) => {
-                const active = index === slashIndex
-                return (
+              {visibleOtherSuggestions.map(({ skill }, index) =>
+                renderSkillSuggestion(skill, index)
+              )}
+
+              {larkSuggestions.length > 0 && (
+                <div
+                  style={{
+                    margin: visibleOtherSuggestions.length > 0 ? '8px 4px 4px' : '0 4px 4px',
+                    padding: '8px 12px 6px',
+                    borderRadius: 14,
+                    background: 'rgba(252, 247, 250, 0.92)',
+                    border: '1px solid rgba(241, 230, 236, 0.95)',
+                  }}
+                >
                   <button
-                    key={skill.name}
                     type="button"
-                    onMouseEnter={() => setSlashIndex(index)}
                     onMouseDown={(e) => {
                       e.preventDefault()
-                      insertSkillReference(skill)
+                      setLarkGroupExpanded((prev) => !prev)
                     }}
                     style={{
                       width: '100%',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: 10,
+                      justifyContent: 'space-between',
+                      gap: 12,
+                      padding: 0,
                       border: 'none',
-                      background: active ? '#F6F5F7' : 'transparent',
-                      borderRadius: 16,
-                      padding: '10px 12px',
+                      background: 'transparent',
                       cursor: 'pointer',
                       textAlign: 'left',
-                      transition: 'background 0.15s ease, color 0.15s ease',
                     }}
                   >
-                    <svg
-                      width="18"
-                      height="18"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke={active ? '#202127' : '#6C6C73'}
-                      strokeWidth="1.8"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      style={{ flexShrink: 0 }}
-                    >
-                      <path d="M12 3 5.5 6.75v10.5L12 21l6.5-3.75V6.75L12 3Z" />
-                      <path d="M12 3v7.5m0 0 6.5-3.75M12 10.5 5.5 6.75" />
-                    </svg>
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <div
-                        style={{
-                          fontSize: 13,
-                          fontWeight: 600,
-                          color: active ? '#202127' : '#35353A',
-                          marginBottom: 2,
-                        }}
-                      >
-                        {skill.name}
-                      </div>
+                    <div>
                       <div
                         style={{
                           fontSize: 12,
-                          color: '#9A98A1',
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
+                          fontWeight: 700,
+                          color: '#6B5060',
+                          marginBottom: 2,
                         }}
                       >
-                        {skill.description || '已安装 skill'}
+                        Lark 官方技能
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 11,
+                          color: '#9A98A1',
+                        }}
+                      >
+                        {larkSuggestions.length} 个已安装技能，按需展开调用
                       </div>
                     </div>
                     <div
                       style={{
-                        flexShrink: 0,
                         fontSize: 12,
                         color: '#A1A1AA',
+                        transform: larkGroupExpanded || larkQuery ? 'rotate(90deg)' : 'rotate(0deg)',
+                        transition: 'transform 0.15s ease',
                       }}
                     >
-                      {getSkillSourceLabel(skill)}
+                      ▸
                     </div>
                   </button>
-                )
-              })}
+
+                  {visibleLarkSuggestions.map(({ skill }, index) =>
+                    renderSkillSuggestion(
+                      skill,
+                      visibleOtherSuggestions.length + index,
+                      { inset: 18 }
+                    )
+                  )}
+
+                  {hiddenLarkSkillCount > 0 && !(larkGroupExpanded || larkQuery) && (
+                    <button
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault()
+                        setLarkGroupExpanded(true)
+                      }}
+                      style={{
+                        width: '100%',
+                        marginTop: 4,
+                        padding: '8px 12px 4px 30px',
+                        border: 'none',
+                        background: 'transparent',
+                        color: '#C34C83',
+                        fontSize: 12,
+                        fontWeight: 600,
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      展开其余 {hiddenLarkSkillCount} 个 Lark skills
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           ) : (
             <div style={{ padding: '0 16px 16px', fontSize: 12, color: '#A1A1AA' }}>

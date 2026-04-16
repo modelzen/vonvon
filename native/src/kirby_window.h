@@ -20,7 +20,41 @@ static inline BOOL KirbyStateIsDocked(KirbyState s) {
 // dockedCollapsed) paint outside the classic 80×80 circle without needing
 // to resize the panel between state transitions.
 static const CGFloat kKirbyPanelSize = 120.0;
+static const CGFloat kKirbyAnchorX = 60.0;
+static const CGFloat kKirbyAnchorY = 60.0;
 static const CGFloat kKirbyBallRadius = 40.0;  // visual circular hit radius
+
+// Convert a point from panel-local bottom-left coordinates (AppKit default)
+// into the top-left coordinate space used by the asset pack docs/SVGs.
+static inline NSPoint KirbyTopLeftPointFromPanelPoint(NSPoint panelPoint, NSRect panelBounds) {
+    return NSMakePoint(panelPoint.x, panelBounds.size.height - panelPoint.y);
+}
+
+// Convert a global screen-space mouse point into panel-local top-left coords.
+static inline NSPoint KirbyTopLeftPointFromScreenPoint(NSPoint screenPoint, NSRect panelFrame) {
+    return NSMakePoint(screenPoint.x - panelFrame.origin.x,
+                       NSMaxY(panelFrame) - screenPoint.y);
+}
+
+// The docked anchor coincides with Feishu's top-right corner, so the lower-left
+// quadrant relative to that anchor is Feishu's interior and must stay click-through.
+static inline BOOL KirbyPointIsInFeishuInterior(NSPoint panelPointTopLeft) {
+    return panelPointTopLeft.x < kKirbyAnchorX && panelPointTopLeft.y > kKirbyAnchorY;
+}
+
+// Shared hit-test used by both the native drag handler and the panel content
+// view. Docked states intentionally exclude the Feishu-interior quadrant so
+// clicks on Feishu's own top-right controls are not stolen by vonvon.
+static inline BOOL KirbyPointInHitArea(NSPoint panelPointTopLeft, KirbyState state) {
+    CGFloat dx = panelPointTopLeft.x - kKirbyAnchorX;
+    CGFloat dy = panelPointTopLeft.y - kKirbyAnchorY;
+    BOOL insideCircle = (dx * dx + dy * dy) <= (kKirbyBallRadius * kKirbyBallRadius);
+    if (!insideCircle) return NO;
+    if (KirbyStateIsDocked(state) && KirbyPointIsInFeishuInterior(panelPointTopLeft)) {
+        return NO;
+    }
+    return YES;
+}
 
 @interface KirbyWindow : NSObject
 

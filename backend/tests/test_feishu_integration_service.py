@@ -81,3 +81,23 @@ def test_verify_runtime_uses_parsed_auth_context_instead_of_exit_code(monkeypatc
     assert state["authenticated"] is False
     assert state["runtime_status"] == "configured_needs_auth"
     assert state["auth_identity"] == "bot"
+
+
+def test_sync_hidden_wrappers_keeps_official_lark_skill_names(tmp_path, monkeypatch):
+    monkeypatch.setattr(feishu_integration_service, "SKILL_BRIDGE_ROOT", tmp_path / "skills")
+    monkeypatch.setattr(feishu_integration_service, "PACK_ROOT", tmp_path / "pack")
+    monkeypatch.setattr(
+        feishu_integration_service,
+        "_current_cli_path",
+        lambda: Path("/tmp/fake-lark-cli"),
+    )
+
+    count = feishu_integration_service._sync_hidden_wrappers()
+    manifest = (tmp_path / "pack" / "skill-manifest.json").read_text(encoding="utf-8")
+
+    assert count > 0
+    assert (tmp_path / "skills" / "vonvon-inspect" / "SKILL.md").exists()
+    assert (tmp_path / "skills" / "lark-calendar" / "SKILL.md").exists()
+    assert "feishu-calendar" not in manifest
+    assert '"name": "vonvon-inspect"' in manifest
+    assert '"name": "lark-calendar"' in manifest

@@ -98,6 +98,128 @@ export function useAgentChat(sessionId: string | null | undefined, opts?: UseAge
     activeSessionIdRef.current = sessionId
   }, [sessionId])
 
+  const reloadHistory = useCallback(async () => {
+    const targetSessionId = activeSessionIdRef.current
+    if (!targetSessionId) return
+
+    setLoadingHistory(true)
+    try {
+      const [res, cacheMap] = await Promise.all([
+        apiFetch(`/api/sessions/${targetSessionId}/messages`),
+        getSessionAttachments(targetSessionId)
+      ])
+      if (activeSessionIdRef.current !== targetSessionId || !res.ok) return
+
+      const raw = (await res.json()) as Array<Record<string, unknown>>
+      if (activeSessionIdRef.current !== targetSessionId || !Array.isArray(raw)) return
+
+      const now = Date.now()
+      type RawTc = { id?: string; function?: { name?: string } }
+      interface ToolResult { content: string; name?: string }
+      const toolResultMap = new Map<string, ToolResult>()
+      for (const m of raw) {
+        if (
+          m.role === 'tool' &&
+          typeof (m as Record<string, unknown>).tool_call_id === 'string'
+        ) {
+          const tcId = (m as Record<string, unknown>).tool_call_id as string
+          toolResultMap.set(tcId, {
+            content: typeof m.content === 'string' ? m.content : '',
+            name:
+              typeof (m as Record<string, unknown>).tool_name === 'string'
+                ? ((m as Record<string, unknown>).tool_name as string)
+                : undefined
+          })
+        }
+      }
+
+      const history: AgentMessage[] = []
+      let userOrdinal = 0
+      for (let i = 0; i < raw.length; i++) {
+        const m = raw[i]
+        const rawRole = m.role
+        if (rawRole === 'tool') continue
+        if (rawRole !== 'user' && rawRole !== 'assistant') continue
+        const role = rawRole as 'user' | 'assistant'
+        const content = typeof m.content === 'string' ? m.content : ''
+        const baseTs = now - (raw.length - i)
+
+        if (role === 'user') {
+          const msg: AgentMessage = {
+            id: `hist-${i}-${now}`,
+            role,
+            content,
+            timestamp: baseTs
+          }
+          const cached = cacheMap.get(userOrdinal)
+          if (cached && cached.attachments.length > 0) {
+            const okByHint =
+              !cached.contentHint || content.includes(cached.contentHint)
+            if (okByHint) {
+              msg.attachments = cached.attachments.map((a) => ({
+                type: 'image' as const,
+                dataUrl: a.dataUrl,
+                name: a.name
+              }))
+              msg.content = stripImagePlaceholderTail(content)
+            }
+          }
+          userOrdinal++
+          history.push(msg)
+          continue
+        }
+
+        const rawToolCalls = (m as Record<string, unknown>).tool_calls
+        if (Array.isArray(rawToolCalls)) {
+          for (let j = 0; j < rawToolCalls.length; j++) {
+            const tc = rawToolCalls[j] as RawTc | null
+            if (!tc || typeof tc !== 'object') continue
+            const toolName = tc.function?.name || 'tool'
+            const tcId = typeof tc.id === 'string' ? tc.id : ''
+            const result = tcId ? toolResultMap.get(tcId) : undefined
+            history.push({
+              id: `hist-${i}-tc${j}-${now}`,
+              role: 'tool',
+              content: '',
+              timestamp: baseTs,
+              toolName,
+              toolStatus: 'completed',
+              toolPreview: result?.content || ''
+            })
+          }
+        }
+        if (content.trim()) {
+          history.push({
+            id: `hist-${i}-${now}`,
+            role,
+            content,
+            timestamp: baseTs
+          })
+        }
+      }
+
+      const cached = sessionMessageCacheRef.current.get(targetSessionId) ?? []
+      const preferLocal = preferLocalCacheRef.current.has(targetSessionId)
+      const nextMessages =
+        preferLocal && cached.length > history.length ? cached : history
+
+      if (preferLocal && history.length >= cached.length) {
+        preferLocalCacheRef.current.delete(targetSessionId)
+      }
+
+      sessionMessageCacheRef.current.set(targetSessionId, nextMessages)
+      if (activeSessionIdRef.current === targetSessionId) {
+        setMessages(nextMessages)
+      }
+    } catch {
+      // Keep the current local timeline if the refresh fails.
+    } finally {
+      if (activeSessionIdRef.current === targetSessionId) {
+        setLoadingHistory(false)
+      }
+    }
+  }, [apiFetch])
+
   useEffect(() => {
     const sid = activeSessionIdRef.current
     if (!sid) return
@@ -626,6 +748,7 @@ export function useAgentChat(sessionId: string | null | undefined, opts?: UseAge
     usagePercent,
     sendMessage,
     clearMessages,
+    reloadHistory,
     loadingHistory,
     thinking,
     stop

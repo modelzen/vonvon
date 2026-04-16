@@ -12,6 +12,7 @@ import {
 } from './components/Chat/AgentMessageList'
 import { UsageRing } from './components/Chat/UsageRing'
 import { AgentModelSelector } from './components/Chat/AgentModelSelector'
+import { VONVON_INSPECT_MESSAGE } from './lib/vonvonInspect'
 
 // `#floating` is set by windows.ts when opening the standalone chat window;
 // we use it to (a) leave room for macOS traffic lights in the header and
@@ -21,6 +22,22 @@ const TODO_COLLAPSED_OVERLAP_PX = 32
 const TODO_EXPANDED_OVERLAP_PX = 12
 const TODO_VISIBLE_GAP_PX = 14
 const TODO_SIDE_INSET_PX = 28
+
+interface LarkInspectWindow {
+  x: number
+  y: number
+  width: number
+  height: number
+  windowId: number
+  windowTitle?: string
+}
+
+type InspectBannerTone = 'loading' | 'success' | 'warning' | 'error'
+
+interface InspectBannerState {
+  tone: InspectBannerTone
+  message: string
+}
 
 function App(): React.ReactElement {
   const { activeSession, newTab, updateSessionName, touchSession } = useSession()
@@ -45,11 +62,88 @@ function App(): React.ReactElement {
   const [sidebarHideTick, setSidebarHideTick] = useState(0)
   const [todoBottomInset, setTodoBottomInset] = useState(0)
   const [todoCollapsed, setTodoCollapsed] = useState(false)
+  const [inspectBanner, setInspectBanner] = useState<InspectBannerState | null>(null)
   const todoOverlayRef = useRef<HTMLDivElement>(null)
+  const activeSessionIdRef = useRef<string | null>(activeSession?.id ?? null)
+  const inspectInFlightRef = useRef(false)
   const latestTodoMessage = getLatestTodoMessage(agentMessages)
   const todoOverlapPx = todoCollapsed ? TODO_COLLAPSED_OVERLAP_PX : TODO_EXPANDED_OVERLAP_PX
 
   useEffect(() => { setDisplayPercent(usagePercent) }, [usagePercent])
+  useEffect(() => {
+    activeSessionIdRef.current = activeSession?.id ?? null
+  }, [activeSession?.id])
+
+  useEffect(() => {
+    setInspectBanner(null)
+  }, [activeSession?.id])
+
+  useEffect(() => {
+    if (!inspectBanner || inspectBanner.tone === 'loading') return
+    const timeoutMs = inspectBanner.tone === 'error' ? 5000 : 3200
+    const timer = window.setTimeout(() => {
+      setInspectBanner((current) => (current === inspectBanner ? null : current))
+    }, timeoutMs)
+    return () => window.clearTimeout(timer)
+  }, [inspectBanner])
+
+  useEffect(() => {
+    if (isFloatingWindow) return
+
+    const dockedClickHandler = (payload?: unknown): void => {
+      const sessionId = activeSessionIdRef.current
+      if (!sessionId || !payload || typeof payload !== 'object') return
+      if (inspectInFlightRef.current) return
+      if (isLoading) {
+        setInspectBanner({
+          tone: 'warning',
+          message: '上一条消息还在处理中，等我先回复完再看新的协同上下文。',
+        })
+        return
+      }
+
+      const windowInfo = payload as LarkInspectWindow
+      inspectInFlightRef.current = true
+      setInspectBanner({ tone: 'loading', message: '正在发送当前 Lark 窗口截图…' })
+
+      void (async () => {
+        try {
+          const screenshotDataUrl = await window.electron.captureLarkWindow(windowInfo.windowId)
+          if (!screenshotDataUrl) {
+            throw new Error('还没有拿到 Lark 窗口截图，请先确认录屏权限已经授予')
+          }
+          if (activeSessionIdRef.current !== sessionId) return
+          sendMessage(
+            VONVON_INSPECT_MESSAGE,
+            sessionId,
+            [{ type: 'image', dataUrl: screenshotDataUrl, name: 'vonvon-inspect-lark.png' }],
+            ['vonvon-inspect']
+          )
+          setInspectBanner({
+            tone: 'success',
+            message: '已发送当前截图，我先结合相关 skills 主动帮你看一眼。',
+          })
+        } catch (error) {
+          if (activeSessionIdRef.current !== sessionId) return
+          setInspectBanner({
+            tone: 'error',
+            message: `发送协同上下文失败：${(error as Error).message}`,
+          })
+        } finally {
+          inspectInFlightRef.current = false
+        }
+      })()
+    }
+
+    try {
+      ;(window as any).electron?.on?.('kirby:docked-click', dockedClickHandler)
+    } catch {}
+    return () => {
+      try {
+        ;(window as any).electron?.off?.('kirby:docked-click', dockedClickHandler)
+      } catch {}
+    }
+  }, [isLoading, sendMessage])
 
   // Listen for sidebar show/hide events from main so we can replay the CSS
   // entry/exit animations on the still-mounted React tree.
@@ -279,6 +373,48 @@ function App(): React.ReactElement {
               </div>
             )}
             <div style={{ position: 'relative', zIndex: 1 }}>
+              {inspectBanner && (
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 8,
+                    padding: '0 12px 8px',
+                  }}
+                >
+                  {inspectBanner && (
+                    <div
+                      style={{
+                        padding: '10px 12px',
+                        borderRadius: 14,
+                        border: `1px solid ${
+                          inspectBanner.tone === 'error'
+                            ? '#f4b4c0'
+                            : inspectBanner.tone === 'warning'
+                              ? '#f3d4a4'
+                              : '#f5d5e7'
+                        }`,
+                        background:
+                          inspectBanner.tone === 'error'
+                            ? 'rgba(255, 240, 244, 0.96)'
+                            : inspectBanner.tone === 'warning'
+                              ? 'rgba(255, 249, 236, 0.96)'
+                              : 'rgba(255, 248, 252, 0.96)',
+                        color:
+                          inspectBanner.tone === 'error'
+                            ? '#9f3e58'
+                            : inspectBanner.tone === 'warning'
+                              ? '#8d6221'
+                              : '#6f4d60',
+                        fontSize: 13,
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      {inspectBanner.message}
+                    </div>
+                  )}
+                </div>
+              )}
               <InputArea
                 onSend={(msg, skills) => { if (activeSession) sendMessage(msg, activeSession.id, undefined, skills) }}
                 onSendWithAttachments={(msg, atts, skills) => { if (activeSession) sendMessage(msg, activeSession.id, atts, skills) }}

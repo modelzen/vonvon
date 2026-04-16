@@ -190,8 +190,6 @@ export interface FeishuIntegrationState {
   state_version: number
   provider: string
   feature_enabled: boolean
-  skills_enabled: boolean
-  orb_inspect_enabled: boolean
   runtime_status: string
   config_initialized: boolean
   authenticated: boolean
@@ -395,12 +393,6 @@ export function useHermesConfig() {
   const setFeishuFeatureEnabled = (enabled: boolean) =>
     post<FeishuIntegrationState>('/api/integrations/feishu/feature', { enabled })
 
-  const setFeishuSkillsEnabled = (enabled: boolean) =>
-    post<FeishuIntegrationState>('/api/integrations/feishu/skills', { enabled })
-
-  const setFeishuOrbInspectEnabled = (enabled: boolean) =>
-    post<FeishuIntegrationState>('/api/integrations/feishu/orb-inspect', { enabled })
-
   const uninstallFeishuCli = () =>
     post<FeishuIntegrationState>('/api/integrations/feishu/uninstall')
 
@@ -444,8 +436,6 @@ export function useHermesConfig() {
     completeFeishuAuthFlow,
     getFeishuFlowStatus,
     setFeishuFeatureEnabled,
-    setFeishuSkillsEnabled,
-    setFeishuOrbInspectEnabled,
     uninstallFeishuCli,
   }
 }

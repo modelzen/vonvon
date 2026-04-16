@@ -54,28 +54,28 @@ _DEVICE_CODE_RE = re.compile(
 _FLOW_KINDS = {"config_init", "auth_login"}
 
 _DEFAULT_SKILLS: List[tuple[str, str]] = [
-    ("shared", "应用配置、鉴权状态和基础守则。"),
-    ("calendar", "日历、日程、空闲忙碌查询。"),
-    ("im", "飞书会话、消息、线程和附件。"),
-    ("doc", "飞书文档创建、读取、更新。"),
-    ("drive", "云文档、文件上传下载和权限。"),
-    ("sheets", "电子表格读写、追加和导出。"),
-    ("slides", "幻灯片创建、读取和改写。"),
-    ("base", "多维表格、字段、记录和视图。"),
-    ("task", "任务、提醒、成员和子任务。"),
-    ("mail", "邮箱搜索、收发和草稿。"),
-    ("contact", "联系人与用户查询。"),
-    ("wiki", "知识库空间、节点和文档。"),
-    ("event", "实时事件订阅与路由。"),
-    ("vc", "会议纪要、录制与摘要。"),
-    ("whiteboard", "白板与图表 DSL。"),
-    ("minutes", "会议纪要结构化结果。"),
-    ("openapi-explorer", "官方 OpenAPI 探索能力。"),
-    ("skill-maker", "自定义 Feishu skill 框架。"),
-    ("attendance", "考勤打卡记录查询。"),
-    ("approval", "审批查询、审批和转交。"),
-    ("workflow-meeting-summary", "会议总结 workflow。"),
-    ("workflow-standup-report", "站会/agenda 汇总 workflow。"),
+    ("lark-shared", "应用配置、鉴权状态和基础守则。"),
+    ("lark-calendar", "日历、日程、空闲忙碌查询。"),
+    ("lark-im", "飞书会话、消息、线程和附件。"),
+    ("lark-doc", "飞书文档创建、读取、更新。"),
+    ("lark-drive", "云文档、文件上传下载和权限。"),
+    ("lark-sheets", "电子表格读写、追加和导出。"),
+    ("lark-slides", "幻灯片创建、读取和改写。"),
+    ("lark-base", "多维表格、字段、记录和视图。"),
+    ("lark-task", "任务、提醒、成员和子任务。"),
+    ("lark-mail", "邮箱搜索、收发和草稿。"),
+    ("lark-contact", "联系人与用户查询。"),
+    ("lark-wiki", "知识库空间、节点和文档。"),
+    ("lark-event", "实时事件订阅与路由。"),
+    ("lark-vc", "会议纪要、录制与摘要。"),
+    ("lark-whiteboard", "白板与图表 DSL。"),
+    ("lark-minutes", "会议纪要结构化结果。"),
+    ("lark-openapi-explorer", "官方 OpenAPI 探索能力。"),
+    ("lark-skill-maker", "自定义 Lark skill 框架。"),
+    ("lark-attendance", "考勤打卡记录查询。"),
+    ("lark-approval", "审批查询、审批和转交。"),
+    ("lark-workflow-meeting-summary", "会议总结 workflow。"),
+    ("lark-workflow-standup-report", "站会/agenda 汇总 workflow。"),
 ]
 
 _flows: Dict[str, "FeishuFlow"] = {}
@@ -401,17 +401,47 @@ def _compute_runtime_status(state: Dict[str, Any]) -> str:
     return "installed_needs_config"
 
 
-def _wrapper_dir(kind: str) -> Path:
-    return SKILL_BRIDGE_ROOT / f"feishu-{kind}"
+def _wrapper_dir(skill_name: str) -> Path:
+    return SKILL_BRIDGE_ROOT / skill_name
 
 
-def _write_skill_wrapper(kind: str, description: str) -> None:
-    wrapper_dir = _wrapper_dir(kind)
+def _write_skill_wrapper(skill_name: str, description: str) -> None:
+    wrapper_dir = _wrapper_dir(skill_name)
     wrapper_dir.mkdir(parents=True, exist_ok=True)
     skill_md = wrapper_dir / "SKILL.md"
     cli_path = _current_cli_path()
+    extra_guidance = ""
+    if skill_name == "lark-im":
+        extra_guidance = f"""
+
+High-signal command recipes for this domain:
+- 检查登录态：`{cli_path} auth status`
+- 按聊天名搜索会话：`{cli_path} im +chat-search --query '<聊天名>' --format json`
+- 读取群/会话信息：`{cli_path} im chats get --params '{{"chat_id":"<chat_id>"}}' --format json`
+- 读取群成员：`{cli_path} im chat.members get --params '{{"chat_id":"<chat_id>"}}' --format json`
+- 搜索消息：`{cli_path} im +messages-search --query '<关键词>' --format json`
+
+Important constraints:
+- 在 auto-inspect 场景里，优先直接使用上面的命令模板，而不是先从 `--help` / `schema` 开始探索。
+- 直接用上面的命令模板，不要优先试错 `--keyword`、`--chat-id` 这类参数；这里统一优先 `--query` 和 `--params`。
+- `+messages-search` 需要 `search:message` scope。若缺权限，只说明限制并回退到截图可见信息，不要继续多轮重试。
+- inspect 场景下，默认最多做一次定向会话查询；不要为了“更完整”扫全量聊天列表。
+"""
+    elif skill_name == "lark-contact":
+        extra_guidance = f"""
+
+High-signal command recipes for this domain:
+- 检查登录态：`{cli_path} auth status`
+- 按姓名搜索用户：`{cli_path} contact +search-user --query '<姓名>' --format json`
+- 需要更多字段时，再结合 `--page-size` / `--page-token` 做定向翻页
+
+Important constraints:
+- 在 auto-inspect 场景里，优先直接用 `+search-user --query`，不要先把时间花在 `--help` / `schema` 上。
+- inspect 场景下，不要因为联系人没精确命中就继续做多轮模糊搜索；一次失败后应回退到截图可见信息。
+"""
+
     body = f"""---
-name: feishu-{kind}
+name: {skill_name}
 description: {description}
 platform: darwin
 ---
@@ -431,9 +461,244 @@ Workflow:
    Vonvon Settings > Feishu 集成 and finish install / config / login first.
 4. Do not assume context. Only operate on chats/docs/calendar items that the
    user explicitly references or that Vonvon has already injected into the turn.
+5. In auto-inspect turns, do not explore the CLI surface area. Use direct
+   commands only, keep calls minimal, and stop once you can provide useful help.
 
-This wrapper maps to the official skill family `{kind}` and exists so Vonvon can
-gate Feishu abilities separately from user-installed marketplace skills.
+This managed copy keeps the official skill name `{skill_name}` while letting
+Vonvon gate Lark abilities separately from the normal Skills settings surface.
+{extra_guidance}"""
+    skill_md.write_text(body, encoding="utf-8")
+
+
+def _write_vonvon_inspect_skill() -> None:
+    wrapper_dir = _wrapper_dir("vonvon-inspect")
+    wrapper_dir.mkdir(parents=True, exist_ok=True)
+    skill_md = wrapper_dir / "SKILL.md"
+    body = """---
+name: vonvon-inspect
+description: 根据当前截图识别用户正在关注的协同应用上下文，调用相关 skills 获取更完整的实时信息，并主动提供帮助。
+platform: darwin
+---
+
+# vonvon-inspect
+
+这是一个由 vonvon 内部自动触发的编排 skill。
+
+它的触发场景是：
+- 用户点击 vonvon 粉球
+- vonvon 已经吸附在协同应用侧边
+- 当前 turn 自动附带了一张截图
+- 当前 turn 自动激活了 `vonvon-inspect`
+
+这个 skill 不面向用户手动选择，也不应该出现在普通技能列表里。
+
+## 你的目标
+
+基于当前 turn 中的截图，完成下面 4 件事：
+
+1. 判断用户当前正在关注哪个协同应用上下文
+2. 判断应该调用哪些相关 skills 去获取更完整、更新的实时上下文
+3. 推断用户此刻最可能想做什么
+4. 主动提供帮助，而不只是描述你看到了什么
+
+## 输入原则
+
+截图是第一信号源。
+
+必须先看图，再判断上下文。
+不要先假设当前对象是什么。
+不要把窗口标题、历史记忆或模糊猜测当成主依据。
+
+如果截图信息不够，再把其他弱信号当辅助参考。
+
+默认先基于截图直接给出帮助。
+只有当截图里缺少一个“高价值、会明显提升帮助质量”的关键信息时，才去调用相关 suite skills 补充实时上下文。
+
+## 你的角色定位
+
+你是一个“路由与编排” skill，不是一个直接操作 Lark CLI 的底层 skill。
+
+你的职责是：
+- 先识别截图里的协同场景
+- 决定最应该加载哪个 `lark-*` skill
+- 把问题交给那个最相关的 domain skill 去完成
+- 最后把结果组织成一条主动、有帮助的回复
+
+因此，在默认情况下：
+- 不要在 `vonvon-inspect` 里直接开始一串底层 CLI 探索
+- 应该先加载最相关的 `lark-*` skill，再按照那个 skill 的路径去做
+- 只有当某个 domain skill 明显不够用时，再升级到第二个相关 skill
+
+## 默认效率策略
+
+这是一个“快速 inspect”技能，不是 CLI 探索任务。
+
+默认遵守下面 6 条：
+
+1. 先看图，再决定是否真的需要额外 tool。
+2. 如果截图已经足够让你总结重点、判断对象、起草回复，就直接回答，不要为了追求“更全”而继续拉取。
+3. 默认先激活 **1 个** 最相关的 `lark-*` domain skill，让它带路。
+4. 在识图之后，默认最多再做 **3 次** 外部工具调用。
+5. 默认不要把时间花在 `--help`、`schema`、宽范围 `list --page-all`、或为了摸索参数而连续试错上；优先走相关 domain skill 已知的快路径。
+6. 如果第一次定向调用已经暴露出权限不足、对象无法精确定位、或参数模式不匹配，就应停止扩张，回退到截图可见信息并说明限制。
+
+## 当前支持的协同套件
+
+当前优先支持：
+- Lark / 飞书，对应 `lark-*` skills
+
+后续可能支持：
+- DingTalk / 钉钉，对应 `dingtalk-*` skills
+
+因此你不应该把自己写死为“只支持飞书”，而应该先识别当前是哪类协同套件，再决定调用哪一组 skills。
+
+## 你要识别的上下文类型
+
+优先判断用户当前关注的是：
+
+- chat：聊天、群聊、私聊、话题
+- doc：文档、知识库页面、wiki 页面
+- calendar：日历、日程、排期
+- meeting：会议、视频会议、会议纪要
+- sheet：表格、电子表格、多维表格
+- slide：幻灯片、演示文稿
+- drive：文件、云盘、目录
+- task：任务、待办、项目项
+- mail：邮件
+- approval：审批
+- contact：联系人、人员页
+- unknown：暂时无法可靠判断
+
+如果不能高置信度判断，就明确说不确定，不要编造。
+
+## 工作流程
+
+### 第一步：看图识别当前对象
+
+先从截图中提取尽可能多的可见线索，例如：
+
+- 当前套件品牌
+- 页面类型
+- 聊天标题
+- 文档标题
+- 日程标题
+- 参与人
+- 时间
+- 日期
+- 文件名
+- 空间名
+- 团队名
+- 标签
+- 页面结构
+- 当前是否在讨论、阅读、安排会议、查看任务、审批等
+
+### 第二步：选择最小必要 skill 集合
+
+识别出对象后，优先加载最相关的 `lark-*` skill，让它负责执行。
+
+如果是 Lark：
+- chat：优先 `lark-im`
+- doc/wiki：优先 `lark-doc`、`lark-wiki`
+- calendar/meeting：优先 `lark-calendar`、`lark-vc`、`lark-minutes`
+- sheet/base：优先 `lark-sheets`、`lark-base`
+- drive/file：优先 `lark-drive`
+- task：优先 `lark-task`
+- mail：优先 `lark-mail`
+- approval：优先 `lark-approval`
+- contact：优先 `lark-contact`
+
+只调用当前问题真正需要的 skill。
+不要无差别把所有 `lark-*` skills 全部调用一遍。
+不要在默认情况下同时加载 `lark-im` 和 `lark-contact` 等多个相邻 skill，除非第一个 skill 明确证据不足。
+
+你可以把这一步理解成：
+- `vonvon-inspect` 负责“选路”
+- `lark-*` domain skill 负责“走路”
+
+### 第三步：拉取更完整的实时上下文
+
+调用相关 `lark-*` domain skill 后，你的目标不是重复截图里已经能看到的内容，而是补全截图无法稳定提供的信息，例如：
+
+- 最近几条消息
+- 更完整的文档内容
+- 文档结构
+- 会议信息
+- 参与者
+- 议程
+- 时间安排
+- 任务详情
+- 审批状态
+- 文件元信息
+- 联系人信息
+
+如果 domain skill 调用失败，就明确说哪一步失败了，并退回到“基于截图的帮助”。
+
+如果截图里已经清晰可见最近消息、文档段落、时间安排或待办线索，就不要再为了复读这些可见内容调用额外 API。
+
+### 第四步：主动提供帮助
+
+你不应该只回答：
+- “我看到你现在在看某个聊天”
+- “我看到你在一个文档里”
+- “我看到这是一个会议页面”
+
+你应该进一步思考：
+- 用户现在最可能想做什么？
+- 我能不能先帮他做第一步？
+- 我能不能主动给一个高价值输出？
+
+优先提供的帮助包括：
+
+- 总结当前讨论重点
+- 提炼待办事项
+- 梳理分歧点
+- 起草回复
+- 概括文档内容
+- 提炼行动项
+- 整理会议议程
+- 提示风险、遗漏和下一步建议
+- 帮用户继续“刚才那个对象”的工作
+
+## 回答风格
+
+你的第一条回复应该像是 vonvon 在用户点击粉球后主动接话。
+
+风格要像：
+- “我看到你现在在看这个聊天，我先帮你理了一下最近讨论……”
+- “我看到你现在打开的是这份文档，我先抓了更完整的上下文，重点是……”
+- “我看到你在看这个日程，我先帮你整理了时间、参与人和待确认事项……”
+
+不要只做冷冰冰的识别报告。
+
+如果截图本身已经足够支撑一个高价值回复，优先直接给：
+- 当前对象判断
+- 你从截图里提炼出的核心信息
+- 一条可以直接采取的下一步建议
+- 如有必要，再补一句“如果你要，我可以继续去拉更完整的实时上下文”
+
+而不是默认先进入长链路工具调用。
+
+## 安全边界
+
+- 不要假装看到了截图里没有的东西
+- 不要假装拿到了 skill 没返回的信息
+- 识别不清楚时，要明确说不确定
+- 需要实时信息时，优先先选对 `lark-*` domain skill，再按那个 skill 的路径执行
+- 不要把弱信号包装成高置信度结论
+- 不要在这个回合里顺手修 skill、写 memory、或做额外维护动作
+
+## 失败回退
+
+如果你无法可靠识别：
+1. 先简要说明截图里看到了什么
+2. 说明目前不确定的部分
+3. 如果可能，提出一个最小澄清
+4. 或者先提供截图层面的初步帮助
+
+## 这一 skill 的本质
+
+这不是一个“描述截图”的 skill。
+这是一个“从截图出发，连接 suite skills，主动帮助用户推进当前协同任务”的 skill。
 """
     skill_md.write_text(body, encoding="utf-8")
 
@@ -441,13 +706,22 @@ gate Feishu abilities separately from user-installed marketplace skills.
 def _sync_hidden_wrappers() -> int:
     count = 0
     manifest = []
-    for kind, description in _DEFAULT_SKILLS:
-        _write_skill_wrapper(kind, description)
+    _write_vonvon_inspect_skill()
+    count += 1
+    manifest.append(
+        {
+            "name": "vonvon-inspect",
+            "official_skill": None,
+            "description": "根据当前截图识别协同应用上下文并主动提供帮助。",
+        }
+    )
+    for skill_name, description in _DEFAULT_SKILLS:
+        _write_skill_wrapper(skill_name, description)
         count += 1
         manifest.append(
             {
-                "name": f"feishu-{kind}",
-                "official_skill": f"lark-{kind}",
+                "name": skill_name,
+                "official_skill": skill_name,
                 "description": description,
             }
         )
@@ -857,26 +1131,6 @@ def set_feature_enabled(enabled: bool) -> Dict[str, Any]:
         state["orb_inspect_enabled"] = False
     state["last_error"] = None
     state = _refresh_skill_bridge(state)
-    return _write_state(state)
-
-
-def set_skills_enabled(enabled: bool) -> Dict[str, Any]:
-    state = verify_runtime()
-    if enabled and state.get("runtime_status") != "ready":
-        raise RuntimeError("请先让 Lark CLI 进入就绪状态，再启用飞书内部 Skills")
-    if enabled and not state.get("feature_enabled"):
-        raise RuntimeError("请先打开飞书深度集成总开关")
-
-    state["skills_enabled"] = enabled
-    state = _refresh_skill_bridge(state)
-    return _write_state(state)
-
-
-def set_orb_inspect_enabled(enabled: bool) -> Dict[str, Any]:
-    state = _read_state()
-    if enabled and not state.get("feature_enabled"):
-        raise RuntimeError("请先打开飞书深度集成总开关")
-    state["orb_inspect_enabled"] = enabled
     return _write_state(state)
 
 

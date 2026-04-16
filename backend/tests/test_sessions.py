@@ -1,8 +1,4 @@
 """Tests for session CRUD endpoints."""
-import pytest
-from unittest.mock import patch
-from fastapi.testclient import TestClient
-
 
 def test_list_sessions(client):
     resp = client.get("/api/sessions")

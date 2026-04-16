@@ -14,6 +14,7 @@ type FeishuBounds = {
   width: number
   height: number
   windowId: number
+  windowTitle?: string
 }
 
 type KirbyForm = 'floating' | 'snapping' | 'dockedExpanded' | 'dockedCollapsed'
@@ -234,20 +235,28 @@ export function initKirby(mainWindow: BrowserWindow): void {
     _mainWin?.webContents.send('kirby:detach')
   })
 
-  // Ball clicked while dockedCollapsed → native already switched state to
-  // dockedExpanded + form dockedExpanded. Re-show the sidebar.
+// Ball clicked while docked:
+// - if the sidebar was hidden (dockedCollapsed), re-show it
+// - if the sidebar was already visible (dockedExpanded), forward an
+//   explicit inspect event to the renderer so it can sample current Lark
+//   context for the active session.
   if (typeof addon.onDockedClick === 'function') {
     addon.onDockedClick((feishuBounds: FeishuBounds) => {
       if (isFloatingChatWindowOpen()) {
         closeFloatingChatWindow()
       }
+      const wasVisible = !!_mainWin?.isVisible()
       _lastFeishuBounds = feishuBounds
       if (_mainWin) {
         applySidebarBounds(feishuBounds)
         _mainWin.show()
         syncSidebarAboveFeishu(feishuBounds)
         startSidebarZOrderSync()
-        _mainWin.webContents.send('kirby:sidebar-show')
+        if (!wasVisible) {
+          _mainWin.webContents.send('kirby:sidebar-show')
+        } else {
+          _mainWin.webContents.send('kirby:docked-click', feishuBounds)
+        }
       }
     })
   }

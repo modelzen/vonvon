@@ -41,6 +41,12 @@ contextBridge.exposeInMainWorld('electron', {
   },
   fileExists: (path: string): Promise<boolean> =>
     ipcRenderer.invoke('fs:exists', path),
+  getLarkPermissions: (): Promise<{ screen_recording: string; accessibility: string }> =>
+    ipcRenderer.invoke('lark:permissions:get'),
+  requestLarkPermissions: (): Promise<{ screen_recording: string; accessibility: string }> =>
+    ipcRenderer.invoke('lark:permissions:request'),
+  captureLarkWindow: (windowId: number): Promise<string | null> =>
+    ipcRenderer.invoke('lark:captureWindow', windowId),
   getPathForFile: (file: File): string => {
     try {
       return webUtils.getPathForFile(file)
@@ -65,6 +71,7 @@ contextBridge.exposeInMainWorld('electron', {
     const allowedChannels = [
       'chat:chunk', 'chat:error', 'chat:done',
       'kirby:snap-proximity', 'kirby:snap-complete', 'kirby:detach',
+      'kirby:docked-click',
       'kirby:sidebar-show', 'kirby:sidebar-hide'
     ]
     if (allowedChannels.includes(channel)) {
@@ -99,6 +106,9 @@ declare global {
       openExternal(url: string): Promise<void>
       showItemInFolder(path: string): void
       fileExists(path: string): Promise<boolean>
+      getLarkPermissions(): Promise<{ screen_recording: string; accessibility: string }>
+      requestLarkPermissions(): Promise<{ screen_recording: string; accessibility: string }>
+      captureLarkWindow(windowId: number): Promise<string | null>
       getPathForFile(file: File): string
       detachKirby(): void
       closeKirbySidebar(): void

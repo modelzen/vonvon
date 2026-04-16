@@ -22,6 +22,7 @@ typedef void (^FeishuMovedBlock)(CGRect newBounds);
 @property (nonatomic, assign) CGRect              targetFeishuBounds;
 @property (nonatomic, assign) CGRect              lastFeishuBounds;
 @property (nonatomic, assign) CGWindowID          lastFeishuWindowID;
+@property (nonatomic, copy)   NSString           *lastFeishuWindowTitle;
 
 + (instancetype)shared;
 - (void)checkSnapProximity:(NSPoint)kirbyOrigin;
