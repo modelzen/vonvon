@@ -9,12 +9,13 @@ import React, {
 import {
   FileChipRenderer,
   buildFileReference,
+  buildLarkDocReference,
   buildSkillReference,
   getFileTypeInfo,
   parseInlineReferences,
   parseSkillReferences,
 } from './FileChip'
-import { useHermesConfig, type SkillView } from '../../hooks/useHermesConfig'
+import { useHermesConfig, type FeishuLinkPreview, type SkillView } from '../../hooks/useHermesConfig'
 
 interface ImageAttachment {
   type: 'image'
@@ -39,6 +40,7 @@ const MAX_OTHER_SKILL_SUGGESTIONS = 5
 const MAX_LARK_SKILL_PREVIEW = 3
 const PLACEHOLDER_TIP_INTERVAL_MS = 4200
 const PLACEHOLDER_TIP_FADE_MS = 220
+const FEISHU_LINK_RESOLVE_DEBOUNCE_MS = 280
 const PLACEHOLDER_TIPS_WITH_ATTACHMENTS = [
   '今天想聊点什么？',
   '输个 /，我来找 skill',
@@ -68,7 +70,44 @@ interface SlashState {
   query: string
 }
 
+interface SelectionOffsets {
+  start: number
+  end: number
+}
+
 const TRAILING_BREAK_PLACEHOLDER_ATTR = 'data-trailing-break-placeholder'
+const FEISHU_DOC_URL_RE = /https?:\/\/[^\s<>"']*[^\s<>"'.,;:!?，。；：！？）\]]/g
+
+const FEISHU_DOC_PATH_SEGMENTS = new Set([
+  'doc',
+  'docs',
+  'docx',
+  'sheet',
+  'sheets',
+  'wiki',
+  'slides',
+  'base',
+  'bitable',
+])
+
+const isFeishuDocUrl = (raw: string): boolean => {
+  try {
+    const parsed = new URL(raw)
+    const host = parsed.hostname.toLowerCase()
+    if (
+      !host.endsWith('.feishu.cn') &&
+      !host.endsWith('.larksuite.com') &&
+      host !== 'feishu.cn' &&
+      host !== 'larksuite.com'
+    ) {
+      return false
+    }
+    const segments = parsed.pathname.split('/').filter(Boolean)
+    return segments.some((segment) => FEISHU_DOC_PATH_SEGMENTS.has(segment.toLowerCase()))
+  } catch {
+    return false
+  }
+}
 
 const skillSlug = (name: string): string =>
   name
@@ -143,6 +182,8 @@ export function InputArea({
   const [placeholderTipIndex, setPlaceholderTipIndex] = useState(0)
   const [placeholderTipLeaving, setPlaceholderTipLeaving] = useState(false)
   const editorRef = useRef<HTMLDivElement>(null)
+  const larkPreviewCacheRef = useRef<Map<string, FeishuLinkPreview>>(new Map())
+  const pendingLarkPreviewUrlsRef = useRef<Set<string>>(new Set())
 
   interface QueuedMsg {
     id: string
@@ -174,6 +215,135 @@ export function InputArea({
     void refreshSkills()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const collectBareFeishuUrls = (rawValue: string): string[] => {
+    const refs = parseInlineReferences(rawValue)
+    const urls: string[] = []
+    const seen = new Set<string>()
+    let match: RegExpExecArray | null
+    FEISHU_DOC_URL_RE.lastIndex = 0
+    while ((match = FEISHU_DOC_URL_RE.exec(rawValue)) !== null) {
+      const url = match[0]
+      if (!isFeishuDocUrl(url)) continue
+      const index = match.index
+      const insideToken = refs.some((ref) => index >= ref.start && index < ref.end)
+      if (insideToken || seen.has(url)) continue
+      seen.add(url)
+      urls.push(url)
+    }
+    return urls
+  }
+
+  const replaceResolvedFeishuUrls = (
+    rawValue: string,
+    selection: SelectionOffsets,
+    previews: Map<string, FeishuLinkPreview>
+  ): { nextValue: string; nextStart: number; nextEnd: number } => {
+    const refs = parseInlineReferences(rawValue)
+    const replacements: Array<{ start: number; end: number; raw: string }> = []
+    let segmentCursor = 0
+
+    const collectSegmentReplacements = (segment: string, baseOffset: number) => {
+      let match: RegExpExecArray | null
+      FEISHU_DOC_URL_RE.lastIndex = 0
+      while ((match = FEISHU_DOC_URL_RE.exec(segment)) !== null) {
+        const url = match[0]
+        const preview = previews.get(url)
+        if (!preview || !isFeishuDocUrl(url)) continue
+        replacements.push({
+          start: baseOffset + match.index,
+          end: baseOffset + match.index + url.length,
+          raw: buildLarkDocReference(preview.title, preview.url),
+        })
+      }
+    }
+
+    for (const ref of refs) {
+      if (ref.start > segmentCursor) {
+        collectSegmentReplacements(rawValue.slice(segmentCursor, ref.start), segmentCursor)
+      }
+      segmentCursor = ref.end
+    }
+    if (segmentCursor < rawValue.length) {
+      collectSegmentReplacements(rawValue.slice(segmentCursor), segmentCursor)
+    }
+
+    if (replacements.length === 0) {
+      return { nextValue: rawValue, nextStart: selection.start, nextEnd: selection.end }
+    }
+
+    replacements.sort((a, b) => a.start - b.start)
+
+    let nextValue = ''
+    let cursor = 0
+    for (const replacement of replacements) {
+      nextValue += rawValue.slice(cursor, replacement.start)
+      nextValue += replacement.raw
+      cursor = replacement.end
+    }
+    nextValue += rawValue.slice(cursor)
+
+    const mapOffset = (offset: number): number => {
+      let delta = 0
+      for (const replacement of replacements) {
+        if (offset <= replacement.start) break
+        if (offset >= replacement.end) {
+          delta += replacement.raw.length - (replacement.end - replacement.start)
+          continue
+        }
+        return replacement.start + delta + replacement.raw.length
+      }
+      return offset + delta
+    }
+
+    return {
+      nextValue,
+      nextStart: mapOffset(selection.start),
+      nextEnd: mapOffset(selection.end),
+    }
+  }
+
+  const resolveBareFeishuUrls = async () => {
+    const rawValue = getCurrentRawValue()
+    const urls = collectBareFeishuUrls(rawValue).filter((url) => {
+      return (
+        !larkPreviewCacheRef.current.has(url) &&
+        !pendingLarkPreviewUrlsRef.current.has(url)
+      )
+    })
+
+    if (urls.length > 0) {
+      urls.forEach((url) => pendingLarkPreviewUrlsRef.current.add(url))
+      const results = await Promise.all(
+        urls.map(async (url) => {
+          try {
+            const preview = await hermesConfig.previewFeishuLink(url)
+            return { url, preview }
+          } catch {
+            return null
+          } finally {
+            pendingLarkPreviewUrlsRef.current.delete(url)
+          }
+        })
+      )
+      results.forEach((result) => {
+        if (!result) return
+        larkPreviewCacheRef.current.set(result.url, result.preview)
+      })
+    }
+
+    const latestRawValue = getCurrentRawValue()
+    if (collectBareFeishuUrls(latestRawValue).length === 0) return
+    const selection = getSelectionOffsets()
+    const { nextValue, nextStart, nextEnd } = replaceResolvedFeishuUrls(
+      latestRawValue,
+      selection,
+      larkPreviewCacheRef.current
+    )
+    if (nextValue !== latestRawValue) {
+      applyEditorValue(nextValue, nextStart, nextEnd, { focusEditor: focused })
+    }
+  }
 
   const readFileAsDataURL = (file: File): Promise<string> =>
     new Promise((resolve, reject) => {
@@ -241,6 +411,9 @@ export function InputArea({
     if (node instanceof HTMLElement && node.dataset.skillName) {
       return buildSkillReference(node.dataset.skillName).length
     }
+    if (node instanceof HTMLElement && node.dataset.larkDocTitle && node.dataset.larkDocUrl) {
+      return buildLarkDocReference(node.dataset.larkDocTitle, node.dataset.larkDocUrl).length
+    }
     if (node.nodeName === 'BR') return 1
     return node.textContent?.length ?? 0
   }
@@ -256,6 +429,9 @@ export function InputArea({
         }
         if (child instanceof HTMLElement && child.dataset.skillName) {
           return buildSkillReference(child.dataset.skillName)
+        }
+        if (child instanceof HTMLElement && child.dataset.larkDocTitle && child.dataset.larkDocUrl) {
+          return buildLarkDocReference(child.dataset.larkDocTitle, child.dataset.larkDocUrl)
         }
         if (
           child instanceof HTMLElement &&
@@ -299,7 +475,7 @@ export function InputArea({
           }
           if (
             child instanceof HTMLElement &&
-            (child.dataset.filePath || child.dataset.skillName)
+            (child.dataset.filePath || child.dataset.skillName || child.dataset.larkDocUrl)
           ) {
             return total + (offset > 0 ? getChildRawLength(child) : 0)
           }
@@ -558,12 +734,103 @@ export function InputArea({
       return chip
     }
 
+    const createLarkDocChipNode = (title: string, url: string) => {
+      const accent = '#2B78E4'
+      const titleColor = '#235FB5'
+      const chip = doc.createElement('span')
+      chip.dataset.larkDocTitle = title
+      chip.dataset.larkDocUrl = url
+      chip.contentEditable = 'false'
+      chip.style.display = 'inline-flex'
+      chip.style.alignItems = 'center'
+      chip.style.gap = '5px'
+      chip.style.background = hexToRgba(accent, 0.1)
+      chip.style.borderRadius = '10px'
+      chip.style.padding = '0 7px'
+      chip.style.fontSize = '11.5px'
+      chip.style.lineHeight = '18px'
+      chip.style.color = titleColor
+      chip.style.verticalAlign = 'middle'
+      chip.style.maxWidth = '252px'
+      chip.style.overflow = 'hidden'
+      chip.style.userSelect = 'none'
+      chip.style.margin = '0 2px'
+      chip.style.boxShadow = 'inset 0 1px 0 rgba(255,255,255,0.52)'
+
+      const icon = doc.createElementNS('http://www.w3.org/2000/svg', 'svg')
+      icon.setAttribute('width', '12')
+      icon.setAttribute('height', '12')
+      icon.setAttribute('viewBox', '0 0 24 24')
+      icon.setAttribute('fill', 'none')
+      icon.setAttribute('stroke', accent)
+      icon.setAttribute('stroke-width', '1.7')
+      icon.setAttribute('stroke-linecap', 'round')
+      icon.setAttribute('stroke-linejoin', 'round')
+      icon.setAttribute('aria-hidden', 'true')
+      icon.style.flexShrink = '0'
+
+      const iconPath1 = doc.createElementNS('http://www.w3.org/2000/svg', 'path')
+      iconPath1.setAttribute('d', 'M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z')
+      const iconPath2 = doc.createElementNS('http://www.w3.org/2000/svg', 'path')
+      iconPath2.setAttribute('d', 'M14 3v5h5')
+      const iconPath3 = doc.createElementNS('http://www.w3.org/2000/svg', 'path')
+      iconPath3.setAttribute('d', 'M9 13h6')
+      const iconPath4 = doc.createElementNS('http://www.w3.org/2000/svg', 'path')
+      iconPath4.setAttribute('d', 'M9 17h4')
+      icon.appendChild(iconPath1)
+      icon.appendChild(iconPath2)
+      icon.appendChild(iconPath3)
+      icon.appendChild(iconPath4)
+      chip.appendChild(icon)
+
+      const label = doc.createElement('span')
+      label.textContent = title
+      label.style.overflow = 'hidden'
+      label.style.textOverflow = 'ellipsis'
+      label.style.whiteSpace = 'nowrap'
+      label.style.minWidth = '0'
+      label.style.fontWeight = '650'
+      label.style.letterSpacing = '-0.1px'
+      label.style.color = titleColor
+      chip.appendChild(label)
+
+      const removeBtn = doc.createElement('button')
+      removeBtn.type = 'button'
+      removeBtn.textContent = '×'
+      removeBtn.title = '移除'
+      removeBtn.style.width = '11px'
+      removeBtn.style.height = '11px'
+      removeBtn.style.borderRadius = '0'
+      removeBtn.style.border = 'none'
+      removeBtn.style.background = 'transparent'
+      removeBtn.style.color = accent
+      removeBtn.style.cursor = 'pointer'
+      removeBtn.style.display = 'flex'
+      removeBtn.style.alignItems = 'center'
+      removeBtn.style.justifyContent = 'center'
+      removeBtn.style.padding = '0'
+      removeBtn.style.flexShrink = '0'
+      removeBtn.style.fontSize = '11px'
+      removeBtn.style.lineHeight = '1'
+      removeBtn.style.opacity = '0.72'
+      removeBtn.onclick = (event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        removeChipNode(chip)
+      }
+      chip.appendChild(removeBtn)
+
+      return chip
+    }
+
     for (const ref of refs) {
       appendText(rawValue.slice(cursor, ref.start))
       if (ref.kind === 'file') {
         fragment.appendChild(createFileChipNode(ref.path))
-      } else {
+      } else if (ref.kind === 'skill') {
         fragment.appendChild(createSkillChipNode(ref.name))
+      } else {
+        fragment.appendChild(createLarkDocChipNode(ref.title, ref.url))
       }
       cursor = ref.end
     }
@@ -576,14 +843,21 @@ export function InputArea({
     root.replaceChildren(fragment)
   }
 
-  const applyEditorValue = (nextValue: string, nextCursor: number, nextSelectionEnd = nextCursor) => {
+  const applyEditorValue = (
+    nextValue: string,
+    nextCursor: number,
+    nextSelectionEnd = nextCursor,
+    options?: { focusEditor?: boolean }
+  ) => {
     setValue(nextValue)
     renderEditorValue(nextValue)
     syncSlashState(nextValue, nextCursor, nextSelectionEnd)
     const root = editorRef.current
     if (!root) return
-    root.focus()
-    setSelectionOffsets(nextCursor, nextSelectionEnd)
+    if (options?.focusEditor ?? true) {
+      root.focus()
+      setSelectionOffsets(nextCursor, nextSelectionEnd)
+    }
   }
 
   const insertPlainText = (text: string) => {
@@ -932,6 +1206,18 @@ export function InputArea({
     ...(extraPlaceholderTips ?? []),
     ...basePlaceholderTips,
   ]
+
+  useEffect(() => {
+    if (value.length === 0) return
+    if (collectBareFeishuUrls(value).length === 0) return
+    const timeoutId = window.setTimeout(() => {
+      void resolveBareFeishuUrls()
+    }, FEISHU_LINK_RESOLVE_DEBOUNCE_MS)
+    return () => {
+      window.clearTimeout(timeoutId)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, focused])
 
   useEffect(() => {
     if (focused) {

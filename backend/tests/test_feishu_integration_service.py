@@ -121,3 +121,21 @@ def test_vonvon_inspect_wrapper_includes_auth_and_degradation_constraints(tmp_pa
     assert "不要把它写成“我顺手做了一个最小补充”或额外贡献" in skill_text
     assert "本回答当前仅基于截图可见内容" in skill_text
     assert "是否要继续查看这份文档的详细内容" in skill_text
+
+
+def test_parse_feishu_doc_url_supports_docx_link():
+    parsed = feishu_integration_service._parse_feishu_doc_url(
+        "https://foo.feishu.cn/docx/AbCdEf123456?from=copy"
+    )
+
+    assert parsed["doc_type"] == "docx"
+    assert parsed["doc_token"] == "AbCdEf123456"
+
+
+def test_parse_feishu_doc_url_supports_wiki_link():
+    parsed = feishu_integration_service._parse_feishu_doc_url(
+        "https://foo.feishu.cn/wiki/WikToken123456"
+    )
+
+    assert parsed["doc_type"] == "wiki"
+    assert parsed["doc_token"] == "WikToken123456"

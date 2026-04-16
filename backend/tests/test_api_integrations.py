@@ -90,3 +90,21 @@ def test_set_feature_400_on_service_error(client):
         resp = client.post("/api/integrations/feishu/feature", json={"enabled": True})
     assert resp.status_code == 400
     assert resp.json()["detail"] == "not ready"
+
+
+def test_preview_feishu_link(client):
+    preview = {
+        "title": "乌鲁木齐十天九日",
+        "url": "https://foo.feishu.cn/docx/AbCdEf123456",
+        "doc_type": "docx",
+        "doc_token": "AbCdEf123456",
+    }
+    with patch("app.routes.integrations.feishu_integration_service") as svc:
+        svc.resolve_link_preview.return_value = preview
+        resp = client.post(
+            "/api/integrations/feishu/link-preview",
+            json={"url": "https://foo.feishu.cn/docx/AbCdEf123456"},
+        )
+    assert resp.status_code == 200
+    assert resp.json()["title"] == "乌鲁木齐十天九日"
+    svc.resolve_link_preview.assert_called_once_with("https://foo.feishu.cn/docx/AbCdEf123456")

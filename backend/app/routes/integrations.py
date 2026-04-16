@@ -56,6 +56,17 @@ class FeishuToggleRequest(BaseModel):
     enabled: bool
 
 
+class FeishuLinkPreviewRequest(BaseModel):
+    url: str
+
+
+class FeishuLinkPreviewResponse(BaseModel):
+    title: str
+    url: str
+    doc_type: str
+    doc_token: str
+
+
 class FeishuFlowView(BaseModel):
     flow_id: str
     kind: str
@@ -151,6 +162,14 @@ async def get_feishu_flow(flow_id: str) -> FeishuFlowView:
 async def set_feishu_feature(req: FeishuToggleRequest) -> FeishuIntegrationState:
     try:
         return feishu_integration_service.set_feature_enabled(req.enabled)
+    except (RuntimeError, ValueError) as exc:
+        raise _handle_runtime_error(exc)
+
+
+@router.post("/api/integrations/feishu/link-preview")
+async def preview_feishu_link(req: FeishuLinkPreviewRequest) -> FeishuLinkPreviewResponse:
+    try:
+        return feishu_integration_service.resolve_link_preview(req.url)
     except (RuntimeError, ValueError) as exc:
         raise _handle_runtime_error(exc)
 

@@ -226,6 +226,13 @@ export interface FeishuFlowStatus {
   command: string[]
 }
 
+export interface FeishuLinkPreview {
+  title: string
+  url: string
+  doc_type: string
+  doc_token: string
+}
+
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useHermesConfig() {
@@ -393,6 +400,9 @@ export function useHermesConfig() {
   const setFeishuFeatureEnabled = (enabled: boolean) =>
     post<FeishuIntegrationState>('/api/integrations/feishu/feature', { enabled })
 
+  const previewFeishuLink = (url: string) =>
+    post<FeishuLinkPreview>('/api/integrations/feishu/link-preview', { url })
+
   const uninstallFeishuCli = () =>
     post<FeishuIntegrationState>('/api/integrations/feishu/uninstall')
 
@@ -436,6 +446,7 @@ export function useHermesConfig() {
     completeFeishuAuthFlow,
     getFeishuFlowStatus,
     setFeishuFeatureEnabled,
+    previewFeishuLink,
     uninstallFeishuCli,
   }
 }

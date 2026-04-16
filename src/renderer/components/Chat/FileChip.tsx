@@ -133,14 +133,55 @@ export function buildSkillReference(name: string): string {
   return name.includes(' ') ? `@skill:"${name}"` : `@skill:${name}`
 }
 
+// ── @larkdoc: reference parser ───────────────────────────────────────────────
+
+export interface LarkDocReference {
+  raw: string
+  title: string
+  url: string
+  start: number
+  end: number
+}
+
+function escapeLarkDocTitle(title: string): string {
+  return title.replace(/\\/g, '\\\\').replace(/\]/g, '\\]')
+}
+
+function unescapeLarkDocTitle(title: string): string {
+  return title.replace(/\\\]/g, ']').replace(/\\\\/g, '\\')
+}
+
+export function parseLarkDocReferences(text: string): LarkDocReference[] {
+  const re = /@larkdoc:\[((?:\\.|[^\]])*)\]\((https?:\/\/[^\s)]+)\)/g
+  const refs: LarkDocReference[] = []
+  let m: RegExpExecArray | null
+  while ((m = re.exec(text)) !== null) {
+    refs.push({
+      raw: m[0],
+      title: unescapeLarkDocTitle((m[1] ?? '').trim()),
+      url: (m[2] ?? '').trim(),
+      start: m.index,
+      end: m.index + m[0].length,
+    })
+  }
+  return refs
+}
+
+export function buildLarkDocReference(title: string, url: string): string {
+  const safeTitle = escapeLarkDocTitle(title.trim().replace(/\s+/g, ' '))
+  return `@larkdoc:[${safeTitle}](${url.trim()})`
+}
+
 export type InlineReference =
   | ({ kind: 'file' } & FileReference)
   | ({ kind: 'skill' } & SkillReference)
+  | ({ kind: 'larkdoc' } & LarkDocReference)
 
 export function parseInlineReferences(text: string): InlineReference[] {
   return [
     ...parseFileReferences(text).map((ref) => ({ ...ref, kind: 'file' as const })),
     ...parseSkillReferences(text).map((ref) => ({ ...ref, kind: 'skill' as const })),
+    ...parseLarkDocReferences(text).map((ref) => ({ ...ref, kind: 'larkdoc' as const })),
   ].sort((a, b) => a.start - b.start)
 }
 
@@ -392,6 +433,121 @@ export function SkillChip({
   )
 }
 
+interface LarkDocChipProps {
+  title: string
+  url: string
+  onRemove?: () => void
+  tone?: ChipTone
+}
+
+function LarkDocIcon({ color }: { color: string }): React.ReactElement {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={color}
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z" />
+      <path d="M14 3v5h5" />
+      <path d="M9 13h6" />
+      <path d="M9 17h4" />
+    </svg>
+  )
+}
+
+export function LarkDocChip({
+  title,
+  url,
+  onRemove,
+  tone = 'default',
+}: LarkDocChipProps): React.ReactElement {
+  const accent = '#2B78E4'
+  const titleColor = '#235FB5'
+  const bg = hexToRgba(accent, tone === 'user' ? 0.14 : 0.1)
+
+  return (
+    <span
+      title={url}
+      onClick={
+        onRemove
+          ? undefined
+          : () => {
+              void window.electron?.openExternal?.(url)
+            }
+      }
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 5,
+        background: bg,
+        borderRadius: 10,
+        padding: '0 7px',
+        fontSize: 11.5,
+        lineHeight: '18px',
+        color: titleColor,
+        verticalAlign: 'middle',
+        maxWidth: tone === 'user' ? 236 : 252,
+        overflow: 'hidden',
+        flexShrink: 0,
+        userSelect: 'none',
+        margin: '0 2px',
+        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.52)',
+        cursor: onRemove ? 'default' : 'pointer',
+        pointerEvents: 'auto',
+      }}
+    >
+      <LarkDocIcon color={accent} />
+      <span
+        style={{
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          minWidth: 0,
+          fontWeight: 650,
+          letterSpacing: '-0.1px',
+        }}
+      >
+        {title}
+      </span>
+      {onRemove && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            onRemove()
+          }}
+          title="移除"
+          style={{
+            width: 11,
+            height: 11,
+            borderRadius: 0,
+            border: 'none',
+            background: 'transparent',
+            color: accent,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 0,
+            flexShrink: 0,
+            fontSize: 11,
+            lineHeight: 1,
+            opacity: 0.72,
+          }}
+        >
+          ×
+        </button>
+      )}
+    </span>
+  )
+}
+
 // ── FileChipRenderer ──────────────────────────────────────────────────────────
 
 interface FileChipRendererProps {
@@ -400,7 +556,7 @@ interface FileChipRendererProps {
 }
 
 /**
- * Splits a message string into plain text segments and @file: chip segments,
+ * Splits a message string into plain text segments and inline chip tokens,
  * rendering them inline. Used in message bubbles (read-only).
  */
 export function FileChipRenderer({
@@ -419,8 +575,10 @@ export function FileChipRenderer({
     parts.push(
       ref.kind === 'file' ? (
         <FileChip key={`f-${ref.start}`} path={ref.path} tone={tone} />
-      ) : (
+      ) : ref.kind === 'skill' ? (
         <SkillChip key={`s-${ref.start}`} name={ref.name} tone={tone} />
+      ) : (
+        <LarkDocChip key={`l-${ref.start}`} title={ref.title} url={ref.url} tone={tone} />
       )
     )
     cursor = ref.end

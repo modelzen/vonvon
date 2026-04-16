@@ -22,6 +22,7 @@ import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
 
 from app.config import HERMES_HOME
 
@@ -33,6 +34,7 @@ OFFICIAL_SKILL_SOURCE = "larksuite/cli"
 FLOW_TTL_SECONDS = 30 * 60
 FLOW_OUTPUT_LIMIT = 3200
 DEFAULT_COMMAND_TIMEOUT = 45
+LINK_PREVIEW_VERIFY_TTL_SECONDS = 60
 
 VONVON_HOME = HERMES_HOME.parent
 INTEGRATIONS_HOME = VONVON_HOME / "integrations"
@@ -50,6 +52,7 @@ _URL_RE = re.compile(r"https?://[^\s)]+")
 _DEVICE_CODE_RE = re.compile(
     r"(?i)(?:device[_ -]?code|deviceCode)[^A-Za-z0-9]+([A-Za-z0-9:._-]{6,})"
 )
+_LARK_DOC_TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{8,}$")
 
 _FLOW_KINDS = {"config_init", "auth_login"}
 
@@ -943,6 +946,239 @@ def _ensure_cli_ready_for_commands() -> Path:
     if not cli.exists():
         raise RuntimeError("vonvon 托管的 Lark CLI 还没有安装")
     return cli
+
+
+def _ensure_runtime_ready_for_link_preview() -> Dict[str, Any]:
+    state = _read_state()
+    last_verified_at = float(state.get("last_verified_at") or 0)
+    recently_verified = (_now() - last_verified_at) < LINK_PREVIEW_VERIFY_TTL_SECONDS
+    if (
+        recently_verified
+        and state.get("runtime_status") == "ready"
+        and state.get("authenticated")
+        and _is_runtime_installed()
+    ):
+        return state
+
+    state = verify_runtime()
+    if state.get("runtime_status") != "ready" or not state.get("authenticated"):
+        raise RuntimeError("请先在 vonvon 设置里完成飞书登录，再使用链接标题预览")
+    return state
+
+
+def _extract_lark_url_token(raw_url: str, marker: str) -> Optional[str]:
+    index = raw_url.find(marker)
+    if index < 0:
+        return None
+    token = raw_url[index + len(marker) :]
+    for delimiter in "/?#":
+        split_at = token.find(delimiter)
+        if split_at >= 0:
+            token = token[:split_at]
+    token = token.strip()
+    if not token or not _LARK_DOC_TOKEN_RE.match(token):
+        return None
+    return token
+
+
+def _parse_feishu_doc_url(raw_url: str) -> Dict[str, str]:
+    url = (raw_url or "").strip()
+    if not url:
+        raise ValueError("飞书链接不能为空")
+
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise ValueError("请输入有效的飞书文档链接")
+
+    host = parsed.netloc.lower()
+    if not (
+        host.endswith(".feishu.cn")
+        or host.endswith(".larksuite.com")
+        or host == "feishu.cn"
+        or host == "larksuite.com"
+    ):
+        raise ValueError("当前只支持飞书 / Lark 文档链接")
+
+    markers = [
+        ("/wiki/", "wiki"),
+        ("/docx/", "docx"),
+        ("/docs/", "doc"),
+        ("/doc/", "doc"),
+        ("/sheets/", "sheet"),
+        ("/sheet/", "sheet"),
+        ("/base/", "bitable"),
+        ("/bitable/", "bitable"),
+        ("/slides/", "slides"),
+        ("/drive/folder/", "folder"),
+    ]
+    for marker, doc_type in markers:
+        token = _extract_lark_url_token(url, marker)
+        if token:
+            return {
+                "url": url,
+                "doc_type": doc_type,
+                "doc_token": token,
+            }
+
+    raise ValueError("暂时无法从这个飞书链接中识别文档类型")
+
+
+def _run_lark_json(command: List[str], *, timeout: int = DEFAULT_COMMAND_TIMEOUT) -> Dict[str, Any]:
+    result = _run(command, timeout=timeout)
+    combined_output = _trim_output("\n".join([result.stdout or "", result.stderr or ""]))
+    if result.returncode != 0:
+        raise RuntimeError(combined_output or "读取飞书数据失败")
+    payload = _safe_json_loads(result.stdout or "")
+    if not payload:
+        raise RuntimeError(combined_output or "飞书返回不是有效 JSON")
+    return payload
+
+
+def _query_drive_meta(cli: Path, doc_token: str, doc_type: str) -> Dict[str, str]:
+    payload = {
+        "request_docs": [
+            {
+                "doc_token": doc_token,
+                "doc_type": doc_type,
+            }
+        ],
+        "with_url": True,
+    }
+    response = _run_lark_json(
+        [
+            str(cli),
+            "drive",
+            "metas",
+            "batch_query",
+            "--as",
+            "user",
+            "--data",
+            json.dumps(payload, ensure_ascii=False),
+            "--format",
+            "json",
+        ],
+        timeout=15,
+    )
+    data = response.get("data") if isinstance(response.get("data"), dict) else {}
+    metas = data.get("metas") if isinstance(data.get("metas"), list) else []
+    if metas and isinstance(metas[0], dict):
+        meta = metas[0]
+        title = str(meta.get("title") or "").strip()
+        resolved_url = str(meta.get("url") or "").strip()
+        if title:
+            return {
+                "title": title,
+                "url": resolved_url,
+                "doc_type": doc_type,
+                "doc_token": doc_token,
+            }
+
+    failed = data.get("failed_list") if isinstance(data.get("failed_list"), list) else []
+    failure_code = failed[0].get("code") if failed and isinstance(failed[0], dict) else None
+    if failure_code == 970005:
+        raise RuntimeError("当前账号无权读取这个飞书文档，或文档已不存在")
+    if failure_code == 970003:
+        raise RuntimeError("这个飞书文档类型暂不支持标题预览")
+    if failure_code == 970002:
+        raise RuntimeError("飞书文档 token 无效，无法生成标题预览")
+    raise RuntimeError("没能从飞书返回中解析出文档标题")
+
+
+def _resolve_wiki_doc_meta(cli: Path, wiki_token: str, fallback_url: str) -> Dict[str, str]:
+    response = _run_lark_json(
+        [
+            str(cli),
+            "wiki",
+            "spaces",
+            "get_node",
+            "--as",
+            "user",
+            "--params",
+            json.dumps({"token": wiki_token}, ensure_ascii=False),
+            "--format",
+            "json",
+        ],
+        timeout=15,
+    )
+    data = response.get("data") if isinstance(response.get("data"), dict) else {}
+    node = data.get("node") if isinstance(data.get("node"), dict) else {}
+    obj_type = str(node.get("obj_type") or "").strip()
+    obj_token = str(node.get("obj_token") or "").strip()
+    title = str(node.get("title") or "").strip()
+    if not obj_type or not obj_token:
+        raise RuntimeError("wiki 节点解析成功了，但没有返回实际文档 token")
+
+    try:
+        meta = _query_drive_meta(cli, obj_token, obj_type)
+        if not meta.get("title") and title:
+            meta["title"] = title
+        if not meta.get("url"):
+            meta["url"] = fallback_url
+        return meta
+    except RuntimeError:
+        if title:
+            return {
+                "title": title,
+                "url": fallback_url,
+                "doc_type": obj_type,
+                "doc_token": obj_token,
+            }
+        raise
+
+
+def _fetch_doc_title_via_docs_shortcut(cli: Path, raw_url: str) -> Optional[Dict[str, str]]:
+    try:
+        response = _run_lark_json(
+            [
+                str(cli),
+                "docs",
+                "+fetch",
+                "--as",
+                "user",
+                "--doc",
+                raw_url,
+                "--limit",
+                "1",
+                "--format",
+                "json",
+            ],
+            timeout=20,
+        )
+    except RuntimeError:
+        return None
+
+    title = str(response.get("title") or "").strip()
+    if not title:
+        return None
+    parsed = _parse_feishu_doc_url(raw_url)
+    return {
+        "title": title,
+        "url": raw_url,
+        "doc_type": parsed["doc_type"],
+        "doc_token": parsed["doc_token"],
+    }
+
+
+def resolve_link_preview(raw_url: str) -> Dict[str, str]:
+    state = verify_runtime()
+    if state.get("runtime_status") != "ready" or not state.get("authenticated"):
+        raise RuntimeError("请先在 vonvon 设置里完成飞书登录，再使用链接标题预览")
+
+    parsed = _parse_feishu_doc_url(raw_url)
+    cli = _ensure_cli_ready_for_commands()
+    if parsed["doc_type"] == "wiki":
+        return _resolve_wiki_doc_meta(cli, parsed["doc_token"], parsed["url"])
+
+    try:
+        meta = _query_drive_meta(cli, parsed["doc_token"], parsed["doc_type"])
+        if not meta.get("url"):
+            meta["url"] = parsed["url"]
+        return meta
+    except RuntimeError:
+        shortcut = _fetch_doc_title_via_docs_shortcut(cli, parsed["url"])
+        if shortcut:
+            return shortcut
+        raise
 
 
 def get_state() -> Dict[str, Any]:
