@@ -8,6 +8,7 @@ import asyncio
 import ast
 import json
 import logging
+import os
 import re
 import shutil
 import time
@@ -126,6 +127,7 @@ _jobs_lock = asyncio.Lock()
 
 _VENDORED_SKILLS_DIR = Path(__file__).resolve().parents[2] / "hermes-agent" / "skills"
 _INLINE_SKILL_RE = re.compile(r'@skill:(?:"([^"]+)"|(\S+))')
+_HIDDEN_INSTALL_PATH_FRAGMENT = f"{os.sep}.vonvon-integrations{os.sep}"
 
 
 def _find_installed_skills() -> List[Dict[str, Any]]:
@@ -153,6 +155,11 @@ def _parse_skill_md(skill_md: Path) -> tuple:
     if len(description) > MAX_DESCRIPTION_LENGTH:
         description = description[:MAX_DESCRIPTION_LENGTH] + "..."
     return name, description
+
+
+def _is_hidden_internal_skill(skill: Dict[str, Any]) -> bool:
+    install_path = str(skill.get("install_path", "") or "")
+    return _HIDDEN_INSTALL_PATH_FRAGMENT in install_path
 
 
 def _normalize_category(raw: str | None) -> str:
@@ -911,6 +918,7 @@ def list_skills() -> List[Dict[str, Any]]:
     return [
         _to_view(s, disabled_global=disabled_global, disabled_vonvon=disabled_vonvon)
         for s in _find_installed_skills()
+        if not _is_hidden_internal_skill(s)
     ]
 
 

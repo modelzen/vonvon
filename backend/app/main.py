@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import CORS_ORIGINS
-from app.routes import chat, sessions, models, auth, mcp, workspace, skills
+from app.routes import chat, sessions, models, auth, mcp, workspace, skills, integrations
 from app.services import agent_service, workspace_service
 
 
@@ -42,3 +42,4 @@ app.include_router(auth.router)
 app.include_router(mcp.router)
 app.include_router(workspace.router)
 app.include_router(skills.router)
+app.include_router(integrations.router)

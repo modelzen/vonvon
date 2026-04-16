@@ -173,6 +173,61 @@ export interface WorkspaceState {
   is_sandbox: boolean
 }
 
+export interface FeishuPermissionState {
+  screen_recording: string
+  accessibility: string
+}
+
+export interface FeishuManagedPaths {
+  home: string
+  runtime_root: string
+  current_runtime: string
+  cli_path: string
+  skill_bridge_root: string
+}
+
+export interface FeishuIntegrationState {
+  state_version: number
+  provider: string
+  feature_enabled: boolean
+  skills_enabled: boolean
+  orb_inspect_enabled: boolean
+  runtime_status: string
+  config_initialized: boolean
+  authenticated: boolean
+  auth_identity?: string | null
+  auth_default_as?: string | null
+  auth_note?: string | null
+  account_display_name?: string | null
+  account_identifier?: string | null
+  logged_in_accounts: string[]
+  current_version?: string | null
+  latest_available_version?: string | null
+  upgrade_available: boolean
+  last_checked_at?: number | null
+  last_verified_at?: number | null
+  last_good_version?: string | null
+  last_error?: string | null
+  internal_skills_synced: boolean
+  internal_skill_count: number
+  permissions: FeishuPermissionState
+  managed_paths: FeishuManagedPaths
+}
+
+export interface FeishuFlowStatus {
+  flow_id: string
+  kind: string
+  status: string
+  started_at: number
+  updated_at: number
+  verification_url?: string | null
+  device_code?: string | null
+  error?: string | null
+  output_excerpt: string
+  pid?: number | null
+  command: string[]
+}
+
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useHermesConfig() {
@@ -308,6 +363,47 @@ export function useHermesConfig() {
 
   const resetWorkspace = () => post<WorkspaceState>('/api/workspace/reset')
 
+  // ── Feishu integration ──────────────────────────────────────────────────────
+
+  const getFeishuIntegrationState = () =>
+    json<FeishuIntegrationState>('/api/integrations/feishu')
+
+  const installFeishuCli = (version?: string) =>
+    post<FeishuIntegrationState>('/api/integrations/feishu/install', version ? { version } : undefined)
+
+  const verifyFeishuRuntime = () =>
+    post<FeishuIntegrationState>('/api/integrations/feishu/verify')
+
+  const checkFeishuCliUpdates = () =>
+    post<FeishuIntegrationState>('/api/integrations/feishu/updates/check')
+
+  const upgradeFeishuCli = (version?: string) =>
+    post<FeishuIntegrationState>('/api/integrations/feishu/upgrade', version ? { version } : undefined)
+
+  const startFeishuConfigFlow = () =>
+    post<FeishuFlowStatus>('/api/integrations/feishu/config/start')
+
+  const startFeishuAuthFlow = () =>
+    post<FeishuFlowStatus>('/api/integrations/feishu/auth/start')
+
+  const completeFeishuAuthFlow = (flowId: string) =>
+    post<FeishuFlowStatus>(`/api/integrations/feishu/auth/complete/${encodeURIComponent(flowId)}`)
+
+  const getFeishuFlowStatus = (flowId: string) =>
+    json<FeishuFlowStatus>(`/api/integrations/feishu/flows/${encodeURIComponent(flowId)}`)
+
+  const setFeishuFeatureEnabled = (enabled: boolean) =>
+    post<FeishuIntegrationState>('/api/integrations/feishu/feature', { enabled })
+
+  const setFeishuSkillsEnabled = (enabled: boolean) =>
+    post<FeishuIntegrationState>('/api/integrations/feishu/skills', { enabled })
+
+  const setFeishuOrbInspectEnabled = (enabled: boolean) =>
+    post<FeishuIntegrationState>('/api/integrations/feishu/orb-inspect', { enabled })
+
+  const uninstallFeishuCli = () =>
+    post<FeishuIntegrationState>('/api/integrations/feishu/uninstall')
+
   return {
     listModels,
     switchModel,
@@ -338,5 +434,18 @@ export function useHermesConfig() {
     getWorkspace,
     setWorkspace,
     resetWorkspace,
+    getFeishuIntegrationState,
+    installFeishuCli,
+    verifyFeishuRuntime,
+    checkFeishuCliUpdates,
+    upgradeFeishuCli,
+    startFeishuConfigFlow,
+    startFeishuAuthFlow,
+    completeFeishuAuthFlow,
+    getFeishuFlowStatus,
+    setFeishuFeatureEnabled,
+    setFeishuSkillsEnabled,
+    setFeishuOrbInspectEnabled,
+    uninstallFeishuCli,
   }
 }

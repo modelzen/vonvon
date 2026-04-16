@@ -65,6 +65,24 @@ def test_list_skills_marks_disabled():
     assert pptx["enabled_global"] is True
 
 
+def test_list_skills_hides_vonvon_internal_wrappers():
+    hidden = {
+        "name": "feishu-calendar",
+        "category": "communication",
+        "description": "Hidden wrapper",
+        "install_path": "/tmp/.hermes/skills/.vonvon-integrations/feishu/feishu-calendar",
+        "version": None,
+        "source": "builtin",
+    }
+
+    with patch.object(skills_service, "_find_installed_skills", return_value=[*FAKE_SKILLS, hidden]), \
+         patch.object(skills_service, "load_config", return_value={}), \
+         patch.object(skills_service, "get_disabled_skills", return_value=set()):
+        result = skills_service.list_skills()
+
+    assert {item["name"] for item in result} == {"pptx", "git-tools"}
+
+
 def test_list_skills_returns_empty_on_exception():
     """_find_installed_skills returns [] on exception (AC-S1 guarantee)."""
     with patch("tools.skills_tool._find_all_skills",

@@ -5,6 +5,7 @@ import { HermesAuthPanel } from './HermesAuthPanel'
 import { McpServerPanel } from './McpServerPanel'
 import { SkillsPanel } from './SkillsPanel'
 import { ChatPreferencesPanel } from './ChatPreferencesPanel'
+import { FeishuIntegrationPanel } from './FeishuIntegrationPanel'
 import {
   pageStyle,
   headerStyle,
@@ -49,6 +50,13 @@ export function SettingsPanel(): React.ReactElement {
         description: '连接外部工具服务，让 agent 能调用更多上下文能力。',
         accent: '#ff7c9e',
         render: () => <McpServerPanel />,
+      },
+      {
+        id: 'feishu',
+        title: '飞书集成',
+        description: '托管官方 Lark CLI，统一处理安装、登录、升级和 vonvon 内部能力开关。',
+        accent: '#ff6b9b',
+        render: () => <FeishuIntegrationPanel />,
       },
       {
         id: 'skills',
