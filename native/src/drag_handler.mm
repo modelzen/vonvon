@@ -8,13 +8,18 @@
 // expand (in dockedCollapsed) from drag-to-detach (in any docked state).
 static const CGFloat kDragStartThreshold = 8.0;
 
-// Shared dock-aware hit test against the currently visible/exposed ball area.
-// In docked states, Feishu's interior quadrant is intentionally excluded so
-// the app's own top-right title-bar controls remain clickable.
+// Shared dock-aware hit test against the currently visible/exposed mascot area.
+// Docked states convert the mouse point through the shifted art canvas so the
+// fixed panel's transparent slack never counts as a hit.
 static BOOL PointInBallHitArea(NSPoint mouse, KirbyWindow *k) {
     if (!k.panel) return NO;
-    NSPoint topLeft = KirbyTopLeftPointFromScreenPoint(mouse, k.panel.frame);
-    return KirbyPointInHitArea(topLeft, k.state);
+    NSPoint panelPoint = NSMakePoint(mouse.x - k.panel.frame.origin.x,
+                                     mouse.y - k.panel.frame.origin.y);
+    NSPoint canvasPoint = NSZeroPoint;
+    if (!KirbyPanelPointToCanvasTopLeftPoint(panelPoint, k.state, &canvasPoint)) {
+        return NO;
+    }
+    return KirbyCanvasPointInHitArea(canvasPoint, k.state);
 }
 
 @interface DragHandler ()
@@ -120,17 +125,25 @@ static BOOL PointInBallHitArea(NSPoint mouse, KirbyWindow *k) {
                 return event;
             }
 
-            // Click (no drag). When dockedCollapsed, transition to
-            // dockedExpanded so JS shows the sidebar. When already
-            // dockedExpanded, keep the state and let JS treat this as the
-            // explicit "inspect current Lark context" gesture.
+            // Click (no drag). Single-click toggles immediately so collapse
+            // feels snappy. Double-click still triggers inspect; if the first
+            // click already collapsed the ball, we expand again before
+            // inspecting on the second click.
             KirbyWindow *k = [KirbyWindow shared];
             if (KirbyStateIsDocked(k.state)) {
-                if (k.state == KirbyStateDockedCollapsed) {
-                    k.state = KirbyStateDockedExpanded;
-                    [k setForm:@"dockedExpanded"];
+                if (event.clickCount >= 2) {
+                    if (k.state == KirbyStateDockedCollapsed) {
+                        [k applyState:KirbyStateDockedExpanded preservingAnchor:YES];
+                        [k setForm:@"dockedExpanded"];
+                    }
+                    if (s.onDockedInspect) s.onDockedInspect();
+                } else {
+                    if (k.state == KirbyStateDockedCollapsed) {
+                        [k applyState:KirbyStateDockedExpanded preservingAnchor:YES];
+                        [k setForm:@"dockedExpanded"];
+                    }
+                    if (s.onDockedClick) s.onDockedClick();
                 }
-                if (s.onDockedClick) s.onDockedClick();
             }
             // Floating/snapping states still swallow the click silently.
             return event;

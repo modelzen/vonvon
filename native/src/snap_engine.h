@@ -1,6 +1,7 @@
 #pragma once
 #import <Cocoa/Cocoa.h>
 #import <CoreGraphics/CoreGraphics.h>
+#import "kirby_window.h"
 
 typedef void (^SnapProximityBlock)(CGFloat distance);
 typedef void (^VoidBlock)(void);
@@ -36,9 +37,11 @@ typedef void (^FeishuMovedBlock)(CGRect newBounds);
 /**
  * Convert Feishu's CG-space bounds (top-left origin, y-down) into the NSPanel
  * origin (bottom-left, y-up) at which the 120×120 Kirby panel should sit so
- * that its geometric center (60, 60) coincides with Feishu's top-right corner.
- * Used for both the snap animation target and continuous tracking updates.
+ * that the current state's logical mascot anchor lands on Feishu's top-right
+ * corner. Used for both the snap animation target and continuous tracking
+ * updates while docked.
  */
 - (NSPoint)dockedTopRightOriginForFeishuBounds:(CGRect)cgBounds;
+- (NSPoint)dockedTopRightOriginForFeishuBounds:(CGRect)cgBounds state:(KirbyState)state;
 
 @end

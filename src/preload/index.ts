@@ -71,7 +71,7 @@ contextBridge.exposeInMainWorld('electron', {
     const allowedChannels = [
       'chat:chunk', 'chat:error', 'chat:done',
       'kirby:snap-proximity', 'kirby:snap-complete', 'kirby:detach',
-      'kirby:docked-click',
+      'kirby:docked-inspect',
       'kirby:sidebar-show', 'kirby:sidebar-hide'
     ]
     if (allowedChannels.includes(channel)) {

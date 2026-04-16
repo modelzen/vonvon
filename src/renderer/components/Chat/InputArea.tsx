@@ -27,6 +27,7 @@ interface InputAreaProps {
   isLoading: boolean
   onSendWithAttachments?: (text: string, atts: ImageAttachment[], skills?: string[]) => void
   onStop?: () => void
+  placeholderTips?: string[]
   toolbarLeft?: React.ReactNode
   toolbarRight?: React.ReactNode
 }
@@ -124,6 +125,7 @@ export function InputArea({
   isLoading,
   onSendWithAttachments,
   onStop,
+  placeholderTips: extraPlaceholderTips,
   toolbarLeft,
   toolbarRight,
 }: InputAreaProps): React.ReactElement {
@@ -920,9 +922,13 @@ export function InputArea({
   const canSend = hasInput
   const isQueueing = isLoading && hasInput
   const showSlashMenu = focused && slashState !== null
-  const placeholderTips = attachmentsEnabled
+  const basePlaceholderTips = attachmentsEnabled
     ? PLACEHOLDER_TIPS_WITH_ATTACHMENTS
     : PLACEHOLDER_TIPS_FILES_ONLY
+  const placeholderTips = [
+    ...(extraPlaceholderTips ?? []),
+    ...basePlaceholderTips,
+  ]
 
   useEffect(() => {
     if (focused) {
@@ -931,7 +937,7 @@ export function InputArea({
     }
     setPlaceholderTipIndex(0)
     setPlaceholderTipLeaving(false)
-  }, [focused, attachmentsEnabled])
+  }, [focused, attachmentsEnabled, extraPlaceholderTips?.length])
 
   useEffect(() => {
     if (focused || value.length > 0 || queue.length > 0 || placeholderTips.length <= 1) {

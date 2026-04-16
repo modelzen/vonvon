@@ -11,8 +11,11 @@
 
 - (NSView *)hitTest:(NSPoint)point {
     KirbyWindow *k = [KirbyWindow shared];
-    NSPoint topLeft = KirbyTopLeftPointFromPanelPoint(point, self.bounds);
-    if (!KirbyPointInHitArea(topLeft, k.state)) {
+    NSPoint canvasPoint = NSZeroPoint;
+    if (!KirbyPanelPointToCanvasTopLeftPoint(point, k.state, &canvasPoint)) {
+        return nil;
+    }
+    if (!KirbyCanvasPointInHitArea(canvasPoint, k.state)) {
         return nil;
     }
     return [super hitTest:point];
@@ -56,9 +59,8 @@
 
         // WKWebView fills the panel
         WKWebViewConfiguration *cfg = [[WKWebViewConfiguration alloc] init];
-        self.webView = [[WKWebView alloc] initWithFrame:contentView.bounds
+        self.webView = [[WKWebView alloc] initWithFrame:KirbyCanvasFrameForState(KirbyStateFloating)
                                           configuration:cfg];
-        self.webView.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
         // Transparent background. No corner-radius clip — the SVG draws the
         // ball shape directly, and clipping to a circle would hide dock-mode
         // arms/feet that poke outside the ball's nominal outline.
@@ -76,8 +78,28 @@
 }
 
 - (void)setState:(KirbyState)state {
+    [self applyState:state preservingAnchor:NO];
+}
+
+- (void)applyState:(KirbyState)state preservingAnchor:(BOOL)preservingAnchor {
+    NSPoint anchorOnScreen = NSZeroPoint;
+    if (preservingAnchor && self.panel && self.webView) {
+        NSRect oldCanvasFrame = self.webView.frame;
+        NSPoint oldAnchorInPanel = NSMakePoint(oldCanvasFrame.origin.x + kKirbyAnchorX,
+                                               oldCanvasFrame.origin.y + kKirbyAnchorY);
+        anchorOnScreen = NSMakePoint(self.panel.frame.origin.x + oldAnchorInPanel.x,
+                                     self.panel.frame.origin.y + oldAnchorInPanel.y);
+    }
+
     _state = state;
     [self syncWindowLevelForState];
+    [self syncCanvasLayout];
+
+    if (preservingAnchor && self.panel) {
+        NSPoint newAnchorInPanel = KirbyAnchorPointInPanelForState(self.state);
+        [self.panel setFrameOrigin:NSMakePoint(anchorOnScreen.x - newAnchorInPanel.x,
+                                               anchorOnScreen.y - newAnchorInPanel.y)];
+    }
 }
 
 - (void)syncWindowLevelForState {
@@ -89,6 +111,15 @@
     self.panel.level = KirbyStateIsDocked(self.state)
         ? NSNormalWindowLevel
         : NSFloatingWindowLevel;
+}
+
+- (void)syncCanvasLayout {
+    if (!self.webView) return;
+    self.webView.frame = KirbyCanvasFrameForState(self.state);
+}
+
+- (void)syncCanvasLayoutPreservingAnchor {
+    [self applyState:self.state preservingAnchor:YES];
 }
 
 - (void)orderAboveWindowNumber:(NSInteger)windowNumber {

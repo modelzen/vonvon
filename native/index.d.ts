@@ -46,11 +46,15 @@ declare module 'vonvon-native' {
    *  mode via performDetachAnimation (Feishu disappeared). */
   export function onDetach(callback: () => void): void
 
-  /** Register a callback fired when the user clicks the ball while docked.
-   *  In dockedCollapsed, native has already transitioned state to
-   *  dockedExpanded and switched the SVG form. In dockedExpanded, JS can
-   *  treat the callback as the explicit inspect gesture. */
+  /** Register a callback fired when the user single-clicks the ball while
+   *  docked. In dockedCollapsed, native has already transitioned state to
+   *  dockedExpanded and switched the SVG form so JS can re-show the sidebar. */
   export function onDockedClick(callback: (bounds: FeishuBounds) => void): void
+
+  /** Register a callback fired when the user double-clicks the ball while
+   *  docked. Native keeps the ball docked and expanded; JS can use this to
+   *  trigger the explicit inspect-current-context flow. */
+  export function onDockedInspect(callback: (bounds: FeishuBounds) => void): void
 
   /** Register a callback fired when the user drags the ball past 8px
    *  while docked (tear-off). Native has already transitioned state to

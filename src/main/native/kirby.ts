@@ -33,6 +33,7 @@ type KirbyNative = {
   onSnapComplete(cb: (feishuBounds: FeishuBounds) => void): void
   onDetach(cb: () => void): void
   onDockedClick?(cb: (feishuBounds: FeishuBounds) => void): void
+  onDockedInspect?(cb: (feishuBounds: FeishuBounds) => void): void
   onDragLeave?(cb: () => void): void
   onCollapseSidebar?(cb: () => void): void
   onFeishuMoved?(cb: (feishuBounds: FeishuBounds) => void): void
@@ -47,9 +48,10 @@ let native: KirbyNative | null = null
 let _mainWin: BrowserWindow | null = null
 let _kirbyUrl = ''
 let _sidebarZOrderTimer: NodeJS.Timeout | null = null
-// Latest known Feishu bounds, kept in sync via onSnapComplete /
-// onDockedClick callbacks. Used when the user hides→shows the sidebar via
-// the ✕ button and we need to re-position on the current Feishu window.
+let _sidebarHideTimer: NodeJS.Timeout | null = null
+// Latest known Feishu bounds, kept in sync via onSnapComplete and later
+// docked interactions. Used when the user hides→shows the sidebar via the
+// ✕ button and we need to re-position on the current Feishu window.
 let _lastFeishuBounds: FeishuBounds | null = null
 
 function feishuMediaSourceId(feishu: FeishuBounds): string | null {
@@ -79,6 +81,13 @@ function stopSidebarZOrderSync(): void {
   if (_sidebarZOrderTimer) {
     clearInterval(_sidebarZOrderTimer)
     _sidebarZOrderTimer = null
+  }
+}
+
+function clearSidebarHideTimer(): void {
+  if (_sidebarHideTimer) {
+    clearTimeout(_sidebarHideTimer)
+    _sidebarHideTimer = null
   }
 }
 
@@ -124,6 +133,7 @@ function applySidebarBounds(feishu: FeishuBounds): void {
  */
 function releaseSidebar(animate: boolean = false): void {
   if (!_mainWin) return
+  clearSidebarHideTimer()
   stopSidebarZOrderSync()
   _mainWin.setAlwaysOnTop(false)
   _mainWin.setMinimumSize(0, 0)
@@ -133,7 +143,8 @@ function releaseSidebar(animate: boolean = false): void {
   if (animate) {
     const win = _mainWin
     win.webContents.send('kirby:sidebar-hide')
-    setTimeout(() => {
+    _sidebarHideTimer = setTimeout(() => {
+      _sidebarHideTimer = null
       if (!win.isDestroyed() && win.isVisible()) {
         win.hide()
       }
@@ -141,6 +152,27 @@ function releaseSidebar(animate: boolean = false): void {
   } else {
     _mainWin.hide()
   }
+}
+
+function showDockedSidebar(feishuBounds: FeishuBounds): boolean {
+  clearSidebarHideTimer()
+  _lastFeishuBounds = feishuBounds
+  const wasVisible = !!_mainWin?.isVisible()
+  if (_mainWin) {
+    applySidebarBounds(feishuBounds)
+    _mainWin.show()
+    syncSidebarAboveFeishu(feishuBounds)
+    startSidebarZOrderSync()
+  }
+  return wasVisible
+}
+
+function collapseDockedSidebar(addon?: KirbyNative | null): void {
+  const resolvedAddon = addon ?? loadAddon()
+  if (resolvedAddon && typeof resolvedAddon.collapseSidebar === 'function') {
+    resolvedAddon.collapseSidebar()
+  }
+  releaseSidebar(true)
 }
 
 function loadAddon(): KirbyNative | null {
@@ -213,12 +245,8 @@ export function initKirby(mainWindow: BrowserWindow): void {
       closeFloatingChatWindow()
     }
 
-    _lastFeishuBounds = feishuBounds
     if (_mainWin) {
-      applySidebarBounds(feishuBounds)
-      _mainWin.show()
-      syncSidebarAboveFeishu(feishuBounds)
-      startSidebarZOrderSync()
+      showDockedSidebar(feishuBounds)
       // Notify renderer so it can play the entry animation.
       _mainWin.webContents.send('kirby:sidebar-show')
     }
@@ -235,28 +263,37 @@ export function initKirby(mainWindow: BrowserWindow): void {
     _mainWin?.webContents.send('kirby:detach')
   })
 
-// Ball clicked while docked:
-// - if the sidebar was hidden (dockedCollapsed), re-show it
-// - if the sidebar was already visible (dockedExpanded), forward an
-//   explicit inspect event to the renderer so it can sample current Lark
-//   context for the active session.
+  // Ball single-clicked while docked: toggle the sidebar. Collapsed → show,
+  // expanded → collapse back into the ball.
   if (typeof addon.onDockedClick === 'function') {
     addon.onDockedClick((feishuBounds: FeishuBounds) => {
       if (isFloatingChatWindowOpen()) {
         closeFloatingChatWindow()
       }
-      const wasVisible = !!_mainWin?.isVisible()
-      _lastFeishuBounds = feishuBounds
+      if (_mainWin?.isVisible()) {
+        collapseDockedSidebar(addon)
+        return
+      }
+      showDockedSidebar(feishuBounds)
       if (_mainWin) {
-        applySidebarBounds(feishuBounds)
-        _mainWin.show()
-        syncSidebarAboveFeishu(feishuBounds)
-        startSidebarZOrderSync()
+        _mainWin.webContents.send('kirby:sidebar-show')
+      }
+    })
+  }
+
+  // Ball double-clicked while docked: make sure the sidebar is visible,
+  // then forward an explicit inspect request to the renderer.
+  if (typeof addon.onDockedInspect === 'function') {
+    addon.onDockedInspect((feishuBounds: FeishuBounds) => {
+      if (isFloatingChatWindowOpen()) {
+        closeFloatingChatWindow()
+      }
+      const wasVisible = showDockedSidebar(feishuBounds)
+      if (_mainWin) {
         if (!wasVisible) {
           _mainWin.webContents.send('kirby:sidebar-show')
-        } else {
-          _mainWin.webContents.send('kirby:docked-click', feishuBounds)
         }
+        _mainWin.webContents.send('kirby:docked-inspect', feishuBounds)
       }
     })
   }
@@ -333,11 +370,7 @@ export function registerKirbyIpcHandlers(): void {
   // (releaseSidebar(true) sends 'kirby:sidebar-hide' first then hides
   // after the 240ms exit animation completes).
   ipcMain.on('kirby:close-sidebar', () => {
-    const addon = loadAddon()
-    if (addon && typeof addon.collapseSidebar === 'function') {
-      addon.collapseSidebar()
-    }
-    releaseSidebar(true)
+    collapseDockedSidebar()
   })
 
   ipcMain.handle('kirby:getState', () =>

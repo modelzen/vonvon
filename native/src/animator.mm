@@ -17,10 +17,13 @@
         KirbyWindow *kirby = [KirbyWindow shared];
         if (!kirby.panel) return;
 
-        // Target: panel's geometric center lands on Feishu's top-right corner.
+        // Target: the expanded docked form's logical anchor lands on Feishu's
+        // top-right corner. The canvas is offset inside the fixed panel so
+        // transparent slack does not cover Feishu's own controls.
         CGRect feishu = [SnapEngine shared].targetFeishuBounds;
         NSPoint targetOrigin =
-            [[SnapEngine shared] dockedTopRightOriginForFeishuBounds:feishu];
+            [[SnapEngine shared] dockedTopRightOriginForFeishuBounds:feishu
+                                                               state:KirbyStateDockedExpanded];
         NSRect target = NSMakeRect(
             targetOrigin.x, targetOrigin.y,
             kKirbyPanelSize, kKirbyPanelSize);

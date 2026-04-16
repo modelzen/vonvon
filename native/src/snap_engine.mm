@@ -107,6 +107,10 @@ static const NSTimeInterval kDockedTrackingInterval = 1.0 / 30.0;
 }
 
 - (NSPoint)dockedTopRightOriginForFeishuBounds:(CGRect)cgBounds {
+    return [self dockedTopRightOriginForFeishuBounds:cgBounds state:[KirbyWindow shared].state];
+}
+
+- (NSPoint)dockedTopRightOriginForFeishuBounds:(CGRect)cgBounds state:(KirbyState)state {
     // cgBounds is in CG coords (global, top-left origin, y-down).
     // Top-right corner in CG:
     CGFloat trX = cgBounds.origin.x + cgBounds.size.width;
@@ -131,9 +135,8 @@ static const NSTimeInterval kDockedTrackingInterval = 1.0 / 30.0;
                                : NSScreen.mainScreen.frame.size.height;
     CGFloat nsY = primaryH - trY;
 
-    // Panel origin = center - (size/2, size/2); center = Feishu top-right.
-    CGFloat half = kKirbyPanelSize / 2;
-    return NSMakePoint(trX - half, nsY - half);
+    NSPoint anchorInPanel = KirbyAnchorPointInPanelForState(state);
+    return NSMakePoint(trX - anchorInPanel.x, nsY - anchorInPanel.y);
 }
 
 - (void)startTrackingTimer {

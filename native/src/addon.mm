@@ -15,6 +15,7 @@ static napi_threadsafe_function g_completeFn       = nullptr;
 static napi_threadsafe_function g_detachFn         = nullptr;
 static napi_threadsafe_function g_rightClickFn     = nullptr;
 static napi_threadsafe_function g_dockedClickFn    = nullptr;
+static napi_threadsafe_function g_dockedInspectFn  = nullptr;
 static napi_threadsafe_function g_dragLeaveFn      = nullptr;
 static napi_threadsafe_function g_collapseSidebarFn = nullptr;
 static napi_threadsafe_function g_feishuMovedFn    = nullptr;
@@ -151,7 +152,7 @@ Napi::Value CollapseSidebar(const Napi::CallbackInfo& info) {
         // Only transition from dockedExpanded — ignore if already collapsed
         // or if user detached the ball in the meantime.
         if (k.state == KirbyStateDockedExpanded) {
-            k.state = KirbyStateDockedCollapsed;
+            [k applyState:KirbyStateDockedCollapsed preservingAnchor:YES];
             [k setForm:@"dockedCollapsed"];
         }
     });
@@ -243,7 +244,7 @@ Napi::Value OnRightClick(const Napi::CallbackInfo& info) {
     return info.Env().Undefined();
 }
 
-// Native → JS: ball clicked while dockedCollapsed. Carries current Feishu
+// Native → JS: ball single-clicked while docked. Carries current Feishu
 // bounds so JS can position the sidebar (Feishu may have moved since the
 // last onSnapComplete if the user dragged Feishu while collapsed).
 Napi::Value OnDockedClick(const Napi::CallbackInfo& info) {
@@ -262,6 +263,29 @@ Napi::Value OnDockedClick(const Napi::CallbackInfo& info) {
                 (double)[SnapEngine shared].lastFeishuWindowID,
                 std::string([[[SnapEngine shared].lastFeishuWindowTitle ?: @"" description] UTF8String] ?: "")};
             napi_call_threadsafe_function(g_dockedClickFn, b, napi_tsfn_nonblocking);
+        }
+    };
+    return info.Env().Undefined();
+}
+
+// Native → JS: ball double-clicked while docked. Carries current Feishu
+// bounds so JS can inspect against the latest visible Feishu window.
+Napi::Value OnDockedInspect(const Napi::CallbackInfo& info) {
+    napi_env env = info.Env();
+    if (g_dockedInspectFn) {
+        napi_release_threadsafe_function(g_dockedInspectFn, napi_tsfn_release);
+        g_dockedInspectFn = nullptr;
+    }
+    g_dockedInspectFn = MakeTsfn(env, static_cast<napi_value>(info[0]),
+                                  "DockedInspect", CallSnapCompleteWithBounds);
+    [DragHandler shared].onDockedInspect = ^{
+        if (g_dockedInspectFn) {
+            CGRect fb = [SnapEngine shared].targetFeishuBounds;
+            FeishuBounds *b = new FeishuBounds{
+                fb.origin.x, fb.origin.y, fb.size.width, fb.size.height,
+                (double)[SnapEngine shared].lastFeishuWindowID,
+                std::string([[[SnapEngine shared].lastFeishuWindowTitle ?: @"" description] UTF8String] ?: "")};
+            napi_call_threadsafe_function(g_dockedInspectFn, b, napi_tsfn_nonblocking);
         }
     };
     return info.Env().Undefined();
@@ -339,6 +363,7 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("setVisible",        Napi::Function::New(env, SetVisible));
     exports.Set("onRightClick",      Napi::Function::New(env, OnRightClick));
     exports.Set("onDockedClick",     Napi::Function::New(env, OnDockedClick));
+    exports.Set("onDockedInspect",   Napi::Function::New(env, OnDockedInspect));
     exports.Set("onDragLeave",       Napi::Function::New(env, OnDragLeave));
     exports.Set("onCollapseSidebar", Napi::Function::New(env, OnCollapseSidebar));
     exports.Set("onFeishuMoved",     Napi::Function::New(env, OnFeishuMoved));

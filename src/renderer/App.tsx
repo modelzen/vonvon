@@ -18,6 +18,11 @@ import { VONVON_INSPECT_MESSAGE } from './lib/vonvonInspect'
 // we use it to (a) leave room for macOS traffic lights in the header and
 // (b) hide the ✕ detach button, which is meaningless in standalone mode.
 const isFloatingWindow = window.location.hash === '#floating'
+const DOCKED_INTERACTION_PLACEHOLDER_TIPS = [
+  '单击 vonvon，可以展开或收起侧边栏哦',
+  '双击 vonvon，我会看一眼当前飞书',
+  '拖动 vonvon，可以解除飞书吸附哦',
+]
 const TODO_COLLAPSED_OVERLAP_PX = 32
 const TODO_EXPANDED_OVERLAP_PX = 12
 const TODO_VISIBLE_GAP_PX = 14
@@ -90,7 +95,7 @@ function App(): React.ReactElement {
   useEffect(() => {
     if (isFloatingWindow) return
 
-    const dockedClickHandler = (payload?: unknown): void => {
+    const dockedInspectHandler = (payload?: unknown): void => {
       const sessionId = activeSessionIdRef.current
       if (!sessionId || !payload || typeof payload !== 'object') return
       if (inspectInFlightRef.current) return
@@ -136,11 +141,11 @@ function App(): React.ReactElement {
     }
 
     try {
-      ;(window as any).electron?.on?.('kirby:docked-click', dockedClickHandler)
+      ;(window as any).electron?.on?.('kirby:docked-inspect', dockedInspectHandler)
     } catch {}
     return () => {
       try {
-        ;(window as any).electron?.off?.('kirby:docked-click', dockedClickHandler)
+        ;(window as any).electron?.off?.('kirby:docked-inspect', dockedInspectHandler)
       } catch {}
     }
   }, [isLoading, sendMessage])
@@ -420,6 +425,7 @@ function App(): React.ReactElement {
                 onSendWithAttachments={(msg, atts, skills) => { if (activeSession) sendMessage(msg, activeSession.id, atts, skills) }}
                 isLoading={isLoading}
                 onStop={stop}
+                placeholderTips={isFloatingWindow ? undefined : DOCKED_INTERACTION_PLACEHOLDER_TIPS}
                 toolbarLeft={<AgentModelSelector />}
                 toolbarRight={<UsageRing percent={displayPercent} />}
               />
