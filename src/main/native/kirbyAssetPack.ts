@@ -87,6 +87,9 @@ export type KirbyAssetPackRuntimeConfig = {
   manifest: KirbyAssetPackManifest
 }
 
+const DEFAULT_KIRBY_PACK_ID = 'cat'
+const FALLBACK_KIRBY_PACK_ID = 'default'
+
 const REQUIRED_FORMS: KirbyVisualForm[] = [
   'floating',
   'snapping',
@@ -150,11 +153,11 @@ function loadPackManifest(packId: string): KirbyAssetPackManifest {
 
 export function resolveKirbyAssetPack(
   kirbyHtmlUrl: string,
-  requestedPackId: string = process.env.VONVON_KIRBY_PACK ?? 'default'
+  requestedPackId: string = process.env.VONVON_KIRBY_PACK ?? DEFAULT_KIRBY_PACK_ID
 ): KirbyAssetPackRuntimeConfig {
-  const candidates = requestedPackId === 'default'
-    ? ['default']
-    : [requestedPackId, 'default']
+  const candidates = requestedPackId === FALLBACK_KIRBY_PACK_ID
+    ? [FALLBACK_KIRBY_PACK_ID]
+    : [requestedPackId, FALLBACK_KIRBY_PACK_ID]
 
   let lastError: unknown = null
 

@@ -133,9 +133,21 @@ function validateAssetReference(packDir, packName, label, assetPath, panelWidth,
     const dims = extension === '.png'
       ? parsePngDimensions(resolved)
       : parseSvgDimensions(resolved)
-    if (dims.width !== panelWidth || dims.height !== panelHeight) {
+
+    const scaleX = dims.width / panelWidth
+    const scaleY = dims.height / panelHeight
+    const sameScale = Math.abs(scaleX - scaleY) < 1e-6
+    const isIntegerScale = Math.abs(scaleX - Math.round(scaleX)) < 1e-6
+    const validRasterScale = extension !== '.png'
+      ? dims.width === panelWidth && dims.height === panelHeight
+      : sameScale && isIntegerScale && scaleX >= 1
+
+    if (!validRasterScale) {
+      const expected = extension === '.png'
+        ? `${panelWidth}x${panelHeight} or an integer multiple such as ${panelWidth * 2}x${panelHeight * 2}`
+        : `${panelWidth}x${panelHeight}`
       logError(
-        `${packName}: ${label} has size ${dims.width}x${dims.height}, expected ${panelWidth}x${panelHeight}`
+        `${packName}: ${label} has size ${dims.width}x${dims.height}, expected ${expected}`
       )
     }
   } catch (err) {

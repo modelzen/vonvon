@@ -36,7 +36,7 @@ public/
 
 ## 运行时如何选包
 
-- 默认包 id 是 `default`
+- 默认包 id 是 `cat`
 - 可以用环境变量 `VONVON_KIRBY_PACK` 指定其他包
 - 如果指定包加载失败，主进程会回退到 `default`
 - 开发环境从 `public/kirby-packs/<pack-id>/manifest.json` 读取
@@ -270,12 +270,14 @@ public/
 - transition 如果声明了帧，也会逐帧校验
 - 资源路径不能跳出当前 pack 目录
 - 只接受 `.svg` 和 `.png`
-- 每个资源的尺寸必须和 `layout.panel.width/height` 一致
+- `SVG` 资源尺寸必须和 `layout.panel.width/height` 一致
+- `PNG` 资源可以是 `layout.panel.width/height` 的整数倍，用作高 DPI 素材
 - `anchor.x/y` 必须落在 panel 内
 - `hitArea.r` 必须大于 0
 - `hitArea` 如果超出 panel，会报 warning
 
 当前默认包所有素材都是 `SVG`，并且都是 `120 x 120` 逻辑画布。
+如果使用 `PNG`，逻辑画布仍然是 `120 x 120`，但文件本身可以做成 `240 x 240` 这类整数倍分辨率，运行时会按同样的逻辑尺寸缩放显示。
 
 ## 当前仍然硬编码在 native 的约束
 
@@ -300,6 +302,7 @@ public/
 这意味着：
 
 - 当前最安全的做法是让新素材包继续沿用 `120 x 120`、`anchor=(60,60)`、`hitArea=(60,60,r=40)`
+- 如果素材是 `PNG`，推荐用 `240 x 240` 这样的高 DPI 导出，但视觉构图仍然要遵守同一个 `120 x 120` 逻辑合同
 - 目前更适合“换形态和画风”，不适合随意改几何合同
 - 如果想改成完全不同的体型、锚点或点击区，还需要同步修改 native 命中测试和 dock 布局
 

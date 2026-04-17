@@ -517,7 +517,7 @@
           <div>
             <label class="control-label" for="pack-id">Pack ID</label>
             <div class="row">
-              <input id="pack-id" value="default" spellcheck="false" />
+              <input id="pack-id" value="cat" spellcheck="false" />
               <button id="load-pack">加载素材包</button>
               <button id="choose-pack-directory" class="secondary">选择素材包目录</button>
             </div>
@@ -539,7 +539,7 @@
           </div>
 
           <div class="status" id="status-text">
-            输入 pack id 并点击“加载素材包”，例如 `default`。
+            输入 pack id 并点击“加载素材包”，例如 `cat`。
           </div>
         </div>
       </section>
@@ -616,6 +616,18 @@
     <script>
       ;(() => {
         const REQUIRED_STATES = ['floating', 'snapping', 'dockedExpanded', 'dockedCollapsed']
+        const FILE_PROTOCOL_STATE_CANDIDATES = {
+          floating: ['floating.svg', 'floating.png'],
+          snapping: ['snapping.svg', 'snapping.png'],
+          dockedExpanded: ['docked-expanded.svg', 'docked-expanded.png'],
+          dockedCollapsed: ['docked-collapsed.svg', 'docked-collapsed.png'],
+        }
+        const FILE_PROTOCOL_DETACH_FRAME_CANDIDATES = [
+          ['transitions/detach-01.svg', 'transitions/detach-01.png'],
+          ['transitions/detach-02.svg', 'transitions/detach-02.png'],
+          ['transitions/detach-03.svg', 'transitions/detach-03.png'],
+          ['transitions/detach-04.svg', 'transitions/detach-04.png'],
+        ]
         const EMBEDDED_DEFAULT_MANIFEST = {
           meta: {
             id: 'default',
@@ -782,6 +794,61 @@
             return runtime.assetResolver(relativePath)
           }
           return new URL(relativePath, runtime.assetBase).toString()
+        }
+
+        function checkImageAvailability(url) {
+          return new Promise((resolve) => {
+            const img = new Image()
+            img.onload = () => resolve(true)
+            img.onerror = () => resolve(false)
+            img.src = url
+          })
+        }
+
+        async function resolveFirstAvailableAsset(packId, candidates) {
+          const assetBase = new URL(`./kirby-packs/${packId}/`, window.location.href)
+          for (const candidate of candidates) {
+            const url = new URL(candidate, assetBase).toString()
+            if (await checkImageAvailability(url)) {
+              return candidate
+            }
+          }
+          return null
+        }
+
+        async function buildFileProtocolFallbackManifest(packId) {
+          const manifest = JSON.parse(JSON.stringify(EMBEDDED_DEFAULT_MANIFEST))
+          manifest.meta.id = packId
+          manifest.meta.name = packId
+          manifest.meta.author = 'Local file preview'
+
+          for (const state of REQUIRED_STATES) {
+            const src = await resolveFirstAvailableAsset(packId, FILE_PROTOCOL_STATE_CANDIDATES[state] || [])
+            if (!src) {
+              throw new Error(`file:// 预览模式下找不到状态素材 ${state}`)
+            }
+            manifest.states[state].src = src
+          }
+
+          const detachFrames = []
+          for (const candidates of FILE_PROTOCOL_DETACH_FRAME_CANDIDATES) {
+            const src = await resolveFirstAvailableAsset(packId, candidates)
+            if (!src) {
+              break
+            }
+            detachFrames.push({
+              src,
+              durationMs: detachFrames.length === FILE_PROTOCOL_DETACH_FRAME_CANDIDATES.length - 1 ? 80 : 70,
+            })
+          }
+
+          if (detachFrames.length > 0) {
+            manifest.transitions.detach.frames = detachFrames
+          } else {
+            delete manifest.transitions.detach
+          }
+
+          return manifest
         }
 
         function normalizeFrames(stateDef) {
@@ -1049,9 +1116,9 @@
             }
             manifest = await response.json()
           } catch (error) {
-            if (window.location.protocol === 'file:' && packId === 'default') {
-              manifest = EMBEDDED_DEFAULT_MANIFEST
-              setStatus('检测到 file:// 预览，已切换到内嵌 default manifest。', false)
+            if (window.location.protocol === 'file:') {
+              manifest = await buildFileProtocolFallbackManifest(packId)
+              setStatus('检测到 file:// 预览，已切换到本地文件探测模式。', false)
             } else {
               throw error
             }
@@ -1077,7 +1144,7 @@
         }
 
         loadButton.addEventListener('click', async () => {
-          const packId = packInput.value.trim() || 'default'
+          const packId = packInput.value.trim() || 'cat'
           const url = new URL(window.location.href)
           url.searchParams.set('pack', packId)
           window.history.replaceState({}, '', url)
@@ -1119,7 +1186,7 @@
         })
 
         const params = new URLSearchParams(window.location.search)
-        const initialPack = params.get('pack') || 'default'
+        const initialPack = params.get('pack') || 'cat'
         packInput.value = initialPack
         loadPack(initialPack).catch((error) => {
           setStatus(`加载失败：${error instanceof Error ? error.message : String(error)}`, true)
