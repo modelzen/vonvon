@@ -1,8 +1,11 @@
 """Session management via hermes SessionDB."""
 import uuid
+import logging
 from typing import List, Dict, Any, Optional
 
 from app.services import agent_service
+
+log = logging.getLogger(__name__)
 
 
 def get_session_db():
@@ -33,11 +36,29 @@ def list_sessions(
     archived_only: bool = False,
 ) -> List[Dict[str, Any]]:
     db = get_session_db()
-    return db.list_sessions_rich(
-        source="vonvon",
-        include_archived=include_archived or archived_only,
-        archived_only=archived_only,
-    )
+    try:
+        return db.list_sessions_rich(
+            source="vonvon",
+            include_archived=include_archived or archived_only,
+            archived_only=archived_only,
+        )
+    except TypeError as exc:
+        # Packaged builds may run against an older hermes-agent runtime whose
+        # SessionDB.list_sessions_rich() predates archive-filter parameters.
+        # Fall back to the legacy signature and filter archived rows here so
+        # history loading keeps working instead of returning HTTP 500.
+        if "include_archived" not in str(exc) and "archived_only" not in str(exc):
+            raise
+
+        log.info(
+            "SessionDB.list_sessions_rich() lacks archive kwargs; using legacy fallback"
+        )
+        sessions = db.list_sessions_rich(source="vonvon")
+        if archived_only:
+            return [session for session in sessions if session.get("archived_at")]
+        if include_archived:
+            return sessions
+        return [session for session in sessions if not session.get("archived_at")]
 
 
 def create_session(name: str) -> Dict[str, Any]:

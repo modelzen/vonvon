@@ -3,10 +3,13 @@ import { existsSync } from 'fs'
 import { join } from 'path'
 import * as net from 'net'
 import { app } from 'electron'
+import { DEFAULT_BACKEND_HOST, DEFAULT_BACKEND_PORT } from '../shared/backendDefaults'
 
-// Default port matches backend/app/config.py (VONVON_BACKEND_PORT, fallback 8000)
-const BACKEND_PORT = parseInt(process.env.VONVON_BACKEND_PORT || '8000', 10)
-const BACKEND_HOST = '127.0.0.1'
+// Default port matches backend/app/config.py. Use a Vonvon-specific high port
+// instead of 8000 so packaged builds don't silently attach to unrelated local
+// services that happen to occupy the old default.
+const BACKEND_PORT = parseInt(process.env.VONVON_BACKEND_PORT || String(DEFAULT_BACKEND_PORT), 10)
+const BACKEND_HOST = DEFAULT_BACKEND_HOST
 
 let backendProc: ChildProcess | null = null
 

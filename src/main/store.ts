@@ -1,5 +1,10 @@
 import { safeStorage } from 'electron'
 import { randomUUID } from 'crypto'
+import {
+  DEFAULT_BACKEND_URL,
+  isLegacyDefaultBackendUrl,
+  sanitizeBackendUrl,
+} from '../shared/backendDefaults'
 
 export interface ChatMessage {
   id: string
@@ -23,6 +28,7 @@ interface StoreSchema {
   messages: ChatMessage[]
   backendUrl: string
   backendEnabled: boolean
+  backendUrlMigrationVersion?: number
   // Whitelist of model IDs (hermes provider models) that the chat page
   // is allowed to surface in its model picker. Persisted across restarts
   // so the user's curation survives app relaunches.
@@ -51,6 +57,28 @@ interface StoreSchema {
 export class ChatStore {
   private _store: any = null
   private _initPromise: Promise<void> | null = null
+  private static readonly BACKEND_URL_MIGRATION_VERSION = 2
+
+  private migrateBackendUrl(store: any): void {
+    const migrationVersion = store.get('backendUrlMigrationVersion') as unknown
+    if (migrationVersion === ChatStore.BACKEND_URL_MIGRATION_VERSION) return
+
+    const raw = store.get('backendUrl') as unknown
+    const normalized =
+      typeof raw === 'string' && raw.trim().length > 0 ? sanitizeBackendUrl(raw) : DEFAULT_BACKEND_URL
+    const nextUrl = isLegacyDefaultBackendUrl(normalized) ? DEFAULT_BACKEND_URL : normalized
+
+    if (raw !== nextUrl) {
+      store.set('backendUrl', nextUrl)
+    }
+    store.set('backendUrlMigrationVersion', ChatStore.BACKEND_URL_MIGRATION_VERSION)
+  }
+
+  private readBackendUrl(store: any): string {
+    const raw = store.get('backendUrl') as unknown
+    if (typeof raw !== 'string' || raw.trim().length === 0) return DEFAULT_BACKEND_URL
+    return sanitizeBackendUrl(raw)
+  }
 
   private async ensureStore(): Promise<any> {
     if (this._store) return this._store
@@ -65,7 +93,7 @@ export class ChatStore {
               defaultModel: 'gpt-4o'
             },
             messages: [],
-            backendUrl: 'http://localhost:8000',
+            backendUrl: DEFAULT_BACKEND_URL,
             backendEnabled: true,
             modelWhitelist: [],
             openTabs: [],
@@ -75,6 +103,7 @@ export class ChatStore {
             hermesModelCatalog: null
           }
         })
+        this.migrateBackendUrl(this._store)
       })()
     }
     await this._initPromise
@@ -167,14 +196,21 @@ export class ChatStore {
   async getBackendConfig(): Promise<{ url: string; enabled: boolean }> {
     const store = await this.ensureStore()
     return {
-      url: store.get('backendUrl') as string,
+      url: this.readBackendUrl(store),
       enabled: store.get('backendEnabled') as boolean
     }
   }
 
   async setBackendConfig(config: Partial<{ url: string; enabled: boolean }>): Promise<void> {
     const store = await this.ensureStore()
-    if (config.url !== undefined) store.set('backendUrl', config.url)
+    if (config.url !== undefined) {
+      const nextUrl =
+        typeof config.url === 'string' && config.url.trim().length > 0
+          ? sanitizeBackendUrl(config.url)
+          : DEFAULT_BACKEND_URL
+      store.set('backendUrl', nextUrl)
+      store.set('backendUrlMigrationVersion', ChatStore.BACKEND_URL_MIGRATION_VERSION)
+    }
     if (config.enabled !== undefined) store.set('backendEnabled', config.enabled)
   }
 

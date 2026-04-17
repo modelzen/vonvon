@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('electron', {
   // Generic store
   storeGet: (key: string) => ipcRenderer.invoke('store:get', key),
   storeSet: (key: string, value: unknown) => ipcRenderer.invoke('store:set', key, value),
+  notifySessionsChanged: (): void => ipcRenderer.send('sessions:changed'),
 
   // Settings
   getSettings: () => ipcRenderer.invoke('settings:get'),
@@ -72,7 +73,8 @@ contextBridge.exposeInMainWorld('electron', {
       'chat:chunk', 'chat:error', 'chat:done',
       'kirby:snap-proximity', 'kirby:snap-complete', 'kirby:detach',
       'kirby:docked-inspect',
-      'kirby:sidebar-show', 'kirby:sidebar-hide'
+      'kirby:sidebar-show', 'kirby:sidebar-hide',
+      'sessions:changed'
     ]
     if (allowedChannels.includes(channel)) {
       ipcRenderer.on(channel, (_event, ...args) => callback(...args))
@@ -89,6 +91,7 @@ declare global {
       sendMessage(message: string, model: string): Promise<{ content?: string; error?: string }>
       storeGet(key: string): Promise<unknown>
       storeSet(key: string, value: unknown): Promise<void>
+      notifySessionsChanged(): void
       getSettings(): Promise<{
         defaultProvider: string
         defaultModel: string

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useBackend } from '../../hooks/useBackend'
+import { DEFAULT_BACKEND_URL } from '../../../shared/backendDefaults'
 
 export function BackendSettings(): React.ReactElement {
   const { backendUrl, backendEnabled, isConnected, testConnection, saveConfig } = useBackend()
@@ -37,7 +38,7 @@ export function BackendSettings(): React.ReactElement {
         <input
           value={url}
           onChange={(e) => setUrl(e.target.value)}
-          placeholder="http://localhost:8000"
+          placeholder={DEFAULT_BACKEND_URL}
           style={{
             width: '100%',
             padding: '6px 10px',

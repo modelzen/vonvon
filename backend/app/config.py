@@ -15,7 +15,7 @@ HERMES_HOME = Path(os.environ["HERMES_HOME"]).expanduser()
 DEFAULT_MODEL = "anthropic/claude-sonnet-4-20250514"
 
 # Server port
-PORT = int(os.environ.get("VONVON_BACKEND_PORT", "8000"))
+PORT = int(os.environ.get("VONVON_BACKEND_PORT", "18423"))
 
 # Allowed CORS origins (Electron renderer + Vite dev server)
 CORS_ORIGINS = [

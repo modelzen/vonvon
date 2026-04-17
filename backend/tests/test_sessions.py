@@ -26,6 +26,43 @@ def test_list_sessions_with_include_archived(client, mock_session_db):
     )
 
 
+def test_list_sessions_falls_back_for_legacy_session_db(monkeypatch):
+    class LegacySessionDB:
+        def __init__(self):
+            self.calls = []
+
+        def list_sessions_rich(self, source="vonvon", **kwargs):
+            self.calls.append((source, kwargs))
+            if kwargs:
+                bad_key = next(iter(kwargs))
+                raise TypeError(
+                    f"SessionDB.list_sessions_rich() got an unexpected keyword argument '{bad_key}'"
+                )
+            return [
+                {"id": "active-1", "title": "Active", "archived_at": None},
+                {"id": "archived-1", "title": "Archived", "archived_at": 1700000000.0},
+            ]
+
+    legacy_db = LegacySessionDB()
+    monkeypatch.setattr(agent_service, "_session_db", legacy_db)
+
+    active_only = session_service.list_sessions()
+    archived_only = session_service.list_sessions(archived_only=True)
+    include_archived = session_service.list_sessions(include_archived=True)
+
+    assert [session["id"] for session in active_only] == ["active-1"]
+    assert [session["id"] for session in archived_only] == ["archived-1"]
+    assert [session["id"] for session in include_archived] == ["active-1", "archived-1"]
+    assert legacy_db.calls == [
+        ("vonvon", {"include_archived": False, "archived_only": False}),
+        ("vonvon", {}),
+        ("vonvon", {"include_archived": True, "archived_only": True}),
+        ("vonvon", {}),
+        ("vonvon", {"include_archived": True, "archived_only": False}),
+        ("vonvon", {}),
+    ]
+
+
 def test_create_session(client, mock_session_db):
     resp = client.post("/api/sessions", json={"name": "My New Session"})
     assert resp.status_code == 201

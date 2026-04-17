@@ -1,6 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
-
-const DEFAULT_BACKEND_URL = 'http://localhost:8000'
+import { DEFAULT_BACKEND_URL } from '../../shared/backendDefaults'
 
 export function useBackend() {
   const [backendUrl, setBackendUrl] = useState(DEFAULT_BACKEND_URL)

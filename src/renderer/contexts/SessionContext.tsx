@@ -56,6 +56,14 @@ export function SessionProvider({ children }: { children: React.ReactNode }): Re
   const [hydrated, setHydrated] = useState(false)
   const [sessionsLoaded, setSessionsLoaded] = useState(false)
 
+  const notifySessionsChanged = useCallback(() => {
+    try {
+      window.electron?.notifySessionsChanged?.()
+    } catch {
+      // Best-effort cross-window sync only.
+    }
+  }, [])
+
   const fetchSessions = useCallback(async (): Promise<boolean> => {
     try {
       const res = await apiFetch('/api/sessions?include_archived=true')
@@ -113,6 +121,24 @@ export function SessionProvider({ children }: { children: React.ReactNode }): Re
     }
   }, [fetchSessions, sessionsLoaded])
 
+  useEffect(() => {
+    const handleSessionsChanged = () => {
+      void fetchSessions()
+    }
+    try {
+      window.electron?.on?.('sessions:changed', handleSessionsChanged)
+    } catch {
+      return
+    }
+    return () => {
+      try {
+        window.electron?.off?.('sessions:changed', handleSessionsChanged)
+      } catch {
+        // ignore
+      }
+    }
+  }, [fetchSessions])
+
   // Hydration: runs once after sessions load
   useEffect(() => {
     if (hydrated || !sessionsLoaded) return
@@ -136,6 +162,46 @@ export function SessionProvider({ children }: { children: React.ReactNode }): Re
     })()
   }, [sessions, hydrated, sessionsLoaded])
 
+  useEffect(() => {
+    const validIds = new Set(sessions.map((session) => session.id))
+    const cleanedTabs = openTabs.filter((id) => validIds.has(id))
+
+    if (cleanedTabs.length !== openTabs.length) {
+      setOpenTabs(cleanedTabs)
+    }
+
+    const nextActiveTabId =
+      activeTabId && validIds.has(activeTabId)
+        ? activeTabId
+        : cleanedTabs[0] ?? null
+
+    if (nextActiveTabId !== activeTabId) {
+      setActiveTabIdState(nextActiveTabId)
+    }
+
+    if (!nextActiveTabId) {
+      if (activeSession !== null) setActiveSession(null)
+      return
+    }
+
+    const nextActiveSession = sessions.find((session) => session.id === nextActiveTabId) ?? null
+    if (!nextActiveSession) {
+      if (activeSession !== null) setActiveSession(null)
+      return
+    }
+
+    if (
+      !activeSession ||
+      activeSession.id !== nextActiveSession.id ||
+      activeSession.name !== nextActiveSession.name ||
+      activeSession.title !== nextActiveSession.title ||
+      activeSession.last_active !== nextActiveSession.last_active ||
+      activeSession.archived_at !== nextActiveSession.archived_at
+    ) {
+      setActiveSession(nextActiveSession)
+    }
+  }, [sessions, openTabs, activeTabId, activeSession])
+
   // Debounced write-back to electron-store
   useEffect(() => {
     if (!hydrated) return
@@ -158,12 +224,13 @@ export function SessionProvider({ children }: { children: React.ReactNode }): Re
         const session = (await res.json()) as Session
         setSessions((prev) => [...prev, session])
         setActiveSession(session)
+        notifySessionsChanged()
         return session
       } catch {
         return null
       }
     },
-    [apiFetch]
+    [apiFetch, notifySessionsChanged]
   )
 
   const switchSession = useCallback((session: Session) => {
@@ -189,7 +256,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }): Re
         if (next.length > 0) {
           fallback = next[idx] ?? next[idx - 1] ?? next[0]
         } else {
-          const sorted = [...sessions].sort((a, b) => (b.last_active ?? 0) - (a.last_active ?? 0))
+          const sorted = sessions
+            .filter((session) => session.id !== sessionId)
+            .sort((a, b) => (b.last_active ?? 0) - (a.last_active ?? 0))
           if (sorted[0]) {
             fallback = sorted[0].id
             return [sorted[0].id]
@@ -256,11 +325,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }): Re
         await apiFetch(`/api/sessions/${id}`, { method: 'DELETE' })
         removeSessionFromActiveView(id)
         setArchivedSessions((prev) => prev.filter((session) => session.id !== id))
+        notifySessionsChanged()
       } catch {
         // ignore
       }
     },
-    [apiFetch, removeSessionFromActiveView]
+    [apiFetch, notifySessionsChanged, removeSessionFromActiveView]
   )
 
   const archiveSession = useCallback(
@@ -279,11 +349,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }): Re
         } else {
           await loadSessions()
         }
+        notifySessionsChanged()
       } catch {
         // ignore
       }
     },
-    [apiFetch, sessions, removeSessionFromActiveView, loadSessions]
+    [apiFetch, sessions, notifySessionsChanged, removeSessionFromActiveView, loadSessions]
   )
 
   const restoreSession = useCallback(
@@ -298,24 +369,27 @@ export function SessionProvider({ children }: { children: React.ReactNode }): Re
         } else {
           await loadSessions()
         }
+        notifySessionsChanged()
       } catch {
         // ignore
       }
     },
-    [apiFetch, archivedSessions, loadSessions]
+    [apiFetch, archivedSessions, notifySessionsChanged, loadSessions]
   )
 
   const updateSessionName = useCallback((id: string, name: string) => {
     setSessions(prev => prev.map(s => s.id === id ? { ...s, name } : s))
     setArchivedSessions(prev => prev.map(s => s.id === id ? { ...s, name } : s))
     setActiveSession(prev => prev?.id === id ? { ...prev, name } : prev)
-  }, [])
+    notifySessionsChanged()
+  }, [notifySessionsChanged])
 
   const touchSession = useCallback((id: string) => {
     const now = Date.now() / 1000
     setSessions(prev => prev.map(s => s.id === id ? { ...s, last_active: now } : s))
     setArchivedSessions(prev => prev.map(s => s.id === id ? { ...s, last_active: now } : s))
-  }, [])
+    notifySessionsChanged()
+  }, [notifySessionsChanged])
 
   const resetSession = useCallback(
     async (id: string) => {

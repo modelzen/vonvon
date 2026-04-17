@@ -18,7 +18,10 @@ async def lifespan(app: FastAPI):
     workspace_service.init_from_hermes_config()
     # 3. Eager SessionDB AFTER workspace is final so SQLite path is absolute
     agent_service.get_session_db()
-    yield
+    try:
+        yield
+    finally:
+        agent_service.close_session_db()
 
 
 app = FastAPI(

@@ -1,4 +1,4 @@
-import { app, ipcMain, dialog, shell, systemPreferences, desktopCapturer } from 'electron'
+import { app, ipcMain, dialog, shell, systemPreferences, desktopCapturer, BrowserWindow } from 'electron'
 import { existsSync } from 'fs'
 import { chatStore } from './store'
 import { registry } from './providers/registry'
@@ -55,6 +55,15 @@ async function requestLarkPermissions(): Promise<LarkPermissionState> {
 }
 
 export function registerIpcHandlers(): void {
+  ipcMain.on('sessions:changed', (event) => {
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (win.isDestroyed()) continue
+      if (win.webContents.isDestroyed()) continue
+      if (win.webContents.id === event.sender.id) continue
+      win.webContents.send('sessions:changed')
+    }
+  })
+
   // Chat: send message with streaming response
   ipcMain.handle('chat:send', async (event, message: string, model: string) => {
     const { randomUUID } = await import('crypto')

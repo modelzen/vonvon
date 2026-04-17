@@ -52,6 +52,13 @@ def test_get_current_model_returns_model():
     assert agent_service.get_current_model() == "google/gemini-2.5-pro"
 
 
+def test_close_session_db_closes_and_clears_singleton(mock_session_db):
+    """close_session_db should release the cached SessionDB instance."""
+    agent_service.close_session_db()
+    mock_session_db.close.assert_called_once_with()
+    assert agent_service._session_db is None
+
+
 def test_agent_lock_is_asyncio_lock():
     """_agent_lock must be an asyncio.Lock so it serializes async requests."""
     assert isinstance(agent_service._agent_lock, asyncio.Lock)

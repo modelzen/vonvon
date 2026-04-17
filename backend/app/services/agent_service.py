@@ -6,6 +6,7 @@ Do NOT use sys.path.insert — rely on editable install for imports.
 import asyncio
 from contextlib import suppress
 from typing import Any, Optional
+import logging
 
 from run_agent import AIAgent
 from hermes_state import SessionDB
@@ -24,6 +25,8 @@ _running_task: Optional[asyncio.Task[Any]] = None
 _running_session_id: Optional[str] = None
 _lock_owner_task: Optional[asyncio.Task[Any]] = None
 
+log = logging.getLogger(__name__)
+
 # NOTE (v1.1): _api_key / _base_url REMOVED — credential resolution is
 # delegated entirely to hermes credential_pool via per-request lookups.
 
@@ -39,6 +42,19 @@ def get_session_db() -> SessionDB:
     if _session_db is None:
         _session_db = SessionDB()
     return _session_db
+
+
+def close_session_db() -> None:
+    """Close the shared SessionDB so shutdown flushes cleanly."""
+    global _session_db
+    db = _session_db
+    _session_db = None
+    if db is None:
+        return
+    try:
+        db.close()
+    except Exception as exc:
+        log.warning("Failed to close SessionDB cleanly: %s", exc)
 
 
 # ── Credential resolution ─────────────────────────────────────────────────────
