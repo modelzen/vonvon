@@ -1,75 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!--
-  Vonvon app icon — derived from the floating kirby form in
-  src/renderer/components/Kirby/kirby.html. Scaled to 1024x1024
-  and padded so the body doesn't touch the icon edge (macOS icon
-  guideline: keep about 10% breathing room).
--->
+<!-- Wrapper preview for the app icon source image. -->
 <svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <radialGradient id="body" cx="38%" cy="30%" r="68%" fx="38%" fy="30%">
-      <stop offset="0%"   stop-color="#ffe2ee"/>
-      <stop offset="30%"  stop-color="#ffb6da"/>
-      <stop offset="70%"  stop-color="#ff6fb4"/>
-      <stop offset="100%" stop-color="#e11f85"/>
-    </radialGradient>
-    <radialGradient id="spec" cx="36%" cy="26%" r="42%">
-      <stop offset="0%"   stop-color="rgba(255,255,255,0.75)"/>
-      <stop offset="60%"  stop-color="rgba(255,255,255,0.12)"/>
-      <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
-    </radialGradient>
-    <radialGradient id="bg" cx="50%" cy="40%" r="75%">
-      <stop offset="0%"   stop-color="#fff5fa"/>
-      <stop offset="60%"  stop-color="#ffe1ef"/>
-      <stop offset="100%" stop-color="#ffc8e0"/>
-    </radialGradient>
-    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur in="SourceAlpha" stdDeviation="18"/>
-      <feOffset dx="0" dy="12" result="off"/>
-      <feComponentTransfer><feFuncA type="linear" slope="0.35"/></feComponentTransfer>
-      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
-    <filter id="blush" x="-50%" y="-50%" width="200%" height="200%">
-      <feGaussianBlur stdDeviation="16"/>
-    </filter>
-  </defs>
-
-  <!-- Rounded-square background tile (macOS icon frame).
-       Using a squircle approximation — 225px radius on 1024px square. -->
-  <rect x="0" y="0" width="1024" height="1024" rx="225" ry="225" fill="url(#bg)"/>
-
-  <!--
-    Body (floating kirby) — original viewBox is 120 units, centre at
-    (60,60) radius 38. Scale by 8 to fit 1024:  (60*8, 60*8) = (480, 480)
-    r = 38*8 = 304. Then add 32px padding by shifting everything into
-    a 960x960 inner box (pad 32 on each side):
-      cx = 512 (centred), cy = 512, r = 304 → leaves 20px to frame.
-    Keep the top-left specular highlight + blush + eyes + smile in the
-    same relative positions as the source SVG.
-  -->
-  <g filter="url(#shadow)">
-    <circle cx="512" cy="512" r="304" fill="url(#body)"/>
-    <circle cx="512" cy="512" r="304" fill="url(#spec)"/>
-
-    <!-- Top-left cheek highlight (strong white) — scaled from (46,40) rx6 ry4, rot -25 -->
-    <ellipse cx="384" cy="336" rx="48" ry="32"
-             fill="rgba(255,255,255,0.65)"
-             transform="rotate(-25 384 336)"/>
-
-    <!-- Blush patches (left, right) — scaled from (43,68) and (77,68), rx7.5 ry4.5 -->
-    <ellipse cx="360" cy="560" rx="60" ry="36"
-             fill="rgba(255,90,150,0.42)" filter="url(#blush)"/>
-    <ellipse cx="632" cy="560" rx="60" ry="36"
-             fill="rgba(255,90,150,0.42)" filter="url(#blush)"/>
-
-    <!-- Eyes — scaled from (49,56) r5.5 and (71,56) r5.5 -->
-    <circle cx="408" cy="472" r="44" fill="#1a1230"/>
-    <circle cx="396" cy="456" r="14" fill="#ffffff"/>
-    <circle cx="592" cy="472" r="44" fill="#1a1230"/>
-    <circle cx="580" cy="456" r="14" fill="#ffffff"/>
-
-    <!-- Smile — path scaled from "M 55 66 Q 60 71 65 66" -->
-    <path d="M 456 544 Q 512 584 568 544"
-          stroke="#c2185b" stroke-width="18" fill="none" stroke-linecap="round"/>
-  </g>
+  <image
+    href="../resources/logo.png"
+    x="0"
+    y="0"
+    width="1024"
+    height="1024"
+    preserveAspectRatio="xMidYMid meet"
+  />
 </svg>

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell } from 'electron'
+import { app, BrowserWindow, nativeImage, shell } from 'electron'
 import { join } from 'path'
 import { registerIpcHandlers } from './ipc'
 import { initKirby, destroyKirby } from './native/kirby'
@@ -7,6 +7,15 @@ import { startBackend, stopBackend } from './backend'
 const isDev = !app.isPackaged
 
 let mainWindow: BrowserWindow | null = null
+
+function setDockIcon(): void {
+  if (process.platform !== 'darwin' || app.isPackaged) return
+
+  const icon = nativeImage.createFromPath(join(app.getAppPath(), 'resources/logo.png'))
+  if (!icon.isEmpty()) {
+    app.dock.setIcon(icon)
+  }
+}
 
 function createMainWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -55,6 +64,7 @@ function createMainWindow(): BrowserWindow {
 startBackend().catch((err) => console.error('[backend] startBackend failed:', err))
 
 app.whenReady().then(() => {
+  setDockIcon()
   registerIpcHandlers()
   mainWindow = createMainWindow()
 
