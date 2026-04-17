@@ -71,6 +71,35 @@ def test_send_message_expands_inline_skills_before_agent_run(client, mock_agent)
     assert kwargs["persist_user_message"] == '@skill:checkpoint save current state'
 
 
+def test_send_message_can_persist_display_text_without_sending_it_to_agent(client, mock_agent):
+    with patch(
+        "app.routes.chat.skills_service.build_skill_turn_message",
+        return_value=("skill prompt only", ["vonvon-inspect"], []),
+    ):
+        resp = client.post(
+            "/api/chat/send",
+            json={
+                "session_id": "test-session-123",
+                "message": "",
+                "persist_message": "【vonvon-inspect】",
+                "skills": ["vonvon-inspect"],
+                "attachments": [
+                    {
+                        "type": "image",
+                        "data_url": "data:image/png;base64,ZmFrZQ==",
+                        "name": "vonvon-inspect-lark.png",
+                    }
+                ],
+            },
+            headers={"Accept": "text/event-stream"},
+        )
+
+    assert resp.status_code == 200
+    kwargs = mock_agent.run_conversation.call_args.kwargs
+    assert kwargs["persist_user_message"] == "【vonvon-inspect】 [图片:vonvon-inspect-lark.png]"
+    assert "【vonvon-inspect】" not in str(kwargs["user_message"])
+
+
 def test_send_message_interrupts_agent_when_sse_client_disconnects(mock_session_db, mock_agent):
     """Disconnecting the SSE client should interrupt the running agent."""
     from app.routes.chat import send_message

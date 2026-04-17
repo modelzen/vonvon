@@ -41,7 +41,9 @@
             kirby.state = KirbyStateDockedExpanded;
             [kirby setForm:@"dockedExpanded"];
             if ([SnapEngine shared].lastFeishuWindowID != kCGNullWindowID) {
-                [kirby orderAboveWindowNumber:(NSInteger)[SnapEngine shared].lastFeishuWindowID];
+                // Keep the mascot behind Feishu so overlapping transparent
+                // window regions never steal clicks from Feishu controls.
+                [kirby orderBelowWindowNumber:(NSInteger)[SnapEngine shared].lastFeishuWindowID];
             }
 
             [[SnapEngine shared] notifySnapComplete];

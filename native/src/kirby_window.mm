@@ -122,10 +122,10 @@
     [self applyState:self.state preservingAnchor:YES];
 }
 
-- (void)orderAboveWindowNumber:(NSInteger)windowNumber {
+- (void)orderBelowWindowNumber:(NSInteger)windowNumber {
     dispatch_async(dispatch_get_main_queue(), ^{
         if (!self.panel || windowNumber <= 0) return;
-        [self.panel orderWindow:NSWindowAbove relativeTo:windowNumber];
+        [self.panel orderWindow:NSWindowBelow relativeTo:windowNumber];
     });
 }
 

@@ -437,7 +437,6 @@ function renderMessage(
               padding: '14px 16px',
               borderRadius: 24,
               background: 'linear-gradient(180deg, #fff4fa 0%, #ffeef6 100%)',
-              border: '1px solid rgba(241, 170, 205, 0.85)',
               boxShadow:
                 '0 14px 28px rgba(215, 154, 193, 0.18), inset 0 1px 0 rgba(255,255,255,0.6)',
               color: '#6f4660',
@@ -466,38 +465,6 @@ function renderMessage(
             )}
             <div
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                marginBottom: 8,
-                flexWrap: 'wrap',
-              }}
-            >
-              <span
-                style={{
-                  fontSize: 11,
-                  fontWeight: 800,
-                  letterSpacing: '0.05em',
-                  color: '#d35b98',
-                  textTransform: 'uppercase',
-                }}
-              >
-                {inspectCard.title}
-              </span>
-              <span
-                style={{
-                  fontSize: 12,
-                  color: '#a85d80',
-                  padding: '2px 8px',
-                  borderRadius: 999,
-                  background: 'rgba(255,255,255,0.72)',
-                }}
-              >
-                自动截图
-              </span>
-            </div>
-            <div
-              style={{
                 fontSize: 15,
                 fontWeight: 700,
                 color: '#3f2d36',
@@ -506,7 +473,7 @@ function renderMessage(
                 wordBreak: 'break-word',
               }}
             >
-              当前协同上下文
+              {inspectCard.headline}
             </div>
             <div
               style={{

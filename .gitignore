@@ -74,5 +74,6 @@ Thumbs.db
 
 # Agent runtime
 .agents/
-.claude/skills/frontend-design
+/.claude/
+/.omc/
 skills-lock.json

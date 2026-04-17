@@ -12,7 +12,7 @@ import {
 } from './components/Chat/AgentMessageList'
 import { UsageRing } from './components/Chat/UsageRing'
 import { AgentModelSelector } from './components/Chat/AgentModelSelector'
-import { VONVON_INSPECT_MESSAGE } from './lib/vonvonInspect'
+import { createVonvonInspectCardContent } from './lib/vonvonInspect'
 import { FeishuIntegrationState, useHermesConfig } from './hooks/useHermesConfig'
 
 // `#floating` is set by windows.ts when opening the standalone chat window;
@@ -171,11 +171,16 @@ function App(): React.ReactElement {
             throw new Error('还没有拿到 Lark 窗口截图，请先确认录屏权限已经授予')
           }
           if (activeSessionIdRef.current !== sessionId) return
+          const inspectCardContent = createVonvonInspectCardContent()
           sendMessage(
-            VONVON_INSPECT_MESSAGE,
+            '',
             sessionId,
             [{ type: 'image', dataUrl: screenshotDataUrl, name: 'vonvon-inspect-lark.png' }],
-            ['vonvon-inspect']
+            ['vonvon-inspect'],
+            {
+              displayContent: inspectCardContent,
+              persistContent: inspectCardContent,
+            }
           )
           setInspectBanner({
             tone: 'success',

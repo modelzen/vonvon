@@ -12,6 +12,7 @@ class ChatAttachment(BaseModel):
 class ChatRequest(BaseModel):
     session_id: str
     message: str
+    persist_message: Optional[str] = None
     attachments: List[ChatAttachment] = Field(default_factory=list)
     skills: List[str] = Field(default_factory=list)
 

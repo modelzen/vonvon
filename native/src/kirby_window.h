@@ -111,7 +111,7 @@ static inline BOOL KirbyPanelPointToCanvasTopLeftPoint(NSPoint panelPointBottomL
 - (void)syncWindowLevelForState;
 - (void)syncCanvasLayout;
 - (void)syncCanvasLayoutPreservingAnchor;
-- (void)orderAboveWindowNumber:(NSInteger)windowNumber;
+- (void)orderBelowWindowNumber:(NSInteger)windowNumber;
 
 /**
  * Switch the SVG form displayed by the embedded WKWebView. Valid values

@@ -70,6 +70,11 @@ interface UseAgentChatOpts {
   onRunCompleted?: () => void
 }
 
+interface SendMessageOpts {
+  displayContent?: string
+  persistContent?: string
+}
+
 export function useAgentChat(sessionId: string | null | undefined, opts?: UseAgentChatOpts) {
   const { apiFetch } = useBackend()
   const [messages, setMessages] = useState<AgentMessage[]>([])
@@ -426,15 +431,17 @@ export function useAgentChat(sessionId: string | null | undefined, opts?: UseAge
       sessionId: string,
       attachments?: AgentAttachment[],
       skills?: string[],
+      options?: SendMessageOpts,
     ) => {
       const hasAttachments = !!(attachments && attachments.length > 0)
       const hasSkills = !!(skills && skills.length > 0)
       if ((!content.trim() && !hasAttachments && !hasSkills) || isLoading) return
 
+      const visibleContent = options?.displayContent ?? content
       const userMsg: AgentMessage = {
         id: Date.now().toString(),
         role: 'user',
-        content,
+        content: visibleContent,
         timestamp: Date.now(),
         ...(hasAttachments ? { attachments } : {})
       }
@@ -482,6 +489,7 @@ export function useAgentChat(sessionId: string | null | undefined, opts?: UseAge
           body: JSON.stringify({
             session_id: sessionId,
             message: content,
+            persist_message: options?.persistContent,
             skills: skills || [],
             attachments: (attachments || []).map((a) => ({
               type: a.type,

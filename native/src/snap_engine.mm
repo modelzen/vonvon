@@ -170,7 +170,7 @@ static const NSTimeInterval kDockedTrackingInterval = 1.0 / 30.0;
     // docked state. We intentionally keep both the ball and sidebar attached
     // until Feishu actually disappears or the user explicitly detaches.
     if (self.lastFeishuWindowID != kCGNullWindowID) {
-        [[KirbyWindow shared] orderAboveWindowNumber:(NSInteger)self.lastFeishuWindowID];
+        [[KirbyWindow shared] orderBelowWindowNumber:(NSInteger)self.lastFeishuWindowID];
     }
 
     // No change — nothing to do (cheap path, runs 30x/sec while docked).

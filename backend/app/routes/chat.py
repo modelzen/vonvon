@@ -115,6 +115,11 @@ async def send_message(req: ChatRequest, request: Request):
         # never has to serialize a list. Multimodal data only lives in the
         # current turn's API payload, not in history.
         raw_plain_text = (req.message or "").strip()
+        persist_plain_text = (
+            (req.persist_message or "").strip()
+            if req.persist_message is not None
+            else raw_plain_text
+        )
         requested_skills = [str(skill).strip() for skill in (req.skills or []) if str(skill).strip()]
         if requested_skills:
             active_skills = requested_skills
@@ -141,12 +146,16 @@ async def send_message(req: ChatRequest, request: Request):
                 placeholder_tail = " ".join(f"[图片:{n}]" for n in image_names)
             else:
                 placeholder_tail = " ".join(["[图片]"] * image_count)
+            persisted_prefix = persist_plain_text if req.persist_message is not None else raw_plain_text
             persisted_text = (
-                f"{raw_plain_text} {placeholder_tail}" if raw_plain_text else placeholder_tail
+                f"{persisted_prefix} {placeholder_tail}" if persisted_prefix else placeholder_tail
             ).strip()
         else:
             effective_message = plain_text
-            persisted_text = raw_plain_text if active_skills else None
+            if req.persist_message is not None:
+                persisted_text = persist_plain_text
+            else:
+                persisted_text = raw_plain_text if active_skills else None
 
         async def run_agent():
             nonlocal effective_message, persisted_text, run_task

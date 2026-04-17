@@ -121,6 +121,7 @@ def test_vonvon_inspect_wrapper_includes_auth_and_degradation_constraints(tmp_pa
     assert "不要把它写成“我顺手做了一个最小补充”或额外贡献" in skill_text
     assert "本回答当前仅基于截图可见内容" in skill_text
     assert "是否要继续查看这份文档的详细内容" in skill_text
+    assert "当前 turn 可能只有截图和 `vonvon-inspect` 激活信号" in skill_text
 
 
 def test_parse_feishu_doc_url_supports_docx_link():
