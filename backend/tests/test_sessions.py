@@ -144,6 +144,41 @@ def test_rename_session_conflict_returns_409(client, mock_session_db):
     assert "already in use" in resp.json()["detail"]
 
 
+def test_list_sessions_rewrites_empty_placeholder_title(client, mock_session_db):
+    mock_session_db.list_sessions_rich.return_value = [
+        {
+            "id": "session-1",
+            "title": "(empty) #2",
+            "source": "vonvon",
+            "last_active": 1700000000.0,
+        }
+    ]
+    mock_session_db.get_messages_as_conversation.return_value = [
+        {"role": "user", "content": "Hello there"},
+        {"role": "assistant", "content": "(empty)"},
+    ]
+
+    resp = client.get("/api/sessions")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data[0]["title"] == "Hello there #2"
+
+
+def test_get_messages_strips_empty_assistant_placeholder(mock_session_db):
+    mock_session_db.get_messages_as_conversation.return_value = [
+        {"role": "user", "content": "Hello"},
+        {"role": "assistant", "content": "(empty)"},
+        {"role": "assistant", "content": "Actual reply"},
+    ]
+
+    messages = session_service.get_messages("session-1")
+
+    assert messages[0]["content"] == "Hello"
+    assert messages[1]["content"] == ""
+    assert messages[2]["content"] == "Actual reply"
+
+
 @pytest.mark.asyncio
 async def test_summarize_title_conflict_gets_numbered(mock_session_db, mock_agent):
     agent_service._agent_lock = asyncio.Lock()
@@ -169,3 +204,23 @@ async def test_summarize_title_conflict_gets_numbered(mock_session_db, mock_agen
         call("session-1", "飞书上下文识别"),
         call("session-1", "飞书上下文识别 #2"),
     ]
+
+
+@pytest.mark.asyncio
+async def test_summarize_title_empty_placeholder_falls_back_to_first_user_text(
+    mock_session_db,
+    mock_agent,
+):
+    agent_service._agent_lock = asyncio.Lock()
+    mock_session_db.get_messages_as_conversation.return_value = [
+        {"role": "user", "content": "Hello there"},
+        {"role": "assistant", "content": "(empty)"},
+    ]
+    mock_agent.run_conversation.return_value = {
+        "final_response": "(empty)",
+    }
+
+    title = await session_service.summarize_title("session-1")
+
+    assert title == "Hello there"
+    mock_session_db.set_session_title.assert_called_with("session-1", "Hello there")

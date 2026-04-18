@@ -1,5 +1,6 @@
 """Tests for agent_service: create_agent, switch_model, _agent_lock."""
 import asyncio
+import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -44,6 +45,41 @@ async def test_switch_model_updates_global():
     with patch("hermes_cli.model_switch.switch_model", return_value=result):
         await agent_service.switch_model("openai/gpt-4o")
     assert agent_service._current_model == "openai/gpt-4o"
+
+
+async def test_switch_model_supports_openai_base_url_override():
+    """OpenAI should switch using the current pool entry's overridden base URL."""
+    cred = MagicMock()
+    cred.base_url = "https://compat.example.com/v1"
+    cred.access_token = "sk-compatible"
+
+    pool = MagicMock()
+    pool.peek.return_value = cred
+
+    sys.modules["agent.credential_pool"].load_pool = MagicMock(return_value=pool)
+    agent_service._current_provider = "openai"
+    result = MagicMock()
+    result.success = True
+    result.new_model = "gpt-4.1-mini"
+    result.target_provider = "openai"
+    result.base_url = "https://compat.example.com/v1"
+    result.api_mode = "chat_completions"
+    result.warning_message = None
+    result.error_message = None
+
+    with patch("hermes_cli.model_switch.switch_model", return_value=result) as switch_mock:
+        result = await agent_service.switch_model(
+            "gpt-4.1-mini",
+            persist=False,
+            provider="openai",
+        )
+
+    assert result.success is True
+    assert result.target_provider == "openai"
+    assert result.base_url == "https://compat.example.com/v1"
+    assert agent_service._current_model == "gpt-4.1-mini"
+    assert agent_service._current_provider == "openai"
+    assert switch_mock.call_args.kwargs["current_base_url"] == "https://compat.example.com/v1"
 
 
 def test_get_current_model_returns_model():

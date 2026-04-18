@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useHermesConfig, ProviderInfo } from '../../hooks/useHermesConfig'
 import { SectionCard } from './SectionCard'
 import { tokens } from './settingsStyles'
-import { loadModelCatalog } from '../../lib/modelCatalogCache'
+import { buildModelCatalogFingerprint, loadModelCatalog } from '../../lib/modelCatalogCache'
 
 /**
  * "可用模型" whitelist panel.
@@ -19,9 +19,11 @@ export function HermesModelPanel({
 }: {
   refreshToken?: number
 } = {}): React.ReactElement {
-  const { listModels } = useHermesConfig()
+  const { listModels, listCredentials } = useHermesConfig()
   const listModelsRef = useRef(listModels)
+  const listCredentialsRef = useRef(listCredentials)
   listModelsRef.current = listModels
+  listCredentialsRef.current = listCredentials
 
   const [providers, setProviders] = useState<ProviderInfo[]>([])
   const [whitelist, setWhitelist] = useState<Set<string>>(new Set())
@@ -36,18 +38,26 @@ export function HermesModelPanel({
       setError(null)
       try {
         const [data, stored] = await Promise.all([
-          loadModelCatalog(() => listModelsRef.current(), { forceRefresh: refreshToken > 0 }),
+          loadModelCatalog(() => listModelsRef.current(), {
+            getFingerprint: () => buildModelCatalogFingerprint(() => listCredentialsRef.current()),
+          }),
           window.electron.storeGet('modelWhitelist') as Promise<unknown>,
         ])
         if (cancelled) return
         setProviders(data.providers)
+        const availableModels = new Set(data.providers.flatMap((provider) => provider.models))
         const ids = Array.isArray(stored) ? (stored as string[]) : []
-        if (ids.length === 0 && data.current) {
+        const validIds = ids.filter((id) => availableModels.has(id))
+        const currentIsAvailable = data.providers.some((provider) => provider.models.includes(data.current))
+        if (validIds.length !== ids.length) {
+          await window.electron.storeSet('modelWhitelist', validIds)
+        }
+        if (validIds.length === 0 && data.current && currentIsAvailable) {
           const seed = new Set([data.current])
           setWhitelist(seed)
           await window.electron.storeSet('modelWhitelist', Array.from(seed))
         } else {
-          setWhitelist(new Set(ids))
+          setWhitelist(new Set(validIds))
         }
       } catch (e: any) {
         if (!cancelled) setError(e?.message ?? '加载失败')
@@ -95,15 +105,19 @@ export function HermesModelPanel({
     return providers
       .map((p) => ({
         ...p,
-        models: p.models.filter(
-          (m) => m.toLowerCase().includes(q) || p.name.toLowerCase().includes(q)
-        ),
+        models: p.models.filter((m) => m.toLowerCase().includes(q)),
       }))
-      .filter((p) => p.models.length > 0)
+      .filter(
+        (p) =>
+          p.models.length > 0 ||
+          p.name.toLowerCase().includes(q) ||
+          (typeof p.error === 'string' && p.error.toLowerCase().includes(q))
+      )
   }, [providers, query])
 
   const totalSelected = whitelist.size
   const totalAvailable = providers.reduce((sum, p) => sum + p.models.length, 0)
+  const currentProvider = providers.find((provider) => provider.is_current) ?? null
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -159,10 +173,34 @@ export function HermesModelPanel({
         />
       }
     >
+      <div
+        style={{
+          marginBottom: 14,
+          padding: '12px 14px',
+          borderRadius: tokens.radiusControl,
+          background: '#fff',
+          border: `1px solid ${tokens.border}`,
+          fontSize: 12,
+          color: tokens.inkSoft,
+          lineHeight: 1.65,
+        }}
+      >
+        当前使用 Provider：
+        <strong style={{ color: tokens.ink }}>
+          {currentProvider?.name ?? '未设置'}
+        </strong>
+        {currentProvider?.usable === false && currentProvider.error && (
+          <div style={{ marginTop: 6, color: tokens.danger }}>{currentProvider.error}</div>
+        )}
+      </div>
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         {filteredProviders.map((p) => {
           const selectedInGroup = p.models.filter((m) => whitelist.has(m)).length
           const allSelected = selectedInGroup === p.models.length && p.models.length > 0
+          const unusable = p.usable === false
+          const statusLabel = unusable ? '不可用' : p.models.length > 0 ? '可用' : '已配置'
+          const statusColor = unusable ? tokens.danger : p.models.length > 0 ? tokens.success : tokens.inkMuted
 
           return (
             <div key={p.slug}>
@@ -187,6 +225,21 @@ export function HermesModelPanel({
                 >
                   {selectedInGroup}/{p.models.length}
                 </span>
+                <span
+                  style={{
+                    fontSize: 9,
+                    fontWeight: 700,
+                    padding: '2px 7px',
+                    borderRadius: tokens.radiusPill,
+                    background: '#fff',
+                    color: statusColor,
+                    border: `1px solid ${unusable ? '#ffd7d7' : tokens.border}`,
+                    letterSpacing: 0.3,
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  {statusLabel}
+                </span>
                 {p.is_current && (
                   <span
                     style={{
@@ -205,74 +258,111 @@ export function HermesModelPanel({
                   </span>
                 )}
                 <div style={{ flex: 1 }} />
-                <button
-                  onClick={() => (allSelected ? clearProvider(p) : selectAllInProvider(p))}
-                  style={{
-                    fontSize: 11,
-                    color: tokens.brand,
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    padding: '2px 4px',
-                    fontWeight: 500,
-                  }}
-                >
-                  {allSelected ? '全部取消' : '全部勾选'}
-                </button>
+                {p.models.length > 0 && (
+                  <button
+                    onClick={() => (allSelected ? clearProvider(p) : selectAllInProvider(p))}
+                    style={{
+                      fontSize: 11,
+                      color: tokens.brand,
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      padding: '2px 4px',
+                      fontWeight: 500,
+                    }}
+                  >
+                    {allSelected ? '全部取消' : '全部勾选'}
+                  </button>
+                )}
               </div>
 
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-                  gap: 4,
-                }}
-              >
-                {p.models.map((model) => {
-                  const checked = whitelist.has(model)
-                  return (
-                    <label
-                      key={model}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 9,
-                        padding: '7px 10px',
-                        borderRadius: tokens.radiusControl,
-                        cursor: 'pointer',
-                        background: checked ? tokens.petal : 'transparent',
-                        border: `1px solid ${checked ? tokens.border : 'transparent'}`,
-                        transition: `background ${tokens.durFast} ${tokens.ease}`,
-                        minWidth: 0,
-                      }}
-                      onMouseEnter={(e) => {
-                        if (!checked)
-                          (e.currentTarget as HTMLElement).style.background = '#fafafa'
-                      }}
-                      onMouseLeave={(e) => {
-                        if (!checked)
-                          (e.currentTarget as HTMLElement).style.background = 'transparent'
-                      }}
-                    >
-                      <CustomCheckbox checked={checked} onChange={() => toggle(model)} />
-                      <span
+              {p.error && (
+                <div
+                  style={{
+                    marginBottom: p.models.length > 0 ? 8 : 0,
+                    padding: '10px 12px',
+                    borderRadius: tokens.radiusControl,
+                    border: `1px solid ${unusable ? '#ffd7d7' : tokens.border}`,
+                    background: unusable ? '#fff7f7' : tokens.petal,
+                    fontSize: 11,
+                    lineHeight: 1.6,
+                    color: unusable ? tokens.danger : tokens.inkSoft,
+                  }}
+                >
+                  {p.error}
+                </div>
+              )}
+
+              {p.models.length > 0 ? (
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+                    gap: 4,
+                  }}
+                >
+                  {p.models.map((model) => {
+                    const checked = whitelist.has(model)
+                    return (
+                      <label
+                        key={model}
                         style={{
-                          fontSize: 12,
-                          color: checked ? tokens.ink : tokens.inkSoft,
-                          fontFamily: tokens.monoFont,
-                          fontWeight: checked ? 500 : 400,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 9,
+                          padding: '7px 10px',
+                          borderRadius: tokens.radiusControl,
+                          cursor: 'pointer',
+                          background: checked ? tokens.petal : 'transparent',
+                          border: `1px solid ${checked ? tokens.border : 'transparent'}`,
+                          transition: `background ${tokens.durFast} ${tokens.ease}`,
                           minWidth: 0,
                         }}
+                        onMouseEnter={(e) => {
+                          if (!checked)
+                            (e.currentTarget as HTMLElement).style.background = '#fafafa'
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!checked)
+                            (e.currentTarget as HTMLElement).style.background = 'transparent'
+                        }}
                       >
-                        {model}
-                      </span>
-                    </label>
-                  )
-                })}
-              </div>
+                        <CustomCheckbox checked={checked} onChange={() => toggle(model)} />
+                        <span
+                          style={{
+                            fontSize: 12,
+                            color: checked ? tokens.ink : tokens.inkSoft,
+                            fontFamily: tokens.monoFont,
+                            fontWeight: checked ? 500 : 400,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            minWidth: 0,
+                          }}
+                        >
+                          {model}
+                        </span>
+                      </label>
+                    )
+                  })}
+                </div>
+              ) : (
+                <div
+                  style={{
+                    padding: '10px 12px',
+                    borderRadius: tokens.radiusControl,
+                    background: tokens.petal,
+                    border: `1px solid ${tokens.border}`,
+                    fontSize: 11,
+                    color: tokens.inkMuted,
+                    lineHeight: 1.6,
+                  }}
+                >
+                  {unusable
+                    ? '这个 Provider 目前不可用，先修复上面的报错后再勾选模型。'
+                    : '这个 Provider 已配置，但还没有发现可勾选的模型。'}
+                </div>
+              )}
             </div>
           )
         })}

@@ -9,6 +9,8 @@ export interface ProviderInfo {
   total_models: number
   is_current: boolean
   source?: string
+  usable?: boolean
+  error?: string | null
 }
 
 export interface ListModelsResponse {
@@ -42,6 +44,8 @@ export interface CredentialView {
   source: string
   status?: string
   is_current: boolean
+  base_url?: string | null
+  base_url_override?: boolean
 }
 
 export interface OAuthStartResponse {

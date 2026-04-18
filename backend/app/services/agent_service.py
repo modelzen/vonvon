@@ -31,6 +31,10 @@ log = logging.getLogger(__name__)
 # delegated entirely to hermes credential_pool via per-request lookups.
 
 
+def _canonicalize_provider(provider: str | None) -> str:
+    return (provider or "").strip().lower()
+
+
 # ── Session DB singleton ──────────────────────────────────────────────────────
 
 def get_session_db() -> SessionDB:
@@ -73,24 +77,25 @@ def _peek_current_credentials() -> tuple[Optional[str], Optional[str]]:
     """
     import logging
     log = logging.getLogger(__name__)
-    if not _current_provider:
+    current_provider = _canonicalize_provider(_current_provider)
+    if not current_provider:
         log.info("peek_creds: _current_provider is empty, returning (None, None)")
         return (None, None)
     try:
         from agent.credential_pool import load_pool
-        pool = load_pool(_current_provider)
+        pool = load_pool(current_provider)
         cred = pool.peek()
     except Exception as exc:
-        log.warning("credential_pool.peek(%s) failed: %s", _current_provider, exc)
+        log.warning("credential_pool.peek(%s) failed: %s", current_provider, exc)
         return (None, None)
     if cred is None:
-        log.info("peek_creds: pool.peek(%s) returned None", _current_provider)
+        log.info("peek_creds: pool.peek(%s) returned None", current_provider)
         return (None, None)
     base_url = getattr(cred, "base_url", None) or None
     token = getattr(cred, "access_token", None) or None
     log.info(
         "peek_creds: provider=%s base_url=%s token_len=%d",
-        _current_provider, base_url or "<none>", len(token) if token else 0,
+        current_provider, base_url or "<none>", len(token) if token else 0,
     )
     return (base_url, token)
 
@@ -260,6 +265,29 @@ def get_model_context_size() -> int:
     )
 
 
+def _persist_model_selection(
+    *,
+    provider: str,
+    model: str,
+    base_url: str,
+) -> None:
+    from hermes_cli.config import load_config, save_config
+    from hermes_cli.config_lock import config_store_lock
+
+    with config_store_lock():
+        cfg = load_config()
+        model_cfg = cfg.get("model")
+        if not isinstance(model_cfg, dict):
+            legacy_name = model_cfg if isinstance(model_cfg, str) and model_cfg else None
+            cfg["model"] = {"name": legacy_name} if legacy_name else {}
+        cfg["model"]["provider"] = _canonicalize_provider(provider)
+        cfg["model"]["name"] = model
+        if base_url:
+            cfg["model"]["base_url"] = base_url
+        else:
+            cfg["model"].pop("base_url", None)
+        save_config(cfg)
+
 def _switch_model_sync(model: str, persist: bool,
                        provider: str | None,
                        base_url: str | None):
@@ -267,20 +295,23 @@ def _switch_model_sync(model: str, persist: bool,
     global _current_model, _current_provider
     from hermes_cli.model_switch import switch_model as hermes_switch_model
 
+    current_provider = _canonicalize_provider(_current_provider)
+    explicit_provider = _canonicalize_provider(provider)
+
     try:
         from agent.credential_pool import load_pool
-        cur_cred = load_pool(_current_provider or "openai").peek() if _current_provider else None
+        cur_cred = load_pool(current_provider or "openai").peek() if current_provider else None
     except Exception:
         cur_cred = None
 
     result = hermes_switch_model(
         raw_input=model,
-        current_provider=_current_provider or "",
+        current_provider=current_provider or "",
         current_model=_current_model,
         current_base_url=cur_cred.base_url if cur_cred else "",
         current_api_key=cur_cred.access_token if cur_cred else "",
         is_global=persist,
-        explicit_provider=provider or "",
+        explicit_provider=explicit_provider or "",
     )
     if not result.success:
         return result
@@ -293,29 +324,14 @@ def _switch_model_sync(model: str, persist: bool,
     if result.new_model:
         _current_model = result.new_model
     if result.target_provider:
-        _current_provider = result.target_provider
+        _current_provider = _canonicalize_provider(result.target_provider)
 
     if persist:
-        from hermes_cli.config import load_config, save_config
-        from hermes_cli.config_lock import config_store_lock
-        with config_store_lock():
-            cfg = load_config()
-            # hermes DEFAULT_CONFIG stores `model` as "" (str) on fresh
-            # installs, and _normalize_root_model_keys only migrates str→dict
-            # when a stale root-level provider/base_url also exists. So on a
-            # clean HERMES_HOME cfg["model"] is the empty string and setdefault
-            # won't replace it — we must normalize explicitly before any item
-            # assignment, otherwise `cfg["model"]["provider"] = …` raises
-            # TypeError: 'str' object does not support item assignment.
-            model_cfg = cfg.get("model")
-            if not isinstance(model_cfg, dict):
-                legacy_name = model_cfg if isinstance(model_cfg, str) and model_cfg else None
-                cfg["model"] = {"name": legacy_name} if legacy_name else {}
-            cfg["model"]["provider"] = result.target_provider
-            cfg["model"]["name"] = result.new_model
-            if base_url:
-                cfg["model"]["base_url"] = base_url
-            save_config(cfg)
+        _persist_model_selection(
+            provider=_canonicalize_provider(result.target_provider),
+            model=result.new_model,
+            base_url=result.base_url or base_url or "",
+        )
     return result
 
 
@@ -331,7 +347,7 @@ def get_current_model() -> str:
 
 
 def get_current_provider() -> str:
-    return _current_provider
+    return _canonicalize_provider(_current_provider)
 
 
 # ── Config loader ─────────────────────────────────────────────────────────────
@@ -352,7 +368,7 @@ def init_from_hermes_config() -> None:
             _current_model = model
         provider = (model_cfg or {}).get("provider")
         if isinstance(provider, str):
-            _current_provider = provider
+            _current_provider = _canonicalize_provider(provider)
     except Exception as exc:
         import logging
         logging.getLogger(__name__).warning("Failed to load hermes config: %s", exc)

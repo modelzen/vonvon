@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import nullcontext
 import sys
 from unittest.mock import MagicMock, patch, AsyncMock
 
@@ -97,12 +98,24 @@ async def test_add_api_key_credential_masks_token():
 
 
 @pytest.mark.asyncio
-async def test_add_api_key_credential_requires_base_url_for_compatible_provider():
-    with pytest.raises(ValueError, match="base_url is required"):
-        await auth_service.add_api_key_credential(
-            provider="openai-compatible",
-            api_key="sk-compatible",
-        )
+async def test_add_api_key_credential_allows_openai_base_url_override():
+    created: dict[str, object] = {}
+
+    def _fake_credential(**kw):
+        created.update(kw)
+        return MagicMock(**kw)
+
+    pool = _make_pool()
+    with patch.object(auth_service, "load_pool", return_value=pool):
+        with patch.object(auth_service, "PooledCredential", side_effect=_fake_credential):
+            await auth_service.add_api_key_credential(
+                provider="openai",
+                api_key="sk-compatible",
+                base_url="https://compat.example.com/v1",
+            )
+
+    assert created["provider"] == "openai"
+    assert created["base_url"] == "https://compat.example.com/v1"
 
 
 @pytest.mark.asyncio
@@ -125,6 +138,8 @@ async def test_add_api_key_credential_sets_native_default_base_url():
     assert created["base_url"] == auth_service.ANTHROPIC_API_BASE_URL
 
 
+
+
 # ── remove_credential ──────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
@@ -142,6 +157,33 @@ async def test_remove_credential_not_found():
     with patch.object(auth_service, "load_pool", return_value=pool):
         result = await auth_service.remove_credential("openai", "nope")
     assert result is False
+
+
+@pytest.mark.asyncio
+async def test_remove_codex_credential_clears_auth_store():
+    removed = MagicMock()
+    removed.source = "manual:device_code"
+
+    pool = _make_pool()
+    pool.remove_index.return_value = removed
+
+    auth_store = {
+        "providers": {
+            "openai-codex": {"tokens": {"access_token": "tok", "refresh_token": "ref"}},
+            "openai": {"tokens": {"access_token": "sk"}},
+        }
+    }
+    hermes_auth = sys.modules["hermes_cli.auth"]
+    hermes_auth._load_auth_store = MagicMock(return_value=auth_store)
+    hermes_auth._save_auth_store = MagicMock()
+    hermes_auth._auth_store_lock = MagicMock(return_value=nullcontext())
+
+    with patch.object(auth_service, "load_pool", return_value=pool):
+        result = await auth_service.remove_credential("openai-codex", "abc123")
+
+    assert result is True
+    assert "openai-codex" not in auth_store["providers"]
+    hermes_auth._save_auth_store.assert_called_once_with(auth_store)
 
 
 @pytest.mark.asyncio

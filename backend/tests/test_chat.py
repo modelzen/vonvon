@@ -47,6 +47,27 @@ def test_send_message_sse(client, mock_agent):
     assert "final_response" in body or "output" in body
 
 
+def test_send_message_sse_strips_empty_output_placeholder(client, mock_agent):
+    mock_agent.run_conversation.return_value = {
+        "final_response": "(empty)",
+        "last_prompt_tokens": 500,
+        "total_tokens": 1000,
+        "completed": True,
+        "messages": [],
+    }
+
+    resp = client.post(
+        "/api/chat/send",
+        json={"session_id": "test-session-123", "message": "Hello"},
+        headers={"Accept": "text/event-stream"},
+    )
+
+    assert resp.status_code == 200
+    body = resp.text
+    assert "run.completed" in body
+    assert "(empty)" not in body
+
+
 def test_send_message_expands_inline_skills_before_agent_run(client, mock_agent):
     with patch(
         "app.routes.chat.skills_service.extract_inline_skills",

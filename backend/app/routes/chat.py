@@ -260,7 +260,9 @@ async def send_message(req: ChatRequest, request: Request):
                 queue.put_nowait({
                     "event": "run.completed",
                     "data": {
-                        "output": result.get("final_response", ""),
+                        "output": session_service.sanitize_assistant_content(
+                            result.get("final_response", "")
+                        ),
                         "usage_percent": usage_pct,
                         "prompt_tokens": prompt_tokens,
                         "context_size": model_ctx,

@@ -3,7 +3,7 @@ import { SectionCard } from './SectionCard'
 import { tokens } from './settingsStyles'
 import { useHermesConfig } from '../../hooks/useHermesConfig'
 import type { ProviderInfo } from '../../hooks/useHermesConfig'
-import { loadModelCatalog } from '../../lib/modelCatalogCache'
+import { buildModelCatalogFingerprint, loadModelCatalog } from '../../lib/modelCatalogCache'
 
 interface TitleModel {
   model: string
@@ -29,9 +29,11 @@ export function ChatPreferencesPanel({
 }: {
   refreshToken?: number
 } = {}): React.ReactElement {
-  const { listModels } = useHermesConfig()
+  const { listModels, listCredentials } = useHermesConfig()
   const listModelsRef = useRef(listModels)
+  const listCredentialsRef = useRef(listCredentials)
   listModelsRef.current = listModels
+  listCredentialsRef.current = listCredentials
 
   const [enabled, setEnabled] = useState(true)
   const [models, setModels] = useState<TitleModel[]>([])
@@ -46,13 +48,23 @@ export function ChatPreferencesPanel({
           window.electron?.storeGet?.(AUTO_TITLE_KEY),
           window.electron?.storeGet?.(TITLE_MODEL_KEY) as Promise<TitleModel | null>,
           loadModelCatalog(() => listModelsRef.current(), {
-            forceRefresh: refreshToken > 0,
+            getFingerprint: () => buildModelCatalogFingerprint(() => listCredentialsRef.current()),
           }).catch(() => ({ providers: [], current: '', current_provider: '' })),
         ])
+        const availableModels = flattenModels(data.providers)
+        const hasCurrentModel = availableModels.some((item) => item.model === data.current)
+        const storedValid =
+          stored != null &&
+          availableModels.some(
+            (item) => item.model === stored.model && item.provider === stored.provider
+          )
         setEnabled(val !== false)
-        setTitleModel(stored ?? null)
-        setModels(flattenModels(data.providers))
-        setCurrentModel(data.current)
+        setTitleModel(storedValid ? stored : null)
+        if (stored != null && !storedValid) {
+          await window.electron?.storeSet?.(TITLE_MODEL_KEY, null)
+        }
+        setModels(availableModels)
+        setCurrentModel(hasCurrentModel ? data.current : '')
       } finally {
         setLoaded(true)
       }

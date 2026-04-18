@@ -18,9 +18,17 @@ export interface AgentAttachment {
 // strip that placeholder tail from the visible text — otherwise the user
 // sees both the real image AND "[图片:image.png]" in the bubble.
 const IMAGE_PLACEHOLDER_TAIL_RE = /(\s*\[图片(?::[^\]]*)?\])+\s*$/
+const EMPTY_ASSISTANT_SENTINEL_RE = /^\(empty\)(?:\s+#\d+)?$/i
 
 function stripImagePlaceholderTail(text: string): string {
   return text.replace(IMAGE_PLACEHOLDER_TAIL_RE, '').trim()
+}
+
+function normalizeAssistantContent(role: 'user' | 'assistant', text: string): string {
+  if (role === 'assistant' && EMPTY_ASSISTANT_SENTINEL_RE.test(text.trim())) {
+    return ''
+  }
+  return text
 }
 
 // Per-session usage cache stored in localStorage. The backend's
@@ -332,7 +340,8 @@ export function useAgentChat(sessionId: string | null | undefined, opts?: UseAge
           if (rawRole === 'tool') continue
           if (rawRole !== 'user' && rawRole !== 'assistant') continue
           const role = rawRole as 'user' | 'assistant'
-          const content = typeof m.content === 'string' ? m.content : ''
+          const content =
+            typeof m.content === 'string' ? normalizeAssistantContent(role, m.content) : ''
           const baseTs = now - (raw.length - i)
 
           if (role === 'user') {
@@ -589,12 +598,18 @@ export function useAgentChat(sessionId: string | null | undefined, opts?: UseAge
                 // would run them together into a single garbled string.
                 setThinking(text)
               } else if (currentEvent === 'run.completed') {
-                const output = (data.output as string) || ''
-                setMessages((prev) =>
-                  prev.map((m) =>
+                const output = normalizeAssistantContent(
+                  'assistant',
+                  ((data.output as string) || '')
+                )
+                setMessages((prev) => {
+                  if (!output) {
+                    return prev.filter((m) => !(m.id === assistantId && !m.content.trim()))
+                  }
+                  return prev.map((m) =>
                     m.id === assistantId && !m.content ? { ...m, content: output } : m
                   )
-                )
+                })
                 preferLocalCacheRef.current.delete(sessionId)
                 stoppingSessionsRef.current.delete(sessionId)
                 const pct = (data.usage_percent as number) ?? 0

@@ -19,7 +19,7 @@ type ProviderOption = {
   id: string
   name: string
   authType: 'api_key' | 'oauth'
-  requiresBaseUrl?: boolean
+  supportsBaseUrlOverride?: boolean
   apiKeyPlaceholder?: string
   baseUrlPlaceholder?: string
   hint: string
@@ -30,8 +30,10 @@ const PROVIDERS: ProviderOption[] = [
     id: 'openai',
     name: 'OpenAI',
     authType: 'api_key',
+    supportsBaseUrlOverride: true,
     apiKeyPlaceholder: 'sk-...',
-    hint: '官方 OpenAI 接口，仅需配置 API Key。',
+    baseUrlPlaceholder: 'https://api.openai.com/v1',
+    hint: '默认使用官方 OpenAI 接口；如需代理或兼容端点，可开启 Override Base URL。',
   },
   {
     id: 'openai-codex',
@@ -43,26 +45,10 @@ const PROVIDERS: ProviderOption[] = [
     id: 'anthropic',
     name: 'Anthropic',
     authType: 'api_key',
+    supportsBaseUrlOverride: true,
     apiKeyPlaceholder: 'sk-ant-...',
-    hint: '官方 Anthropic 接口，仅需配置 API Key。',
-  },
-  {
-    id: 'openai-compatible',
-    name: 'OpenAI 兼容接口',
-    authType: 'api_key',
-    requiresBaseUrl: true,
-    apiKeyPlaceholder: 'sk-...',
-    baseUrlPlaceholder: 'https://your-openai-compatible-endpoint/v1',
-    hint: '适用于兼容 OpenAI 协议的代理或自建接口，需要 Base URL 和 API Key。',
-  },
-  {
-    id: 'anthropic-compatible',
-    name: 'Anthropic 兼容接口',
-    authType: 'api_key',
-    requiresBaseUrl: true,
-    apiKeyPlaceholder: 'sk-ant-...',
-    baseUrlPlaceholder: 'https://your-anthropic-compatible-endpoint',
-    hint: '适用于兼容 Anthropic 协议的代理接口，需要 Base URL 和 API Key。',
+    baseUrlPlaceholder: 'https://api.anthropic.com',
+    hint: '默认使用官方 Anthropic 接口；如需代理或兼容端点，可开启 Override Base URL。',
   },
 ]
 
@@ -379,11 +365,20 @@ function AddDrawer({ onAdded, onClose }: AddDrawerProps): React.ReactElement {
   const [apiKey, setApiKey] = useState('')
   const [label, setLabel] = useState('')
   const [baseUrl, setBaseUrl] = useState('')
+  const [overrideBaseUrl, setOverrideBaseUrl] = useState(false)
   const [adding, setAdding] = useState(false)
   const [error, setError] = useState('')
   const [oauthFlow, setOauthFlow] = useState<OAuthStartResponse | null>(null)
   const providerOption = PROVIDER_BY_ID[provider]
   const isOAuthProvider = providerOption.authType === 'oauth'
+  const supportsBaseUrlOverride = providerOption.supportsBaseUrlOverride === true
+
+  useEffect(() => {
+    if (!supportsBaseUrlOverride) {
+      setOverrideBaseUrl(false)
+      setBaseUrl('')
+    }
+  }, [supportsBaseUrlOverride, provider])
 
   const handleAddApiKey = async () => {
     if (!apiKey.trim()) return
@@ -394,9 +389,12 @@ function AddDrawer({ onAdded, onClose }: AddDrawerProps): React.ReactElement {
         provider,
         api_key: apiKey.trim(),
         label: label.trim() || undefined,
-        base_url: providerOption.requiresBaseUrl ? baseUrl.trim() || undefined : undefined,
+        base_url:
+          supportsBaseUrlOverride && overrideBaseUrl ? baseUrl.trim() || undefined : undefined,
       })
       setApiKey('')
+      setBaseUrl('')
+      setOverrideBaseUrl(false)
       onAdded(cred)
     } catch (e: any) {
       setError(e.message)
@@ -519,17 +517,35 @@ function AddDrawer({ onAdded, onClose }: AddDrawerProps): React.ReactElement {
                 onBlur={(e) => applyFocusRing(e, false)}
               />
             </div>
-            {providerOption.requiresBaseUrl && (
+            {supportsBaseUrlOverride && (
               <div style={{ marginBottom: 14 }}>
-                <label style={labelStyle}>Base URL</label>
-                <input
-                  value={baseUrl}
-                  onChange={(e) => setBaseUrl(e.target.value)}
-                  placeholder={providerOption.baseUrlPlaceholder ?? 'https://...'}
-                  style={inputStyle}
-                  onFocus={(e) => applyFocusRing(e, true)}
-                  onBlur={(e) => applyFocusRing(e, false)}
-                />
+                <label
+                  style={{
+                    ...labelStyle,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 12,
+                    marginBottom: 8,
+                  }}
+                >
+                  <span>Override Base URL</span>
+                  <input
+                    type="checkbox"
+                    checked={overrideBaseUrl}
+                    onChange={(e) => setOverrideBaseUrl(e.target.checked)}
+                  />
+                </label>
+                {overrideBaseUrl && (
+                  <input
+                    value={baseUrl}
+                    onChange={(e) => setBaseUrl(e.target.value)}
+                    placeholder={providerOption.baseUrlPlaceholder ?? 'https://...'}
+                    style={inputStyle}
+                    onFocus={(e) => applyFocusRing(e, true)}
+                    onBlur={(e) => applyFocusRing(e, false)}
+                  />
+                )}
               </div>
             )}
             <div style={{ display: 'flex', gap: 8 }}>
@@ -538,20 +554,20 @@ function AddDrawer({ onAdded, onClose }: AddDrawerProps): React.ReactElement {
                 disabled={
                   adding ||
                   !apiKey.trim() ||
-                  (providerOption.requiresBaseUrl && !baseUrl.trim())
+                  (supportsBaseUrlOverride && overrideBaseUrl && !baseUrl.trim())
                 }
                 style={{
                   ...btnPrimaryStyle,
                   opacity:
                     adding ||
                     !apiKey.trim() ||
-                    (providerOption.requiresBaseUrl && !baseUrl.trim())
+                    (supportsBaseUrlOverride && overrideBaseUrl && !baseUrl.trim())
                       ? 0.55
                       : 1,
                   cursor:
                     adding ||
                     !apiKey.trim() ||
-                    (providerOption.requiresBaseUrl && !baseUrl.trim())
+                    (supportsBaseUrlOverride && overrideBaseUrl && !baseUrl.trim())
                       ? 'not-allowed'
                       : 'pointer',
                 }}
@@ -666,7 +682,7 @@ export function HermesAuthPanel({
       subtitle={
         creds.length > 0
           ? `已配置 ${creds.length} 个账号`
-          : '支持 OpenAI、OpenAI Codex、Anthropic 以及兼容接口'
+          : '支持 OpenAI、OpenAI Codex、Anthropic；OpenAI / Anthropic 可选 Override Base URL'
       }
       action={
         <button onClick={() => setShowAdd(true)} style={btnPrimaryStyle}>
@@ -790,6 +806,24 @@ export function HermesAuthPanel({
                           OAuth
                         </span>
                       )}
+                      {credential.base_url_override && (
+                        <span
+                          style={{
+                            marginLeft: 6,
+                            fontSize: 9,
+                            fontWeight: 600,
+                            padding: '1px 6px',
+                            borderRadius: tokens.radiusPill,
+                            background: '#fff',
+                            color: tokens.brand,
+                            border: `1px solid ${tokens.border}`,
+                            letterSpacing: 0.3,
+                            textTransform: 'uppercase',
+                          }}
+                        >
+                          Override Base URL
+                        </span>
+                      )}
                     </span>
 
                     {credential.status && (
@@ -855,6 +889,20 @@ export function HermesAuthPanel({
                     >
                       {isBusy && !canSetCurrent ? '删除中…' : '删除'}
                     </button>
+
+                    {credential.base_url_override && credential.base_url && (
+                      <div
+                        style={{
+                          width: '100%',
+                          fontSize: 11,
+                          color: tokens.inkMuted,
+                          fontFamily: tokens.monoFont,
+                          marginTop: -2,
+                        }}
+                      >
+                        {credential.base_url}
+                      </div>
+                    )}
                   </div>
                 )
               })}

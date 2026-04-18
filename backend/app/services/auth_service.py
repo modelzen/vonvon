@@ -34,24 +34,16 @@ SUPPORTED_PROVIDER_SPECS: Dict[str, Dict[str, Any]] = {
     "openai": {
         "auth_type": AUTH_TYPE_API_KEY,
         "default_base_url": OPENAI_API_BASE_URL,
-        "requires_base_url": False,
+        "allows_base_url_override": True,
     },
     "openai-codex": {
         "auth_type": AUTH_TYPE_OAUTH,
-        "requires_base_url": False,
+        "allows_base_url_override": False,
     },
     "anthropic": {
         "auth_type": AUTH_TYPE_API_KEY,
         "default_base_url": ANTHROPIC_API_BASE_URL,
-        "requires_base_url": False,
-    },
-    "openai-compatible": {
-        "auth_type": AUTH_TYPE_API_KEY,
-        "requires_base_url": True,
-    },
-    "anthropic-compatible": {
-        "auth_type": AUTH_TYPE_API_KEY,
-        "requires_base_url": True,
+        "allows_base_url_override": True,
     },
 }
 
@@ -83,6 +75,10 @@ def _normalize_provider(provider: str) -> str:
     return (provider or "").strip().lower()
 
 
+def canonicalize_provider(provider: str) -> str:
+    return _normalize_provider(provider)
+
+
 def _normalize_optional_text(value: Optional[str]) -> Optional[str]:
     normalized = (value or "").strip()
     return normalized or None
@@ -94,7 +90,7 @@ def _normalize_base_url(value: Optional[str]) -> Optional[str]:
 
 
 def _get_supported_provider_spec(provider: str) -> tuple[str, Dict[str, Any]]:
-    normalized = _normalize_provider(provider)
+    normalized = canonicalize_provider(provider)
     spec = SUPPORTED_PROVIDER_SPECS.get(normalized)
     if spec is None:
         supported = ", ".join(SUPPORTED_PROVIDER_SPECS.keys())
@@ -102,20 +98,70 @@ def _get_supported_provider_spec(provider: str) -> tuple[str, Dict[str, Any]]:
     return normalized, spec
 
 
+def _normalized_base_url(value: Optional[str]) -> str:
+    return str(value or "").strip().rstrip("/")
+
+
+def _provider_default_base_url(provider: str) -> Optional[str]:
+    spec = SUPPORTED_PROVIDER_SPECS.get(canonicalize_provider(provider))
+    default_base_url = spec.get("default_base_url") if isinstance(spec, dict) else None
+    return _normalized_base_url(default_base_url) or None
+
+
+def _has_base_url_override(provider: str, base_url: Optional[str]) -> bool:
+    normalized_base = _normalized_base_url(base_url)
+    if not normalized_base:
+        return False
+    default_base = _provider_default_base_url(provider)
+    if not default_base:
+        return False
+    return normalized_base != default_base
+
+
 def _mask(token: str) -> str:
     return f"...{token[-4:]}" if token and len(token) >= 4 else "..."
 
 
+def _credential_source_kind(source: Optional[str]) -> str:
+    normalized = str(source or "").strip().lower()
+    if not normalized:
+        return ""
+    if ":" in normalized:
+        return normalized.split(":")[-1]
+    return normalized
+
+
+def _cleanup_removed_singleton_credential(provider: str, removed: PooledCredential) -> None:
+    normalized_provider = canonicalize_provider(provider)
+    source = str(getattr(removed, "source", "") or "")
+    source_kind = _credential_source_kind(source)
+
+    if source_kind == "device_code" and normalized_provider in {"openai-codex", "nous"}:
+        from hermes_cli.auth import _load_auth_store, _save_auth_store, _auth_store_lock
+
+        with _auth_store_lock():
+            auth_store = _load_auth_store()
+            providers_dict = auth_store.get("providers")
+            if isinstance(providers_dict, dict) and normalized_provider in providers_dict:
+                del providers_dict[normalized_provider]
+                _save_auth_store(auth_store)
+        logger.info("credential_singleton_cleared provider=%s source=%s", normalized_provider, source)
+
+
 def _to_view(provider: str, entry: PooledCredential, *, is_current: bool) -> dict:
+    normalized_provider = canonicalize_provider(provider)
+    base_url = _normalized_base_url(getattr(entry, "base_url", None)) or None
     return {
         "id": entry.id,
-        "provider": provider,
+        "provider": normalized_provider,
         "label": entry.label,
         "auth_type": entry.auth_type,
         "last4": _mask(entry.access_token or ""),
         "source": entry.source,
         "status": entry.last_status,
         "is_current": is_current,
+        "base_url": base_url,
+        "base_url_override": _has_base_url_override(normalized_provider, base_url),
     }
 
 
@@ -151,10 +197,8 @@ async def add_api_key_credential(
         if not normalized_api_key:
             raise ValueError("api_key is required")
         normalized_base_url = _normalize_base_url(base_url)
-        requires_base_url = bool(spec.get("requires_base_url"))
-        if requires_base_url and not normalized_base_url:
-            raise ValueError(f"base_url is required for provider '{p}'")
-        if not requires_base_url and normalized_base_url:
+        allows_base_url_override = bool(spec.get("allows_base_url_override"))
+        if normalized_base_url and not allows_base_url_override:
             raise ValueError(f"provider '{p}' does not support base_url")
 
         pool = load_pool(p)
@@ -184,12 +228,16 @@ async def add_api_key_credential(
 
 async def remove_credential(provider: str, cred_id: str) -> bool:
     def _remove() -> bool:
-        pool = load_pool(provider)
+        p, _ = _get_supported_provider_spec(provider)
+        pool = load_pool(p)
         index, matched, _ = pool.resolve_target(cred_id)
         if matched is None or index is None:
             return False
         removed = pool.remove_index(index)
-        logger.info("credential_removed provider=%s id=%s", provider, cred_id)
+        if removed is None:
+            return False
+        _cleanup_removed_singleton_credential(p, removed)
+        logger.info("credential_removed provider=%s id=%s", p, cred_id)
         return removed is not None
 
     return await asyncio.to_thread(_remove)

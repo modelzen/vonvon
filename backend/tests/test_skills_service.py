@@ -164,6 +164,56 @@ def test_build_skill_turn_message_skips_disabled_vonvon_skill():
     fake_skill_commands._load_skill_payload.assert_called_once_with("browse", task_id="session-1")
 
 
+def test_ensure_vonvon_default_skills_bootstraps_once():
+    cfg = {}
+
+    with patch.object(skills_service, "load_config", return_value=cfg), \
+         patch.object(skills_service, "save_config") as mock_save, \
+         patch.object(skills_service, "_installed_skill_names", return_value=set()), \
+         patch.object(skills_service, "install_template") as mock_install, \
+         patch.object(skills_service, "toggle_skill") as mock_toggle, \
+         patch.object(skills_service, "config_store_lock") as mock_lock:
+
+        mock_lock.return_value.__enter__ = MagicMock(return_value=None)
+        mock_lock.return_value.__exit__ = MagicMock(return_value=False)
+        result = skills_service.ensure_vonvon_default_skills()
+
+    assert result == {
+        "applied": True,
+        "installed": ["install-skills"],
+        "enabled": ["install-skills"],
+    }
+    mock_install.assert_called_once_with("builtin:software-development/install-skills")
+    mock_toggle.assert_called_once_with(
+        name="install-skills",
+        enabled=True,
+        scope="both",
+    )
+    assert cfg["vonvon"]["default_skills_bootstrap_version"] == 1
+    mock_save.assert_called_once_with(cfg)
+
+
+def test_ensure_vonvon_default_skills_skips_after_bootstrap():
+    cfg = {"vonvon": {"default_skills_bootstrap_version": 1}}
+
+    with patch.object(skills_service, "load_config", return_value=cfg), \
+         patch.object(skills_service, "save_config") as mock_save, \
+         patch.object(skills_service, "_installed_skill_names") as mock_installed, \
+         patch.object(skills_service, "install_template") as mock_install, \
+         patch.object(skills_service, "toggle_skill") as mock_toggle, \
+         patch.object(skills_service, "config_store_lock") as mock_lock:
+
+        mock_lock.return_value.__enter__ = MagicMock(return_value=None)
+        mock_lock.return_value.__exit__ = MagicMock(return_value=False)
+        result = skills_service.ensure_vonvon_default_skills()
+
+    assert result == {"applied": False, "installed": [], "enabled": []}
+    mock_installed.assert_not_called()
+    mock_install.assert_not_called()
+    mock_toggle.assert_not_called()
+    mock_save.assert_not_called()
+
+
 # ── toggle_skill ───────────────────────────────────────────────────────────────
 
 def test_toggle_skill_invalid_scope():

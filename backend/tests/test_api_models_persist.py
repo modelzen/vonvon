@@ -9,6 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.routes.models import clear_models_cache
 from app.services import agent_service
 
 
@@ -22,13 +23,16 @@ def models_client(mock_session_db):
 
 def test_list_models_uses_authenticated_providers(models_client):
     """AC-M1: GET /api/models returns providers from list_authenticated_providers."""
-    agent_service._current_provider = "openai"
+    clear_models_cache()
+    agent_service._current_provider = "openrouter"
     fake_providers = [
-        {"slug": "openai", "name": "OpenAI", "models": ["gpt-4o"], "total_models": 1, "is_current": True}
+        {"slug": "openrouter", "name": "OpenRouter", "models": ["openai/gpt-4o"], "total_models": 1, "is_current": True}
     ]
+    empty_pool = MagicMock()
+    empty_pool.entries.return_value = []
+    sys.modules["agent.credential_pool"].load_pool = MagicMock(return_value=empty_pool)
     # list_authenticated_providers is a lazy import in the route handler;
     # patch the module attribute it's imported from.
-    import sys
     sys.modules["hermes_cli.model_switch"].list_authenticated_providers = MagicMock(
         return_value=fake_providers
     )
@@ -62,8 +66,12 @@ def test_list_models_fallback_on_error(models_client):
 
 def test_list_models_reflects_current_model(models_client):
     """GET /api/models returns the current model from agent_service."""
+    clear_models_cache()
     agent_service._current_model = "openai/gpt-4o"
     agent_service._current_provider = "openai"
+    pool = MagicMock()
+    pool.entries.return_value = [MagicMock()]
+    sys.modules["agent.credential_pool"].load_pool = MagicMock(return_value=pool)
     sys.modules["hermes_cli.model_switch"].list_authenticated_providers = MagicMock(return_value=[])
     try:
         resp = models_client.get("/api/models")
@@ -76,16 +84,19 @@ def test_list_models_reflects_current_model(models_client):
 
 def test_list_models_prefers_local_codex_catalog(models_client):
     """GET /api/models should use the cached/local Codex catalog for UI loads."""
-    fake_providers = [
-        {
-            "slug": "openai-codex",
-            "name": "OpenAI Codex",
-            "models": ["gpt-5.3-codex"],
-            "total_models": 1,
-            "is_current": True,
-        }
-    ]
-    list_mock = MagicMock(return_value=fake_providers)
+    list_mock = MagicMock(return_value=[])
+    codex_cred = MagicMock()
+    codex_pool = MagicMock()
+    codex_pool.entries.return_value = [codex_cred]
+    codex_pool.peek.return_value = codex_cred
+    empty_pool = MagicMock()
+    empty_pool.entries.return_value = []
+    empty_pool.peek.return_value = None
+
+    def _pool_side_effect(provider):
+        return codex_pool if provider == "openai-codex" else empty_pool
+
+    sys.modules["agent.credential_pool"].load_pool = MagicMock(side_effect=_pool_side_effect)
     codex_mock = MagicMock(return_value=["gpt-5.4", "gpt-5.3-codex"])
     sys.modules["hermes_cli.model_switch"].list_authenticated_providers = list_mock
     sys.modules["hermes_cli.codex_models"] = MagicMock(get_codex_model_ids=codex_mock)
@@ -105,9 +116,12 @@ def test_list_models_prefers_local_codex_catalog(models_client):
 def test_list_models_uses_route_cache_until_invalidated(models_client):
     """Repeated GET /api/models calls should reuse the in-process provider cache."""
     fake_providers = [
-        {"slug": "openai", "name": "OpenAI", "models": ["gpt-4o"], "total_models": 1, "is_current": True}
+        {"slug": "openrouter", "name": "OpenRouter", "models": ["openai/gpt-4o"], "total_models": 1, "is_current": True}
     ]
     list_mock = MagicMock(return_value=fake_providers)
+    empty_pool = MagicMock()
+    empty_pool.entries.return_value = []
+    sys.modules["agent.credential_pool"].load_pool = MagicMock(return_value=empty_pool)
     sys.modules["hermes_cli.model_switch"].list_authenticated_providers = list_mock
 
     try:
@@ -119,6 +133,113 @@ def test_list_models_uses_route_cache_until_invalidated(models_client):
     assert first.status_code == 200
     assert second.status_code == 200
     assert list_mock.call_count == 1
+
+
+def test_list_models_probes_openai_override_base_url(models_client):
+    """OpenAI with an overridden Base URL should probe that endpoint for models."""
+    agent_service._current_provider = "openai"
+    agent_service._current_model = "gpt-4.1-mini"
+    sys.modules["hermes_cli.model_switch"].list_authenticated_providers = MagicMock(return_value=[])
+
+    cred = MagicMock()
+    cred.base_url = "https://compat.example.com/v1"
+    cred.access_token = "sk-compatible"
+
+    pool = MagicMock()
+    pool.entries.return_value = [cred]
+    pool.peek.return_value = cred
+
+    empty_pool = MagicMock()
+    empty_pool.entries.return_value = []
+    empty_pool.peek.return_value = None
+
+    def _pool_side_effect(provider):
+        return pool if provider == "openai" else empty_pool
+
+    sys.modules["agent.credential_pool"].load_pool = MagicMock(side_effect=_pool_side_effect)
+    sys.modules["hermes_cli.models"] = MagicMock(
+        probe_api_models=MagicMock(
+            return_value={
+                "models": ["gpt-4.1-mini", "gpt-4.1"],
+                "probed_url": "https://compat.example.com/v1/models",
+                "resolved_base_url": "https://compat.example.com/v1",
+                "suggested_base_url": None,
+                "used_fallback": False,
+            }
+        )
+    )
+
+    try:
+        resp = models_client.get("/api/models")
+    finally:
+        sys.modules["hermes_cli.model_switch"].list_authenticated_providers = MagicMock()
+
+    assert resp.status_code == 200
+    data = resp.json()
+    provider = next((p for p in data["providers"] if p["slug"] == "openai"), None)
+    assert provider is not None
+    assert provider["usable"] is True
+    assert provider["models"] == ["gpt-4.1-mini", "gpt-4.1"]
+    assert provider["is_current"] is True
+    assert provider["source"] == "override-endpoint"
+
+
+def test_list_models_hides_stale_current_provider_without_credentials(models_client):
+    """A deleted current provider should not keep surfacing stale models in the UI."""
+    clear_models_cache()
+    agent_service._current_provider = "openai-codex"
+    agent_service._current_model = "gpt-5.4"
+
+    empty_pool = MagicMock()
+    empty_pool.entries.return_value = []
+    sys.modules["agent.credential_pool"].load_pool = MagicMock(return_value=empty_pool)
+    list_mock = MagicMock(return_value=[])
+    sys.modules["hermes_cli.model_switch"].list_authenticated_providers = list_mock
+
+    try:
+        resp = models_client.get("/api/models")
+    finally:
+        sys.modules["hermes_cli.model_switch"].list_authenticated_providers = MagicMock()
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["providers"] == []
+    assert data["current_provider"] == ""
+    assert data["current"] == ""
+    assert list_mock.call_args.kwargs["current_provider"] == ""
+
+
+def test_list_models_filters_managed_provider_without_pool_entries(models_client):
+    """Managed providers must only show up when the credential pool still has entries."""
+    clear_models_cache()
+    agent_service._current_provider = ""
+    agent_service._current_model = ""
+
+    empty_pool = MagicMock()
+    empty_pool.entries.return_value = []
+    sys.modules["agent.credential_pool"].load_pool = MagicMock(return_value=empty_pool)
+    list_mock = MagicMock(
+        return_value=[
+            {
+                "slug": "openai-codex",
+                "name": "OpenAI Codex",
+                "models": ["gpt-5.4", "gpt-5.3-codex"],
+                "total_models": 2,
+                "is_current": False,
+                "source": "hermes",
+            }
+        ]
+    )
+    sys.modules["hermes_cli.model_switch"].list_authenticated_providers = list_mock
+
+    try:
+        resp = models_client.get("/api/models")
+    finally:
+        sys.modules["hermes_cli.model_switch"].list_authenticated_providers = MagicMock()
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["providers"] == []
 
 
 # ── POST /api/models/current ──────────────────────────────────────────────────

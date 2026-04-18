@@ -76,6 +76,8 @@ class CredentialView(BaseModel):
     source: str
     status: Optional[str] = None
     is_current: bool
+    base_url: Optional[str] = None
+    base_url_override: bool = False
 
 
 class OAuthStartResponse(BaseModel):

@@ -1,15 +1,74 @@
 """Session management via hermes SessionDB."""
 import uuid
 import logging
+import re
 from typing import List, Dict, Any, Optional
 
 from app.services import agent_service
 
 log = logging.getLogger(__name__)
 
+_EMPTY_RESPONSE_RE = re.compile(r"^\(empty\)(?:\s+#(?P<suffix>\d+))?$", re.IGNORECASE)
+
 
 def get_session_db():
     return agent_service.get_session_db()
+
+
+def _is_empty_response_placeholder(value: Any) -> bool:
+    return isinstance(value, str) and bool(_EMPTY_RESPONSE_RE.fullmatch(value.strip()))
+
+
+def sanitize_assistant_content(content: Any) -> str:
+    if not isinstance(content, str):
+        return ""
+    return "" if _is_empty_response_placeholder(content) else content
+
+
+def _sanitize_message_content(role: Any, content: Any) -> str:
+    if role == "assistant":
+        return sanitize_assistant_content(content)
+    return content if isinstance(content, str) else ""
+
+
+def _fallback_title_from_messages(messages: List[Dict[str, Any]]) -> str:
+    for message in messages:
+        if message.get("role") != "user":
+            continue
+        content = message.get("content")
+        if isinstance(content, str) and content.strip():
+            return content.strip()[:15].rstrip()
+    return ""
+
+
+def _rewrite_empty_placeholder_title(title: Any, fallback: str) -> str:
+    if not isinstance(title, str):
+        return fallback
+    match = _EMPTY_RESPONSE_RE.fullmatch(title.strip())
+    if not match:
+        return title
+    if not fallback:
+        return ""
+    suffix = match.group("suffix")
+    return f"{fallback} #{suffix}" if suffix else fallback
+
+
+def _normalize_generated_title(raw: Any) -> str:
+    if not isinstance(raw, str):
+        return ""
+    title = raw.strip().strip('"\'「」【】《》""').strip()
+    if _is_empty_response_placeholder(title):
+        return ""
+    return title
+
+
+def _sanitize_session_record(session: Dict[str, Any]) -> Dict[str, Any]:
+    normalized = dict(session)
+    title = normalized.get("title")
+    if _is_empty_response_placeholder(title):
+        fallback = _fallback_title_from_messages(get_messages(str(normalized.get("id") or "")))
+        normalized["title"] = _rewrite_empty_placeholder_title(title, fallback)
+    return normalized
 
 
 def _is_title_conflict(exc: ValueError) -> bool:
@@ -37,11 +96,12 @@ def list_sessions(
 ) -> List[Dict[str, Any]]:
     db = get_session_db()
     try:
-        return db.list_sessions_rich(
+        sessions = db.list_sessions_rich(
             source="vonvon",
             include_archived=include_archived or archived_only,
             archived_only=archived_only,
         )
+        return [_sanitize_session_record(session) for session in sessions]
     except TypeError as exc:
         # Packaged builds may run against an older hermes-agent runtime whose
         # SessionDB.list_sessions_rich() predates archive-filter parameters.
@@ -54,6 +114,7 @@ def list_sessions(
             "SessionDB.list_sessions_rich() lacks archive kwargs; using legacy fallback"
         )
         sessions = db.list_sessions_rich(source="vonvon")
+        sessions = [_sanitize_session_record(session) for session in sessions]
         if archived_only:
             return [session for session in sessions if session.get("archived_at")]
         if include_archived:
@@ -73,7 +134,18 @@ def create_session(name: str) -> Dict[str, Any]:
 def get_messages(session_id: str) -> List[Dict[str, Any]]:
     """Return full conversation history (user/assistant/tool) from SessionDB."""
     db = get_session_db()
-    return db.get_messages_as_conversation(session_id)
+    raw_messages = db.get_messages_as_conversation(session_id)
+    messages: list[dict] = []
+    for message in raw_messages:
+        if not isinstance(message, dict):
+            continue
+        normalized = dict(message)
+        normalized["content"] = _sanitize_message_content(
+            normalized.get("role"),
+            normalized.get("content"),
+        )
+        messages.append(normalized)
+    return messages
 
 
 def reset_session(session_id: str) -> None:
@@ -196,7 +268,7 @@ async def summarize_title(session_id: str,
                 conversation_history=[],
             )
             raw = (result.get("final_response") or "").strip()
-            title = raw.strip('"\'「」【】《》""')
+            title = _normalize_generated_title(raw)
             log.info("summarize_title result for %s: %r", session_id, title)
         finally:
             agent_service._agent_lock.release()

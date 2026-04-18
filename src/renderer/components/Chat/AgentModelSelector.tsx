@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useHermesConfig, ProviderInfo } from '../../hooks/useHermesConfig'
 import { useSession } from '../../contexts/SessionContext'
 import {
+  buildModelCatalogFingerprint,
   loadModelCatalog,
   loadStoredModelCatalog,
   saveStoredModelCatalog,
@@ -21,7 +22,7 @@ import {
 const SESSION_MODEL_KEY = (sid: string) => `vonvon:session-model:${sid}`
 
 export function AgentModelSelector(): React.ReactElement {
-  const { listModels, switchModel } = useHermesConfig()
+  const { listModels, listCredentials, switchModel } = useHermesConfig()
   const { activeSession } = useSession()
 
   const [providers, setProviders] = useState<ProviderInfo[]>([])
@@ -38,8 +39,10 @@ export function AgentModelSelector(): React.ReactElement {
   // exactly why model switching felt laggy). Capture them in refs so we can
   // call the latest version without invalidating any callbacks.
   const listModelsRef = useRef(listModels)
+  const listCredentialsRef = useRef(listCredentials)
   const switchModelRef = useRef(switchModel)
   listModelsRef.current = listModels
+  listCredentialsRef.current = listCredentials
   switchModelRef.current = switchModel
 
   // Keep latest providers accessible in effects without adding to deps.
@@ -60,7 +63,9 @@ export function AgentModelSelector(): React.ReactElement {
     const refresh = async () => {
       try {
         const [data, stored] = await Promise.all([
-          loadModelCatalog(() => listModelsRef.current()),
+          loadModelCatalog(() => listModelsRef.current(), {
+            getFingerprint: () => buildModelCatalogFingerprint(() => listCredentialsRef.current()),
+          }),
           window.electron.storeGet('modelWhitelist') as Promise<unknown>,
         ])
         if (cancelled) return
@@ -148,7 +153,7 @@ export function AgentModelSelector(): React.ReactElement {
             ...provider,
             is_current: provider.slug === (owner?.slug ?? cached.current_provider),
           })),
-        })
+        }, { preserveFingerprint: true })
       }
     } catch (err: any) {
       setError(err?.message ?? 'switch failed')

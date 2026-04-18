@@ -47,10 +47,13 @@ interface StoreSchema {
       total_models: number
       is_current: boolean
       source?: string
+      usable?: boolean
+      error?: string | null
     }>
     current: string
     current_provider: string
     fetchedAt: number
+    contextFingerprint?: string | null
   } | null
 }
 

@@ -21,7 +21,7 @@ from typing import Any, Dict, List, Optional
 import httpx
 
 from app.config import HERMES_HOME
-from hermes_cli.config import load_config
+from hermes_cli.config import load_config, save_config
 from hermes_cli.config_lock import config_store_lock
 from hermes_cli.skills_config import get_disabled_skills, save_disabled_skills
 
@@ -128,6 +128,13 @@ _jobs_lock = asyncio.Lock()
 _VENDORED_SKILLS_DIR = Path(__file__).resolve().parents[2] / "hermes-agent" / "skills"
 _INLINE_SKILL_RE = re.compile(r'@skill:(?:"([^"]+)"|(\S+))')
 _HIDDEN_INSTALL_PATH_FRAGMENT = f"{os.sep}.vonvon-integrations{os.sep}"
+_VONVON_DEFAULT_SKILLS_BOOTSTRAP_VERSION = 1
+_VONVON_DEFAULT_SKILLS = (
+    {
+        "name": "install-skills",
+        "identifier": "builtin:software-development/install-skills",
+    },
+)
 
 
 def _find_installed_skills() -> List[Dict[str, Any]]:
@@ -196,6 +203,60 @@ def _installed_skill_names() -> set[str]:
         for skill in _find_installed_skills()
         if str(skill.get("name", "")).strip()
     }
+
+
+def ensure_vonvon_default_skills() -> Dict[str, Any]:
+    """Apply vonvon's one-time default skills bootstrap.
+
+    This only runs once per Hermes home. After the bootstrap marker is written,
+    users remain free to disable or uninstall these skills without vonvon
+    re-applying them on later launches.
+    """
+    with config_store_lock():
+        cfg = load_config()
+        vonvon_cfg = cfg.get("vonvon")
+        if not isinstance(vonvon_cfg, dict):
+            vonvon_cfg = {}
+            cfg["vonvon"] = vonvon_cfg
+
+        try:
+            bootstrap_version = int(vonvon_cfg.get("default_skills_bootstrap_version") or 0)
+        except (TypeError, ValueError):
+            bootstrap_version = 0
+
+        if bootstrap_version >= _VONVON_DEFAULT_SKILLS_BOOTSTRAP_VERSION:
+            return {"applied": False, "installed": [], "enabled": []}
+
+    installed_names = _installed_skill_names()
+    installed: List[str] = []
+    enabled: List[str] = []
+
+    for entry in _VONVON_DEFAULT_SKILLS:
+        name = entry["name"]
+        if name.casefold() not in installed_names:
+            install_template(entry["identifier"])
+            installed.append(name)
+            installed_names.add(name.casefold())
+
+        toggle_skill(name=name, enabled=True, scope="both")
+        enabled.append(name)
+
+    with config_store_lock():
+        cfg = load_config()
+        vonvon_cfg = cfg.get("vonvon")
+        if not isinstance(vonvon_cfg, dict):
+            vonvon_cfg = {}
+            cfg["vonvon"] = vonvon_cfg
+        vonvon_cfg["default_skills_bootstrap_version"] = _VONVON_DEFAULT_SKILLS_BOOTSTRAP_VERSION
+        save_config(cfg)
+
+    logger.info(
+        "vonvon_default_skills_bootstrap applied=%s installed=%s enabled=%s",
+        True,
+        installed,
+        enabled,
+    )
+    return {"applied": True, "installed": installed, "enabled": enabled}
 
 
 def _build_discover_item(
