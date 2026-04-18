@@ -16,6 +16,8 @@ directories:
 files:
   - out/**/*
   - package.json
+  - LICENSE
+  - THIRD_PARTY_NOTICES.md
   - native/build/Release/*.node
 
 # Two classes of things can't be read from inside app.asar:

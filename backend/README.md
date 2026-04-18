@@ -51,6 +51,17 @@ Tests stub hermes-agent at the `sys.modules` level (see `conftest.py`), so
 they run without a real hermes install. 18 tests cover chat SSE flow,
 session CRUD, agent service lifecycle, and compression.
 
+## Licensing
+
+The overall vonvon repository is licensed under `AGPL-3.0-only`.
+
+This backend vendors [Hermes Agent](./hermes-agent/) as a git subtree. That
+subtree remains available under its original MIT license, and its upstream
+license text is preserved at [`./hermes-agent/LICENSE`](./hermes-agent/LICENSE).
+
+See [`../THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md) for the repository
+level third-party notice summary.
+
 ## API
 
 See the [integration plan](../.omc/plans/vonvon-agent.md) for the full
