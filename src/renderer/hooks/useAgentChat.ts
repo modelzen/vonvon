@@ -481,6 +481,37 @@ export function useAgentChat(sessionId: string | null | undefined, opts?: UseAge
       // new indicator stream starts.
       setThinking('')
 
+      // The model chip can show a cached session preference before the
+      // backend has actually activated its provider/model. Preflight that
+      // state here so "send" fails loudly instead of hanging on an empty run.
+      try {
+        const modelRes = await apiFetch('/api/models')
+        if (modelRes.ok) {
+          const modelState = (await modelRes.json()) as {
+            current?: string
+            current_provider?: string
+          }
+          if (!modelState.current || !modelState.current_provider) {
+            preferLocalCacheRef.current.delete(sessionId)
+            stoppingSessionsRef.current.delete(sessionId)
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: `assistant-${Date.now()}`,
+                role: 'assistant',
+                content: 'Error: 当前还没有激活可用的 provider/model，请在输入框左下角重新选择一次模型。',
+                timestamp: Date.now()
+              }
+            ])
+            setIsLoading(false)
+            return
+          }
+        }
+      } catch {
+        // If the health check itself fails, fall through and let the actual
+        // request surface the network/backend error in the normal path.
+      }
+
       const ctrl = new AbortController()
       abortRef.current = ctrl
 
@@ -634,14 +665,39 @@ export function useAgentChat(sessionId: string | null | undefined, opts?: UseAge
                   void (async () => {
                     const autoTitle = await window.electron?.storeGet?.('autoTitleEnabled')
                     if (autoTitle === false) return
-                    const titleModel = await window.electron?.storeGet?.('titleSummaryModel') as
+                    let titleModel = await window.electron?.storeGet?.('titleSummaryModel') as
                       { model: string; provider: string } | null | undefined
+                    const catalog = await window.electron?.storeGet?.('hermesModelCatalog') as
+                      | {
+                          providers?: Array<{ slug?: string; models?: string[] }>
+                        }
+                      | null
+                      | undefined
+                    const titleModelStillAvailable =
+                      !!titleModel &&
+                      !!catalog?.providers?.some((provider) =>
+                        provider?.slug === titleModel?.provider &&
+                        Array.isArray(provider.models) &&
+                        provider.models.includes(titleModel.model)
+                      )
+                    if (titleModel && !titleModelStillAvailable) {
+                      await window.electron?.storeSet?.('titleSummaryModel', null)
+                      titleModel = null
+                    }
                     try {
-                      const r = await apiFetch(`/api/sessions/${capturedSessionId}/summarize`, {
+                      let r = await apiFetch(`/api/sessions/${capturedSessionId}/summarize`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(titleModel ?? {}),
                       })
+                      if (!r.ok && titleModel) {
+                        await window.electron?.storeSet?.('titleSummaryModel', null)
+                        r = await apiFetch(`/api/sessions/${capturedSessionId}/summarize`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({}),
+                        })
+                      }
                       if (!r.ok) return
                       const result = (await r.json()) as { name?: string }
                       if (result.name) onTitleUpdate?.(result.name)

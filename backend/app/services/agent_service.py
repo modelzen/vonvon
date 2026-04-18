@@ -5,6 +5,7 @@ Do NOT use sys.path.insert — rely on editable install for imports.
 """
 import asyncio
 from contextlib import suppress
+from types import SimpleNamespace
 from typing import Any, Optional
 import logging
 
@@ -288,6 +289,94 @@ def _persist_model_selection(
             cfg["model"].pop("base_url", None)
         save_config(cfg)
 
+
+def _direct_provider_api_mode(provider: str, base_url: str | None) -> str:
+    normalized_provider = _canonicalize_provider(provider)
+    normalized_base_url = str(base_url or "").strip().rstrip("/").lower()
+    if normalized_provider == "anthropic":
+        return "anthropic_messages"
+    if normalized_provider == "openai" and "api.openai.com" in normalized_base_url:
+        return "codex_responses"
+    return "chat_completions"
+
+
+def _switch_managed_provider_sync(
+    *,
+    model: str,
+    persist: bool,
+    provider: str,
+) -> Any:
+    """Switch OpenAI/Anthropic-style providers without Hermes alias rewriting.
+
+    Hermes keeps a CLI-oriented alias where bare ``openai`` resolves to
+    ``openrouter``. That is useful in the standalone CLI, but it is wrong for
+    vonvon's managed OpenAI credential flow where ``provider=openai`` means the
+    user's configured direct/compatible OpenAI endpoint from credential_pool.
+    """
+    global _current_model, _current_provider
+
+    normalized_provider = _canonicalize_provider(provider)
+    requested_model = str(model or "").strip()
+    if not requested_model:
+        return SimpleNamespace(
+            success=False,
+            target_provider=normalized_provider,
+            provider_label=normalized_provider,
+            is_global=persist,
+            error_message="Model is required.",
+        )
+
+    try:
+        from agent.credential_pool import load_pool
+
+        pool = load_pool(normalized_provider)
+        cred = pool.peek()
+    except Exception as exc:
+        return SimpleNamespace(
+            success=False,
+            target_provider=normalized_provider,
+            provider_label=normalized_provider,
+            is_global=persist,
+            error_message=f"Could not load credentials for provider '{normalized_provider}': {exc}",
+        )
+
+    if cred is None:
+        return SimpleNamespace(
+            success=False,
+            target_provider=normalized_provider,
+            provider_label=normalized_provider,
+            is_global=persist,
+            error_message=f"No configured credentials for provider '{normalized_provider}'.",
+        )
+
+    resolved_base_url = str(getattr(cred, "base_url", "") or "").strip()
+    previous_provider = _canonicalize_provider(_current_provider)
+    _current_model = requested_model
+    _current_provider = normalized_provider
+
+    if persist:
+        _persist_model_selection(
+            provider=normalized_provider,
+            model=requested_model,
+            base_url=resolved_base_url,
+        )
+
+    return SimpleNamespace(
+        success=True,
+        new_model=requested_model,
+        target_provider=normalized_provider,
+        provider_changed=normalized_provider != previous_provider,
+        api_key=str(getattr(cred, "access_token", "") or ""),
+        base_url=resolved_base_url,
+        api_mode=_direct_provider_api_mode(normalized_provider, resolved_base_url),
+        provider_label=normalized_provider,
+        warning_message="",
+        error_message="",
+        capabilities=None,
+        model_info=None,
+        is_global=persist,
+    )
+
 def _switch_model_sync(model: str, persist: bool,
                        provider: str | None,
                        base_url: str | None):
@@ -297,6 +386,13 @@ def _switch_model_sync(model: str, persist: bool,
 
     current_provider = _canonicalize_provider(_current_provider)
     explicit_provider = _canonicalize_provider(provider)
+
+    if explicit_provider in {"openai", "anthropic"}:
+        return _switch_managed_provider_sync(
+            model=model,
+            persist=persist,
+            provider=explicit_provider,
+        )
 
     try:
         from agent.credential_pool import load_pool

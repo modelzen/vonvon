@@ -256,13 +256,50 @@ async def send_message(req: ChatRequest, request: Request):
 
                 # Detect session_id drift (hermes compression creates a new session)
                 new_session_id = getattr(agent, "session_id", req.session_id)
+                raw_output = result.get("final_response", "")
+                output = session_service.sanitize_assistant_content(raw_output)
+                error_text = str(result.get("error") or "").strip()
+                failed = bool(result.get("failed"))
+                completed = result.get("completed")
+
+                if failed or (completed is False and error_text):
+                    queue.put_nowait({
+                        "event": "run.failed",
+                        "data": {
+                            "error": error_text or "Model request failed before producing a response.",
+                            "usage_percent": usage_pct,
+                            "prompt_tokens": prompt_tokens,
+                            "context_size": model_ctx,
+                            "session_id": new_session_id,
+                        },
+                    })
+                    return
+
+                # Hermes uses "(empty)" as a terminal placeholder when a model
+                # emits reasoning but never produces visible text. Surfacing an
+                # explicit error here avoids the current UI failure mode where
+                # the assistant bubble disappears entirely and the user sees no
+                # clue about what happened.
+                if not output and isinstance(raw_output, str) and raw_output.strip().lower().startswith("(empty)"):
+                    queue.put_nowait({
+                        "event": "run.failed",
+                        "data": {
+                            "error": (
+                                "模型返回了空内容。这个 provider 可能不支持当前模型，"
+                                "或者只返回了 reasoning 没有正文。请换一个模型再试。"
+                            ),
+                            "usage_percent": usage_pct,
+                            "prompt_tokens": prompt_tokens,
+                            "context_size": model_ctx,
+                            "session_id": new_session_id,
+                        },
+                    })
+                    return
 
                 queue.put_nowait({
                     "event": "run.completed",
                     "data": {
-                        "output": session_service.sanitize_assistant_content(
-                            result.get("final_response", "")
-                        ),
+                        "output": output,
                         "usage_percent": usage_pct,
                         "prompt_tokens": prompt_tokens,
                         "context_size": model_ctx,

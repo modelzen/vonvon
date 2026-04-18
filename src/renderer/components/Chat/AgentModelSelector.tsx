@@ -28,6 +28,7 @@ export function AgentModelSelector(): React.ReactElement {
   const [providers, setProviders] = useState<ProviderInfo[]>([])
   const [whitelist, setWhitelist] = useState<Set<string>>(new Set())
   const [current, setCurrent] = useState('')
+  const [currentProvider, setCurrentProvider] = useState('')
   const [error, setError] = useState<string | null>(null)
 
   // useHermesConfig() returns brand-new function references on every render.
@@ -44,10 +45,6 @@ export function AgentModelSelector(): React.ReactElement {
   listModelsRef.current = listModels
   listCredentialsRef.current = listCredentials
   switchModelRef.current = switchModel
-
-  // Keep latest providers accessible in effects without adding to deps.
-  const providersRef = useRef(providers)
-  providersRef.current = providers
 
   // True while a user-initiated switch is in flight. When set, the periodic
   // (focus-triggered) refresh skips updating `current` so it can't clobber
@@ -72,6 +69,7 @@ export function AgentModelSelector(): React.ReactElement {
         setProviders(data.providers)
         if (!switchingRef.current) {
           setCurrent(data.current)
+          setCurrentProvider(data.current_provider)
         }
         setWhitelist(new Set(Array.isArray(stored) ? (stored as string[]) : []))
       } catch (e: any) {
@@ -88,22 +86,6 @@ export function AgentModelSelector(): React.ReactElement {
     }
   }, [])
 
-  // When the active session changes, restore that session's saved model.
-  // Uses localStorage so the preference survives page reloads without
-  // requiring any backend schema changes.
-  useEffect(() => {
-    const sid = activeSession?.id
-    if (!sid || switchingRef.current) return
-    const stored = localStorage.getItem(SESSION_MODEL_KEY(sid))
-    if (!stored) return
-    setCurrent(stored)
-    switchingRef.current = true
-    const owner = providersRef.current.find((p) => p.models.includes(stored))
-    switchModelRef.current({ model: stored, provider: owner?.slug, persist: true })
-      .catch(() => {})
-      .finally(() => { switchingRef.current = false })
-  }, [activeSession?.id])
-
   // Build the grouped option list, keeping only whitelisted models.
   const groups = useMemo(() => {
     return providers
@@ -113,6 +95,53 @@ export function AgentModelSelector(): React.ReactElement {
       }))
       .filter((p) => p.models.length > 0)
   }, [providers, whitelist])
+
+  // Restore the session's preferred model only after the provider catalog is
+  // ready, so we can switch with an explicit provider instead of guessing.
+  useEffect(() => {
+    const sid = activeSession?.id
+    if (!sid || switchingRef.current || providers.length === 0) return
+
+    const stored = localStorage.getItem(SESSION_MODEL_KEY(sid))
+    const storedOwner = stored
+      ? providers.find((provider) => provider.models.includes(stored))
+      : undefined
+    const fallbackModel = groups[0]?.models[0] ?? ''
+    const desiredModel = storedOwner ? stored ?? '' : current || fallbackModel
+    const desiredOwner = providers.find((provider) => provider.models.includes(desiredModel))
+
+    if (!desiredModel || !desiredOwner) return
+    if (current === desiredModel && currentProvider === desiredOwner.slug) {
+      if (!stored || stored !== desiredModel) {
+        localStorage.setItem(SESSION_MODEL_KEY(sid), desiredModel)
+      }
+      return
+    }
+
+    const previousModel = current
+    const previousProvider = currentProvider
+    setCurrent(desiredModel)
+    setCurrentProvider(desiredOwner.slug)
+    setError(null)
+    switchingRef.current = true
+    localStorage.setItem(SESSION_MODEL_KEY(sid), desiredModel)
+
+    switchModelRef.current({
+      model: desiredModel,
+      provider: desiredOwner.slug,
+      persist: true,
+    })
+      .catch((err: any) => {
+        setError(err?.message ?? 'switch failed')
+        setCurrent(previousModel)
+        setCurrentProvider(previousProvider)
+        if (stored) localStorage.setItem(SESSION_MODEL_KEY(sid), stored)
+        else localStorage.removeItem(SESSION_MODEL_KEY(sid))
+      })
+      .finally(() => {
+        switchingRef.current = false
+      })
+  }, [activeSession?.id, current, currentProvider, groups, providers])
 
   const hasAny = groups.length > 0
 
@@ -129,14 +158,16 @@ export function AgentModelSelector(): React.ReactElement {
     // to /api/models/current. Switching models triggers credential pool
     // reloads on the backend and can take a noticeable beat.
     const previous = current
+    const previousProvider = currentProvider
+    const owner = providers.find((p) => p.models.includes(value))
     setCurrent(value)
+    setCurrentProvider(owner?.slug ?? '')
     setError(null)
     switchingRef.current = true
     // Persist per-session model preference so switching tabs restores it.
     const sid = activeSession?.id
     const prevStored = sid ? localStorage.getItem(SESSION_MODEL_KEY(sid)) : null
     if (sid) localStorage.setItem(SESSION_MODEL_KEY(sid), value)
-    const owner = providers.find((p) => p.models.includes(value))
     try {
       await switchModelRef.current({
         model: value,
@@ -158,6 +189,7 @@ export function AgentModelSelector(): React.ReactElement {
     } catch (err: any) {
       setError(err?.message ?? 'switch failed')
       setCurrent(previous)
+      setCurrentProvider(previousProvider)
       if (sid) {
         if (prevStored) localStorage.setItem(SESSION_MODEL_KEY(sid), prevStored)
         else localStorage.removeItem(SESSION_MODEL_KEY(sid))
@@ -218,6 +250,11 @@ export function AgentModelSelector(): React.ReactElement {
           textOverflow: 'ellipsis',
         }}
       >
+        {!current && (
+          <option value="" disabled>
+            选择模型
+          </option>
+        )}
         {!currentIsInWhitelist && current && (
           <optgroup label="当前 (未勾选)">
             <option value={current}>{current}</option>
