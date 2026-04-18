@@ -79,4 +79,6 @@ Thumbs.db
 skills-lock.json
 
 # Private design notes / internal handoff docs
-docs/
+docs/*
+!docs/images/
+!docs/images/**
