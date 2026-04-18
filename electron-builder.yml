@@ -1,6 +1,6 @@
-appId: com.clay.vonvon
+appId: com.modelzen.vonvon
 productName: Vonvon
-copyright: Copyright © 2024 Clay
+copyright: Copyright © 2024-2026 ModelZen contributors
 
 directories:
   output: release

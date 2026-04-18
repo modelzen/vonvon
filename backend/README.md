@@ -64,8 +64,7 @@ level third-party notice summary.
 
 ## API
 
-See the [integration plan](../.omc/plans/vonvon-agent.md) for the full
-endpoint inventory. Core endpoints:
+Core endpoints:
 
 - `POST /api/chat/send` — SSE stream with `tool.started`,
   `tool.completed`, `message.delta`, `run.completed`, `run.failed` events

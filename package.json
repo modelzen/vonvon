@@ -14,8 +14,16 @@
     "validate:kirby": "node scripts/validate-kirby-pack.mjs"
   },
   "keywords": [],
-  "author": "Clay",
+  "author": "ModelZen contributors",
   "license": "AGPL-3.0-only",
+  "homepage": "https://github.com/modelzen/vonvon",
+  "bugs": {
+    "url": "https://github.com/modelzen/vonvon/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/modelzen/vonvon.git"
+  },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.70.0",
     "electron-store": "^10.0.0",

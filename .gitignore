@@ -77,3 +77,6 @@ Thumbs.db
 /.claude/
 /.omc/
 skills-lock.json
+
+# Private design notes / internal handoff docs
+docs/
