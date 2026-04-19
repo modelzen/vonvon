@@ -38,6 +38,17 @@ If your change affects the native addon, also run:
 npm run rebuild
 ```
 
+If you need to verify "what the DMG-installed app will really do" instead of
+just `npm run dev`, use:
+
+```bash
+npm run test:packaged
+```
+
+That command refreshes packaged-only artifacts when needed, builds the macOS
+app bundle, and launches the packaged app from the terminal so you can inspect
+real packaged-mode logs. Add `-- --build-only` if you only want the bundle.
+
 ## Pull Requests
 
 - Describe the user-visible change and how you tested it.

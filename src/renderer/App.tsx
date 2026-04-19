@@ -38,6 +38,31 @@ interface LarkInspectWindow {
   windowTitle?: string
 }
 
+type LarkCaptureFailureReason =
+  | 'invalid-window-id'
+  | 'screen-permission-denied'
+  | 'window-not-found'
+  | 'empty-thumbnail'
+  | 'capture-error'
+
+type LarkPermissionState = {
+  screen_recording: string
+  accessibility: string
+}
+
+type LarkCaptureResult =
+  | {
+      ok: true
+      dataUrl: string
+    }
+  | {
+      ok: false
+      reason: LarkCaptureFailureReason
+      permissionState: LarkPermissionState
+      requestedWindowId: number
+      requestedWindowTitle?: string
+    }
+
 type InspectBannerTone = 'loading' | 'success' | 'warning' | 'error'
 
 interface InspectBannerState {
@@ -70,6 +95,23 @@ function buildFeishuInspectBlockedMessage(
     }。请打开 设置 > 飞书集成 重新登录或刷新登录后再试。`
   }
   return '飞书集成当前还没准备好，请打开 设置 > 飞书集成 检查状态后再试。'
+}
+
+function buildLarkCaptureFailureMessage(result: LarkCaptureResult): string {
+  if (result.ok) return ''
+
+  switch (result.reason) {
+    case 'screen-permission-denied':
+      return '还没有拿到 Lark 窗口截图，请先确认录屏权限已经授予。如果你刚在系统设置里打开录屏权限，通常需要完全退出并重新打开 Vonvon 后再试。'
+    case 'invalid-window-id':
+      return '还没识别到当前 Lark 窗口，请先把飞书 / Lark 切到前台后再试。'
+    case 'window-not-found':
+      return '已经拿到录屏权限，但这次没在可捕获窗口里找到当前 Lark 窗口。请确认飞书 / Lark 窗口在当前桌面、没有最小化，然后再试一次。'
+    case 'empty-thumbnail':
+      return '已经找到当前 Lark 窗口，但这次没拿到可用截图。请先把飞书 / Lark 切回前台后重试；如果你刚授权录屏权限，完全退出并重新打开 Vonvon 后再试。'
+    default:
+      return '这次读取当前 Lark 窗口截图失败了，请稍后再试一次。'
+  }
 }
 
 function App(): React.ReactElement {
@@ -166,16 +208,23 @@ function App(): React.ReactElement {
           if (activeSessionIdRef.current !== sessionId) return
 
           setInspectBanner({ tone: 'loading', message: '正在发送当前 Lark 窗口截图…' })
-          const screenshotDataUrl = await window.electron.captureLarkWindow(windowInfo.windowId)
-          if (!screenshotDataUrl) {
-            throw new Error('还没有拿到 Lark 窗口截图，请先确认录屏权限已经授予')
+          const captureResult = await window.electron.captureLarkWindow({
+            windowId: windowInfo.windowId,
+            windowTitle: windowInfo.windowTitle,
+            x: windowInfo.x,
+            y: windowInfo.y,
+            width: windowInfo.width,
+            height: windowInfo.height,
+          })
+          if (!captureResult.ok) {
+            throw new Error(buildLarkCaptureFailureMessage(captureResult))
           }
           if (activeSessionIdRef.current !== sessionId) return
           const inspectCardContent = createVonvonInspectCardContent()
           sendMessage(
             '',
             sessionId,
-            [{ type: 'image', dataUrl: screenshotDataUrl, name: 'vonvon-inspect-lark.png' }],
+            [{ type: 'image', dataUrl: captureResult.dataUrl, name: 'vonvon-inspect-lark.png' }],
             ['vonvon-inspect'],
             {
               displayContent: inspectCardContent,

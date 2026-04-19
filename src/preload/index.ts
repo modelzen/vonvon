@@ -1,5 +1,39 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 
+type LarkCaptureRequest = {
+  windowId: number
+  windowTitle?: string
+  x?: number
+  y?: number
+  width?: number
+  height?: number
+}
+
+type LarkCaptureFailureReason =
+  | 'invalid-window-id'
+  | 'screen-permission-denied'
+  | 'window-not-found'
+  | 'empty-thumbnail'
+  | 'capture-error'
+
+type LarkPermissionState = {
+  screen_recording: string
+  accessibility: string
+}
+
+type LarkCaptureResult =
+  | {
+      ok: true
+      dataUrl: string
+    }
+  | {
+      ok: false
+      reason: LarkCaptureFailureReason
+      permissionState: LarkPermissionState
+      requestedWindowId: number
+      requestedWindowTitle?: string
+    }
+
 contextBridge.exposeInMainWorld('electron', {
   // Chat — implemented by worker-3 (Stage 3)
   sendMessage: (message: string, model: string) =>
@@ -42,12 +76,12 @@ contextBridge.exposeInMainWorld('electron', {
   },
   fileExists: (path: string): Promise<boolean> =>
     ipcRenderer.invoke('fs:exists', path),
-  getLarkPermissions: (): Promise<{ screen_recording: string; accessibility: string }> =>
+  getLarkPermissions: (): Promise<LarkPermissionState> =>
     ipcRenderer.invoke('lark:permissions:get'),
-  requestLarkPermissions: (): Promise<{ screen_recording: string; accessibility: string }> =>
+  requestLarkPermissions: (): Promise<LarkPermissionState> =>
     ipcRenderer.invoke('lark:permissions:request'),
-  captureLarkWindow: (windowId: number): Promise<string | null> =>
-    ipcRenderer.invoke('lark:captureWindow', windowId),
+  captureLarkWindow: (request: LarkCaptureRequest): Promise<LarkCaptureResult> =>
+    ipcRenderer.invoke('lark:captureWindow', request),
   getPathForFile: (file: File): string => {
     try {
       return webUtils.getPathForFile(file)
@@ -109,9 +143,9 @@ declare global {
       openExternal(url: string): Promise<void>
       showItemInFolder(path: string): void
       fileExists(path: string): Promise<boolean>
-      getLarkPermissions(): Promise<{ screen_recording: string; accessibility: string }>
-      requestLarkPermissions(): Promise<{ screen_recording: string; accessibility: string }>
-      captureLarkWindow(windowId: number): Promise<string | null>
+      getLarkPermissions(): Promise<LarkPermissionState>
+      requestLarkPermissions(): Promise<LarkPermissionState>
+      captureLarkWindow(request: LarkCaptureRequest): Promise<LarkCaptureResult>
       getPathForFile(file: File): string
       detachKirby(): void
       closeKirbySidebar(): void

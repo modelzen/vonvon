@@ -43,9 +43,15 @@ static const NSTimeInterval kDockedTrackingInterval = 1.0 / 30.0;
     NSArray *windows = (__bridge_transfer NSArray *)list;
     for (NSDictionary *info in windows) {
         NSString *owner = info[(__bridge NSString *)kCGWindowOwnerName];
-        if (![owner isEqualToString:@"Lark"]   &&
-            ![owner isEqualToString:@"Feishu"] &&
-            ![owner isEqualToString:@"飞书"]) continue;
+        NSString *normalizedOwner = [[owner ?: @"" stringByTrimmingCharactersInSet:
+            [NSCharacterSet whitespaceAndNewlineCharacterSet]] lowercaseString];
+        BOOL isLarkOwner =
+            [normalizedOwner isEqualToString:@"lark"] ||
+            [normalizedOwner isEqualToString:@"lark 2"] ||
+            [normalizedOwner isEqualToString:@"lark2"] ||
+            [normalizedOwner isEqualToString:@"feishu"] ||
+            [normalizedOwner isEqualToString:@"飞书"];
+        if (!isLarkOwner) continue;
 
         NSNumber *layer = info[(__bridge NSString *)kCGWindowLayer];
         if (layer && [layer intValue] != 0) continue;

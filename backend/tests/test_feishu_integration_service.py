@@ -1,5 +1,6 @@
 """Tests for managed Lark auth status parsing."""
 
+import os
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -41,9 +42,12 @@ def test_extract_flow_hints_preserves_full_device_code_from_json_line():
 
 def test_verify_runtime_uses_parsed_auth_context_instead_of_exit_code(monkeypatch):
     fake_cli = Path("/tmp/fake-lark-cli")
+    node = Path("/usr/local/bin/node")
+    captured_envs: list[dict[str, str] | None] = []
 
     monkeypatch.setattr(feishu_integration_service, "_current_cli_path", lambda: fake_cli)
     monkeypatch.setattr(feishu_integration_service, "_detect_current_version", lambda _cli=None: "1.0.12")
+    monkeypatch.setattr(feishu_integration_service, "_resolve_node_path", lambda: node)
     monkeypatch.setattr(
         feishu_integration_service,
         "_read_state",
@@ -53,7 +57,8 @@ def test_verify_runtime_uses_parsed_auth_context_instead_of_exit_code(monkeypatc
     monkeypatch.setattr(feishu_integration_service, "_refresh_skill_bridge", lambda state: state)
     monkeypatch.setattr(Path, "exists", lambda self: self == fake_cli)
 
-    def fake_run(command, **_kwargs):
+    def fake_run(command, **kwargs):
+        captured_envs.append(kwargs.get("env"))
         if command[-2:] == ["auth", "status"]:
             return SimpleNamespace(
                 returncode=0,
@@ -81,6 +86,200 @@ def test_verify_runtime_uses_parsed_auth_context_instead_of_exit_code(monkeypatc
     assert state["authenticated"] is False
     assert state["runtime_status"] == "configured_needs_auth"
     assert state["auth_identity"] == "bot"
+    assert len(captured_envs) == 3
+    assert all(env is not None for env in captured_envs)
+    assert all(env["PATH"].split(os.pathsep)[0] == str(node.parent) for env in captured_envs if env)
+
+
+def test_verify_runtime_auto_enables_feature_when_runtime_becomes_ready(monkeypatch):
+    fake_cli = Path("/tmp/fake-lark-cli")
+    node = Path("/usr/local/bin/node")
+
+    monkeypatch.setattr(feishu_integration_service, "_current_cli_path", lambda: fake_cli)
+    monkeypatch.setattr(feishu_integration_service, "_detect_current_version", lambda _cli=None: "1.0.12")
+    monkeypatch.setattr(feishu_integration_service, "_resolve_node_path", lambda: node)
+    monkeypatch.setattr(
+        feishu_integration_service,
+        "_read_state",
+        lambda: feishu_integration_service._default_state(),
+    )
+    monkeypatch.setattr(feishu_integration_service, "_write_state", lambda state: state)
+    monkeypatch.setattr(feishu_integration_service, "_refresh_skill_bridge", lambda state: state)
+    monkeypatch.setattr(Path, "exists", lambda self: self == fake_cli)
+
+    def fake_run(command, **_kwargs):
+        if command[-2:] == ["auth", "status"]:
+            return SimpleNamespace(
+                returncode=0,
+                stdout="""{
+                  "appId": "cli_xxx",
+                  "brand": "feishu",
+                  "defaultAs": "user",
+                  "identity": "user",
+                  "userName": "Clay",
+                  "email": "clay@example.com"
+                }""",
+                stderr="",
+            )
+        if command[-2:] == ["auth", "list"]:
+            return SimpleNamespace(
+                returncode=0,
+                stdout="clay@example.com\n",
+                stderr="",
+            )
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(feishu_integration_service, "_run", fake_run)
+
+    state = feishu_integration_service.verify_runtime()
+
+    assert state["runtime_status"] == "ready"
+    assert state["authenticated"] is True
+    assert state["feature_enabled"] is True
+    assert state["skills_enabled"] is True
+    assert state["orb_inspect_enabled"] is True
+    assert state["feature_toggle_initialized"] is True
+
+
+def test_verify_runtime_respects_manual_feature_disable_after_ready(monkeypatch):
+    fake_cli = Path("/tmp/fake-lark-cli")
+    node = Path("/usr/local/bin/node")
+
+    def initial_state():
+        state = feishu_integration_service._default_state()
+        state["feature_toggle_initialized"] = True
+        return state
+
+    monkeypatch.setattr(feishu_integration_service, "_current_cli_path", lambda: fake_cli)
+    monkeypatch.setattr(feishu_integration_service, "_detect_current_version", lambda _cli=None: "1.0.12")
+    monkeypatch.setattr(feishu_integration_service, "_resolve_node_path", lambda: node)
+    monkeypatch.setattr(feishu_integration_service, "_read_state", initial_state)
+    monkeypatch.setattr(feishu_integration_service, "_write_state", lambda state: state)
+    monkeypatch.setattr(feishu_integration_service, "_refresh_skill_bridge", lambda state: state)
+    monkeypatch.setattr(Path, "exists", lambda self: self == fake_cli)
+
+    def fake_run(command, **_kwargs):
+        if command[-2:] == ["auth", "status"]:
+            return SimpleNamespace(
+                returncode=0,
+                stdout="""{
+                  "appId": "cli_xxx",
+                  "brand": "feishu",
+                  "defaultAs": "user",
+                  "identity": "user",
+                  "userName": "Clay",
+                  "email": "clay@example.com"
+                }""",
+                stderr="",
+            )
+        if command[-2:] == ["auth", "list"]:
+            return SimpleNamespace(
+                returncode=0,
+                stdout="clay@example.com\n",
+                stderr="",
+            )
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(feishu_integration_service, "_run", fake_run)
+
+    state = feishu_integration_service.verify_runtime()
+
+    assert state["runtime_status"] == "ready"
+    assert state["authenticated"] is True
+    assert state["feature_enabled"] is False
+    assert state["skills_enabled"] is False
+    assert state["orb_inspect_enabled"] is False
+    assert state["feature_toggle_initialized"] is True
+
+
+def test_missing_npm_install_message_contains_vonvon_help_prompt():
+    message = feishu_integration_service._missing_npm_install_message()
+
+    assert "Node.js / npm" in message
+    assert "<<<VONVON_HELP_PROMPT" in message
+    assert "VONVON_HELP_PROMPT" in message
+    assert "重新点击“安装并初始化飞书”" in message
+
+
+def test_fetch_latest_version_uses_resolved_npm_and_prepends_bin_to_path(monkeypatch):
+    npm = Path("/opt/homebrew/bin/npm")
+    node = Path("/Users/test/.fnm/current/bin/node")
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(feishu_integration_service, "_resolve_npm_path", lambda: npm)
+    monkeypatch.setattr(feishu_integration_service, "_resolve_node_path", lambda: node)
+
+    def fake_run(command, **kwargs):
+        captured["command"] = command
+        captured["env"] = kwargs.get("env")
+        return SimpleNamespace(returncode=0, stdout='"1.0.13"', stderr="")
+
+    monkeypatch.setattr(feishu_integration_service, "_run", fake_run)
+
+    latest = feishu_integration_service._fetch_latest_version()
+
+    assert latest == "1.0.13"
+    assert captured["command"] == [str(npm), "view", feishu_integration_service.PACKAGE_NAME, "version", "--json"]
+    assert captured["env"]["PATH"].split(os.pathsep)[:2] == [str(npm.parent), str(node.parent)]
+
+
+def test_detect_current_version_prepends_resolved_node_dir(monkeypatch):
+    fake_cli = Path("/tmp/fake-lark-cli")
+    node = Path("/usr/local/bin/node")
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(Path, "exists", lambda self: self == fake_cli)
+    monkeypatch.setattr(feishu_integration_service, "_resolve_node_path", lambda: node)
+
+    def fake_run(command, **kwargs):
+        captured["command"] = command
+        captured["env"] = kwargs.get("env")
+        return SimpleNamespace(returncode=0, stdout="1.0.14\n", stderr="")
+
+    monkeypatch.setattr(feishu_integration_service, "_run", fake_run)
+
+    version = feishu_integration_service._detect_current_version(fake_cli)
+
+    assert version == "1.0.14"
+    assert captured["command"] == [str(fake_cli), "--version"]
+    assert captured["env"]["PATH"].split(os.pathsep)[0] == str(node.parent)
+
+
+def test_spawn_flow_prepends_resolved_node_dir(monkeypatch):
+    fake_cli = Path("/tmp/fake-lark-cli")
+    node = Path("/usr/local/bin/node")
+    captured: dict[str, object] = {}
+
+    feishu_integration_service._flows.clear()
+    monkeypatch.setattr(feishu_integration_service, "_resolve_node_path", lambda: node)
+
+    class FakeProcess:
+        pid = 12345
+        stdout = None
+
+    def fake_popen(command, **kwargs):
+        captured["command"] = command
+        captured["env"] = kwargs.get("env")
+        return FakeProcess()
+
+    class FakeThread:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def start(self):
+            return None
+
+    monkeypatch.setattr(feishu_integration_service.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(feishu_integration_service.threading, "Thread", FakeThread)
+
+    flow = feishu_integration_service._spawn_flow(
+        "config_init",
+        [str(fake_cli), "config", "init", "--new"],
+    )
+
+    assert flow.command == [str(fake_cli), "config", "init", "--new"]
+    assert captured["command"] == [str(fake_cli), "config", "init", "--new"]
+    assert captured["env"]["PATH"].split(os.pathsep)[0] == str(node.parent)
 
 
 def test_sync_hidden_wrappers_keeps_official_lark_skill_names(tmp_path, monkeypatch):

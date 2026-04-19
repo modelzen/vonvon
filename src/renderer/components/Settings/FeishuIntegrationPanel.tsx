@@ -32,6 +32,29 @@ const FLOW_STATUS_LABELS: Record<string, string> = {
 }
 
 const LARK_SKILL_SAMPLES = ['lark-im', 'lark-doc', 'lark-calendar']
+const VONVON_HELP_PROMPT_START = '<<<VONVON_HELP_PROMPT'
+const VONVON_HELP_PROMPT_END = 'VONVON_HELP_PROMPT'
+
+function splitGuidedError(raw: string | null): { message: string | null; helpPrompt: string | null } {
+  if (!raw) return { message: null, helpPrompt: null }
+
+  const markerStart = raw.indexOf(VONVON_HELP_PROMPT_START)
+  if (markerStart < 0) return { message: raw, helpPrompt: null }
+
+  const promptStart = raw.indexOf('\n', markerStart)
+  const markerEnd = raw.indexOf(
+    VONVON_HELP_PROMPT_END,
+    promptStart >= 0 ? promptStart : markerStart + VONVON_HELP_PROMPT_START.length
+  )
+  if (promptStart < 0 || markerEnd < 0) return { message: raw, helpPrompt: null }
+
+  const before = raw.slice(0, markerStart).trim()
+  const prompt = raw.slice(promptStart + 1, markerEnd).trim()
+  const after = raw.slice(markerEnd + VONVON_HELP_PROMPT_END.length).trim()
+  const message = [before, after].filter(Boolean).join('\n\n') || null
+
+  return { message, helpPrompt: prompt || null }
+}
 
 function Spinner(): React.ReactElement {
   return (
@@ -175,14 +198,18 @@ export function FeishuIntegrationPanel(): React.ReactElement {
   const [error, setError] = useState<string | null>(null)
   const [hint, setHint] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [copiedAction, setCopiedAction] = useState<string | null>(null)
   const [permissions, setPermissions] = useState<FeishuPermissionState>({
     screen_recording: 'unknown',
     accessibility: 'unknown',
   })
+  const guidedError = useMemo(() => splitGuidedError(error), [error])
 
   const openedBrowserLinks = useRef(new Set<string>())
   const autoResumedAuthFlows = useRef(new Set<string>())
   const autoAdvancedConfigFlows = useRef(new Set<string>())
+  const previousFeatureEnabled = useRef<boolean | null>(null)
+  const skipAutomaticPermissionPrompt = useRef(false)
 
   const safeSetState = useCallback((next: FeishuIntegrationState | null) => {
     if (next) setState(next)
@@ -215,6 +242,14 @@ export function FeishuIntegrationPanel(): React.ReactElement {
     void loadState()
     void loadPermissions()
   }, [loadPermissions, loadState])
+
+  useEffect(() => {
+    if (!copiedAction) return
+    const timer = window.setTimeout(() => {
+      setCopiedAction((current) => (current === copiedAction ? null : current))
+    }, 1600)
+    return () => window.clearTimeout(timer)
+  }, [copiedAction])
 
   const runStateAction = useCallback(
     async (
@@ -273,6 +308,67 @@ export function FeishuIntegrationPanel(): React.ReactElement {
     }
   }, [])
 
+  const handleCopy = useCallback((key: string, text: string, successHint: string, errorHint: string) => {
+    void navigator.clipboard
+      .writeText(text)
+      .then(() => {
+        setError(null)
+        setHint(successHint)
+        setCopiedAction(key)
+      })
+      .catch(() => setError(errorHint))
+  }, [])
+
+  const applyPermissionHintForEnabledIntegration = useCallback(
+    (permissionState: FeishuPermissionState, successHint: string) => {
+      const missingPermissions = []
+      if (permissionState.accessibility !== 'granted') {
+        missingPermissions.push('辅助功能')
+      }
+      if (permissionState.screen_recording !== 'granted') {
+        missingPermissions.push('屏幕录制')
+      }
+
+      if (missingPermissions.length > 0) {
+        setHint(
+          `${successHint} 已尝试申请 ${missingPermissions.join('、')} 权限。你可以在系统设置里授权后回到这里刷新状态。`
+        )
+        return
+      }
+
+      setHint(successHint)
+    },
+    []
+  )
+
+  const requestPermissionsForEnabledIntegration = useCallback(
+    async (successHint: string) => {
+      try {
+        const permissionState = await window.electron.requestLarkPermissions()
+        setPermissions(permissionState)
+        applyPermissionHintForEnabledIntegration(permissionState, successHint)
+      } catch {
+        setHint(successHint)
+      }
+    },
+    [applyPermissionHintForEnabledIntegration]
+  )
+
+  useEffect(() => {
+    const currentEnabled = !!state?.feature_enabled
+    const previousEnabled = previousFeatureEnabled.current
+    previousFeatureEnabled.current = currentEnabled
+
+    if (!state || previousEnabled === null || !currentEnabled || previousEnabled) return
+
+    if (skipAutomaticPermissionPrompt.current) {
+      skipAutomaticPermissionPrompt.current = false
+      return
+    }
+
+    void requestPermissionsForEnabledIntegration('飞书账号已登录完成，已默认开启飞书深度集成。')
+  }, [requestPermissionsForEnabledIntegration, state])
+
   const startConfigFlow = useCallback(
     async (auto = false): Promise<FeishuFlowStatus | null> => {
       return runFlowAction(
@@ -322,28 +418,23 @@ export function FeishuIntegrationPanel(): React.ReactElement {
       if (!state) return
 
       if (enabled) {
+        skipAutomaticPermissionPrompt.current = true
         const permissionState = await window.electron.requestLarkPermissions()
         setPermissions(permissionState)
 
         const next = await runStateAction(
           'toggle-feature',
-          () => apiRef.current.setFeishuFeatureEnabled(true),
+          () => apiRef.current.setFeishuFeatureEnabled(true)
+        )
+        if (!next) {
+          skipAutomaticPermissionPrompt.current = false
+          return
+        }
+
+        applyPermissionHintForEnabledIntegration(
+          permissionState,
           '已启用飞书深度集成。vonvon 现在可以接入官方 Lark skills，并为点击粉球读取飞书上下文做好准备。'
         )
-        if (!next) return
-
-        const missingPermissions = []
-        if (permissionState.accessibility !== 'granted') {
-          missingPermissions.push('辅助功能')
-        }
-        if (permissionState.screen_recording !== 'granted') {
-          missingPermissions.push('屏幕录制')
-        }
-        if (missingPermissions.length > 0) {
-          setHint(
-            `已尝试申请 ${missingPermissions.join('、')} 权限。你可以在系统设置里授权后回到这里刷新状态。`
-          )
-        }
         return
       }
 
@@ -353,7 +444,7 @@ export function FeishuIntegrationPanel(): React.ReactElement {
         '已关闭飞书深度集成。vonvon 不会再进入飞书相关能力链路。'
       )
     },
-    [runStateAction, state]
+    [applyPermissionHintForEnabledIntegration, runStateAction, state]
   )
 
   useEffect(() => {
@@ -676,6 +767,81 @@ export function FeishuIntegrationPanel(): React.ReactElement {
               )}
             </div>
 
+            {(guidedError.message || guidedError.helpPrompt) && (
+              <div
+                style={{
+                  padding: '10px 12px',
+                  borderRadius: 10,
+                  background: '#fff7f7',
+                  border: '1px solid #ffd7d5',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 10,
+                }}
+              >
+                {guidedError.message && (
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: tokens.danger,
+                      lineHeight: 1.6,
+                      whiteSpace: 'pre-wrap',
+                    }}
+                  >
+                    {guidedError.message}
+                  </div>
+                )}
+
+                {guidedError.helpPrompt && (
+                  <>
+                    <div style={{ fontSize: 12, color: tokens.inkSoft, lineHeight: 1.6 }}>
+                      如果你想让 vonvon 帮你安装，可以把下面这段话复制回 vonvon：
+                    </div>
+                    <div
+                      style={{
+                        padding: '10px 12px',
+                        borderRadius: 10,
+                        border: `1px solid ${tokens.border}`,
+                        background: '#fff',
+                        fontFamily: tokens.monoFont,
+                        fontSize: 11,
+                        lineHeight: 1.6,
+                        color: tokens.inkMuted,
+                        whiteSpace: 'pre-wrap',
+                      }}
+                    >
+                      {guidedError.helpPrompt}
+                    </div>
+                    <div>
+                      <button
+                        style={{
+                          ...btnGhostStyle,
+                          transition:
+                            'background 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease',
+                          background: copiedAction === 'copy-vonvon-help' ? '#eefbf0' : btnGhostStyle.background,
+                          borderColor:
+                            copiedAction === 'copy-vonvon-help' ? '#cbe9d1' : btnGhostStyle.borderColor,
+                          color: copiedAction === 'copy-vonvon-help' ? '#2e7d32' : btnGhostStyle.color,
+                          transform:
+                            copiedAction === 'copy-vonvon-help' ? 'translateY(-1px)' : 'translateY(0)',
+                        }}
+                        onClick={() =>
+                          handleCopy(
+                            'copy-vonvon-help',
+                            guidedError.helpPrompt,
+                            '已复制给 vonvon 的安装提示。',
+                            '复制给 vonvon 失败'
+                          )
+                        }
+                      >
+                        {copiedAction === 'copy-vonvon-help' ? '已复制' : '复制给 vonvon'}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
             {state.last_error && (
               <div
                 style={{
@@ -685,6 +851,8 @@ export function FeishuIntegrationPanel(): React.ReactElement {
                   borderRadius: 10,
                   background: '#fff7f7',
                   border: '1px solid #ffd7d5',
+                  lineHeight: 1.6,
+                  whiteSpace: 'pre-wrap',
                 }}
               >
                 {state.last_error}
@@ -754,15 +922,22 @@ export function FeishuIntegrationPanel(): React.ReactElement {
                   重新打开浏览器
                 </button>
                 <button
-                  style={btnGhostStyle}
+                  style={{
+                    ...btnGhostStyle,
+                    transition:
+                      'background 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease',
+                    background: copiedAction === 'copy-browser-link' ? '#eefbf0' : btnGhostStyle.background,
+                    borderColor:
+                      copiedAction === 'copy-browser-link' ? '#cbe9d1' : btnGhostStyle.borderColor,
+                    color: copiedAction === 'copy-browser-link' ? '#2e7d32' : btnGhostStyle.color,
+                    transform:
+                      copiedAction === 'copy-browser-link' ? 'translateY(-1px)' : 'translateY(0)',
+                  }}
                   onClick={() =>
-                    void navigator.clipboard
-                      .writeText(browserLink)
-                      .then(() => setHint('链接已复制。'))
-                      .catch(() => setError('复制链接失败'))
+                    handleCopy('copy-browser-link', browserLink, '链接已复制。', '复制链接失败')
                   }
                 >
-                  复制链接
+                  {copiedAction === 'copy-browser-link' ? '已复制' : '复制链接'}
                 </button>
               </div>
             </div>
@@ -778,6 +953,7 @@ export function FeishuIntegrationPanel(): React.ReactElement {
                 fontSize: 12,
                 color: tokens.danger,
                 lineHeight: 1.6,
+                whiteSpace: 'pre-wrap',
               }}
             >
               {activeFlow.error}
@@ -814,13 +990,14 @@ export function FeishuIntegrationPanel(): React.ReactElement {
             辅助功能 {permissions.accessibility}
             <br />
             屏幕录制 {permissions.screen_recording}
+            <br />
+            <span style={{ color: tokens.inkMuted }}>
+              提示：macOS 上刚打开“屏幕录制”后，通常需要完全退出并重新打开 vonvon，权限才会真正生效。
+            </span>
           </div>
         </div>
       </SectionCard>
 
-      {error && (
-        <div style={{ fontSize: 12, color: tokens.danger, padding: '0 4px 8px' }}>{error}</div>
-      )}
     </div>
   )
 }

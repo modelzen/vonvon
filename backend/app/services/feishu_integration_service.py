@@ -16,6 +16,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import threading
 import time
 import uuid
@@ -109,6 +110,7 @@ def _default_state() -> Dict[str, Any]:
         "state_version": STATE_VERSION,
         "provider": "feishu",
         "feature_enabled": False,
+        "feature_toggle_initialized": False,
         "skills_enabled": False,
         "orb_inspect_enabled": False,
         "runtime_status": "not_installed",
@@ -219,12 +221,14 @@ def _run(
     *,
     cwd: Optional[Path] = None,
     timeout: int = DEFAULT_COMMAND_TIMEOUT,
+    env: Optional[Dict[str, str]] = None,
 ) -> subprocess.CompletedProcess[str]:
     logger.info("feishu command: %s", " ".join(command))
     return subprocess.run(
         command,
         cwd=str(cwd) if cwd else None,
         capture_output=True,
+        env=env,
         text=True,
         timeout=timeout,
         check=False,
@@ -347,12 +351,244 @@ def _safe_version_key(version: Optional[str]) -> tuple:
     return tuple(parts)
 
 
+def _resolve_npm_path() -> Optional[Path]:
+    candidates: List[Path] = []
+    from_path = shutil.which("npm")
+    if from_path:
+        candidates.append(Path(from_path))
+
+    if os.name == "nt":
+        candidates.extend(
+            [
+                Path.home() / "AppData" / "Roaming" / "npm" / "npm.cmd",
+                Path("C:/Program Files/nodejs/npm.cmd"),
+            ]
+        )
+    else:
+        candidates.extend(
+            [
+                Path("/opt/homebrew/bin/npm"),
+                Path("/usr/local/bin/npm"),
+                Path.home() / ".local" / "bin" / "npm",
+                Path.home() / ".volta" / "bin" / "npm",
+                Path.home() / ".asdf" / "shims" / "npm",
+                Path.home() / ".nodenv" / "shims" / "npm",
+                Path.home() / ".fnm" / "current" / "bin" / "npm",
+            ]
+        )
+        nvm_versions_root = Path.home() / ".nvm" / "versions" / "node"
+        if nvm_versions_root.exists():
+            version_dirs = [entry for entry in nvm_versions_root.iterdir() if entry.is_dir()]
+            version_dirs.sort(
+                key=lambda entry: _safe_version_key(entry.name.lstrip("v")),
+                reverse=True,
+            )
+            candidates.extend(entry / "bin" / "npm" for entry in version_dirs)
+        for fnm_root in (
+            Path.home() / ".fnm" / "node-versions",
+            Path.home() / ".local" / "share" / "fnm" / "node-versions",
+        ):
+            if not fnm_root.exists():
+                continue
+            version_dirs = [entry for entry in fnm_root.iterdir() if entry.is_dir()]
+            version_dirs.sort(
+                key=lambda entry: _safe_version_key(entry.name.lstrip("v")),
+                reverse=True,
+            )
+            candidates.extend(entry / "installation" / "bin" / "npm" for entry in version_dirs)
+
+    seen: set[str] = set()
+    for candidate in candidates:
+        resolved = candidate.expanduser()
+        key = str(resolved)
+        if key in seen:
+            continue
+        seen.add(key)
+        if resolved.exists():
+            return resolved
+    return None
+
+
+def _resolve_node_path() -> Optional[Path]:
+    candidates: List[Path] = []
+    from_path = shutil.which("node")
+    if from_path:
+        candidates.append(Path(from_path))
+
+    npm = _resolve_npm_path()
+    if npm:
+        candidates.append(npm.expanduser().parent / ("node.exe" if os.name == "nt" else "node"))
+
+    if os.name == "nt":
+        candidates.extend(
+            [
+                Path("C:/Program Files/nodejs/node.exe"),
+                Path.home() / "AppData" / "Local" / "Programs" / "nodejs" / "node.exe",
+            ]
+        )
+    else:
+        candidates.extend(
+            [
+                Path("/opt/homebrew/bin/node"),
+                Path("/usr/local/bin/node"),
+                Path.home() / ".local" / "bin" / "node",
+                Path.home() / ".volta" / "bin" / "node",
+                Path.home() / ".asdf" / "shims" / "node",
+                Path.home() / ".nodenv" / "shims" / "node",
+                Path.home() / ".fnm" / "current" / "bin" / "node",
+            ]
+        )
+        nvm_versions_root = Path.home() / ".nvm" / "versions" / "node"
+        if nvm_versions_root.exists():
+            version_dirs = [entry for entry in nvm_versions_root.iterdir() if entry.is_dir()]
+            version_dirs.sort(
+                key=lambda entry: _safe_version_key(entry.name.lstrip("v")),
+                reverse=True,
+            )
+            candidates.extend(entry / "bin" / "node" for entry in version_dirs)
+        for fnm_root in (
+            Path.home() / ".fnm" / "node-versions",
+            Path.home() / ".local" / "share" / "fnm" / "node-versions",
+        ):
+            if not fnm_root.exists():
+                continue
+            version_dirs = [entry for entry in fnm_root.iterdir() if entry.is_dir()]
+            version_dirs.sort(
+                key=lambda entry: _safe_version_key(entry.name.lstrip("v")),
+                reverse=True,
+            )
+            candidates.extend(entry / "installation" / "bin" / "node" for entry in version_dirs)
+
+    seen: set[str] = set()
+    for candidate in candidates:
+        resolved = candidate.expanduser()
+        key = str(resolved)
+        if key in seen:
+            continue
+        seen.add(key)
+        if resolved.exists():
+            return resolved
+    return None
+
+
+def _command_env_with_bin(*bin_dirs: Optional[Path]) -> Dict[str, str]:
+    env = dict(os.environ)
+    parts: List[str] = []
+    seen: set[str] = set()
+
+    for bin_dir in bin_dirs:
+        if not bin_dir:
+            continue
+        entry = str(bin_dir.expanduser())
+        if not entry or entry in seen:
+            continue
+        parts.append(entry)
+        seen.add(entry)
+
+    current_path = env.get("PATH", "")
+    for entry in current_path.split(os.pathsep):
+        normalized = entry.strip()
+        if not normalized or normalized in seen:
+            continue
+        parts.append(normalized)
+        seen.add(normalized)
+
+    if parts:
+        env["PATH"] = os.pathsep.join(parts)
+    return env
+
+
+def _npm_command_env(npm: Path) -> Dict[str, str]:
+    node = _resolve_node_path()
+    return _command_env_with_bin(npm.parent, node.parent if node else None)
+
+
+def _managed_cli_env() -> Dict[str, str]:
+    node = _resolve_node_path()
+    return _command_env_with_bin(node.parent if node else None)
+
+
+def _vonvon_dependency_help_prompt() -> str:
+    if sys.platform == "darwin":
+        return (
+            "请帮我在这台 macOS 电脑上安装 Node.js 和 npm。优先使用 Homebrew；"
+            "如果没有 Homebrew，就改用 Node.js 官方安装包。安装完成后请验证 "
+            "`node -v` 和 `npm -v` 都可用，然后提醒我回到 vonvon 的“设置 > 飞书集成”"
+            "重新点击“安装并初始化飞书”。"
+        )
+    if os.name == "nt":
+        return (
+            "请帮我在这台 Windows 电脑上安装 Node.js 和 npm。优先使用 winget；"
+            "如果不方便，再改用 Node.js 官方安装包。安装完成后请验证 "
+            "`node -v` 和 `npm -v` 都可用，然后提醒我回到 vonvon 的“设置 > 飞书集成”"
+            "重新点击“安装并初始化飞书”。"
+        )
+    return (
+        "请帮我在这台电脑上安装 Node.js 和 npm。优先使用系统包管理器；"
+        "如果不方便，再改用 Node.js 官方安装包。安装完成后请验证 "
+        "`node -v` 和 `npm -v` 都可用，然后提醒我回到 vonvon 的“设置 > 飞书集成”"
+        "重新点击“安装并初始化飞书”。"
+    )
+
+
+def _missing_npm_install_message() -> str:
+    lines = [
+        "安装 vonvon 托管的 Lark CLI 需要先具备 Node.js / npm。",
+        "当前机器没有检测到可用的 npm，所以还不能继续初始化飞书。",
+        "",
+    ]
+
+    if sys.platform == "darwin":
+        lines.extend(
+            [
+                "安装方式（任选一种）：",
+                "1. Homebrew（推荐）",
+                "   brew install node",
+                "2. 官方安装包",
+                "   https://nodejs.org/en/download",
+                "",
+                "如果你已经安装过 Node.js，但 vonvon 仍然提示缺少依赖，请确认 npm 位于 /opt/homebrew/bin、/usr/local/bin，或 ~/.nvm/versions/node/*/bin。",
+            ]
+        )
+    elif os.name == "nt":
+        lines.extend(
+            [
+                "安装方式（任选一种）：",
+                "1. winget（推荐）",
+                "   winget install OpenJS.NodeJS.LTS",
+                "2. 官方安装包",
+                "   https://nodejs.org/en/download",
+            ]
+        )
+    else:
+        lines.extend(
+            [
+                "安装方式（任选一种）：",
+                "1. 使用系统包管理器安装 Node.js / npm",
+                "2. 官方安装包",
+                "   https://nodejs.org/en/download",
+            ]
+        )
+
+    lines.extend(
+        [
+            "",
+            "安装完成后，再回到 vonvon 点击“安装并初始化飞书”。",
+            "",
+            "<<<VONVON_HELP_PROMPT",
+            _vonvon_dependency_help_prompt(),
+            "VONVON_HELP_PROMPT",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def _detect_current_version(cli_path: Optional[Path] = None) -> Optional[str]:
     target = cli_path or _current_cli_path()
     if not target.exists():
         return None
     try:
-        result = _run([str(target), "--version"], timeout=10)
+        result = _run([str(target), "--version"], timeout=10, env=_managed_cli_env())
     except Exception as exc:
         logger.warning("feishu version detection failed: %s", exc)
         return None
@@ -361,11 +597,15 @@ def _detect_current_version(cli_path: Optional[Path] = None) -> Optional[str]:
 
 
 def _fetch_latest_version() -> Optional[str]:
-    npm = shutil.which("npm")
+    npm = _resolve_npm_path()
     if not npm:
         return None
     try:
-        result = _run([npm, "view", PACKAGE_NAME, "version", "--json"], timeout=20)
+        result = _run(
+            [str(npm), "view", PACKAGE_NAME, "version", "--json"],
+            timeout=20,
+            env=_npm_command_env(npm),
+        )
     except Exception as exc:
         logger.warning("feishu latest version lookup failed: %s", exc)
         return None
@@ -693,6 +933,19 @@ def _refresh_skill_bridge(state: Dict[str, Any]) -> Dict[str, Any]:
     return state
 
 
+def _apply_default_feature_enable(state: Dict[str, Any]) -> Dict[str, Any]:
+    if state.get("feature_toggle_initialized"):
+        return state
+    if state.get("runtime_status") != "ready":
+        return state
+
+    state["feature_enabled"] = True
+    state["skills_enabled"] = True
+    state["orb_inspect_enabled"] = True
+    state["feature_toggle_initialized"] = True
+    return state
+
+
 def _public_flow(flow: FeishuFlow) -> Dict[str, Any]:
     return {
         "flow_id": flow.flow_id,
@@ -754,6 +1007,7 @@ def _spawn_flow(kind: str, command: List[str], *, auth_resume: bool = False) -> 
         stderr=subprocess.STDOUT,
         text=True,
         bufsize=1,
+        env=_managed_cli_env(),
     )
     flow = _put_flow(
         FeishuFlow(
@@ -929,7 +1183,7 @@ def _parse_feishu_doc_url(raw_url: str) -> Dict[str, str]:
 
 
 def _run_lark_json(command: List[str], *, timeout: int = DEFAULT_COMMAND_TIMEOUT) -> Dict[str, Any]:
-    result = _run(command, timeout=timeout)
+    result = _run(command, timeout=timeout, env=_managed_cli_env())
     combined_output = _trim_output("\n".join([result.stdout or "", result.stderr or ""]))
     if result.returncode != 0:
         raise RuntimeError(combined_output or "读取飞书数据失败")
@@ -1100,6 +1354,7 @@ def get_state() -> Dict[str, Any]:
         state["logged_in_accounts"] = []
         state["config_initialized"] = False
         state["feature_enabled"] = False
+        state["feature_toggle_initialized"] = False
         state["skills_enabled"] = False
         state["orb_inspect_enabled"] = False
     state["runtime_status"] = _compute_runtime_status(state)
@@ -1109,9 +1364,9 @@ def get_state() -> Dict[str, Any]:
 
 
 def install_runtime(version: Optional[str] = None) -> Dict[str, Any]:
-    npm = shutil.which("npm")
+    npm = _resolve_npm_path()
     if not npm:
-        raise RuntimeError("安装 vonvon 托管的 Lark CLI 需要先具备 npm")
+        raise RuntimeError(_missing_npm_install_message())
 
     _ensure_layout()
     state = _read_state()
@@ -1121,8 +1376,9 @@ def install_runtime(version: Optional[str] = None) -> Dict[str, Any]:
         version_dir.mkdir(parents=True, exist_ok=True)
         package_spec = PACKAGE_NAME if target_version == "latest" else f"{PACKAGE_NAME}@{target_version}"
         result = _run(
-            [npm, "install", "--prefix", str(version_dir), package_spec],
+            [str(npm), "install", "--prefix", str(version_dir), package_spec],
             timeout=180,
+            env=_npm_command_env(npm),
         )
         if result.returncode != 0:
             err = _trim_output("\n".join([result.stdout or "", result.stderr or ""]))
@@ -1188,9 +1444,10 @@ def verify_runtime() -> Dict[str, Any]:
 
     state["current_version"] = _detect_current_version(cli) or state.get("current_version")
     state["config_initialized"] = state.get("config_initialized", False)
-    auth_result = _run([str(cli), "auth", "status"], timeout=15)
-    auth_list_result = _run([str(cli), "auth", "list"], timeout=15)
-    doctor_result = _run([str(cli), "doctor"], timeout=30)
+    cli_env = _managed_cli_env()
+    auth_result = _run([str(cli), "auth", "status"], timeout=15, env=cli_env)
+    auth_list_result = _run([str(cli), "auth", "list"], timeout=15, env=cli_env)
+    doctor_result = _run([str(cli), "doctor"], timeout=30, env=cli_env)
     auth_context = _extract_auth_context(
         auth_result.stdout or "",
         auth_list_result.stdout or "",
@@ -1215,6 +1472,7 @@ def verify_runtime() -> Dict[str, Any]:
     else:
         state["last_error"] = None
     state["runtime_status"] = _compute_runtime_status(state)
+    state = _apply_default_feature_enable(state)
     state = _refresh_skill_bridge(state)
     state["managed_paths"] = _managed_paths()
     return _write_state(state)
@@ -1294,6 +1552,7 @@ def set_feature_enabled(enabled: bool) -> Dict[str, Any]:
         raise RuntimeError("请先完成 Lark CLI 安装、飞书应用配置和账号登录")
 
     state["feature_enabled"] = enabled
+    state["feature_toggle_initialized"] = True
     if enabled:
         state["skills_enabled"] = True
         state["orb_inspect_enabled"] = True

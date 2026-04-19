@@ -1,6 +1,6 @@
 {
   "name": "vonvon",
-  "version": "0.2.8",
+  "version": "0.2.9",
   "description": "AI assistant floating window for macOS",
   "main": "out/main/index.js",
   "scripts": {
@@ -10,6 +10,7 @@
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
     "preview": "electron-vite preview",
+    "test:packaged": "bash scripts/test-packaged.sh",
     "rebuild": "cmake-js rebuild --directory native",
     "validate:kirby": "node scripts/validate-kirby-pack.mjs"
   },

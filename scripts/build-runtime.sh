@@ -16,6 +16,7 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="$REPO_ROOT/.dist"
 RUNTIME_DIR="$DIST_DIR/backend-runtime"
+RUNTIME_STAMP="$DIST_DIR/backend-runtime.stamp"
 BACKEND_SRC="$REPO_ROOT/backend"
 
 # python-build-standalone release — pin to a known-good build.
@@ -77,3 +78,7 @@ find "$RUNTIME_DIR" -type f -name "*.pyc" -delete 2>/dev/null || true
 echo
 echo "[build-runtime] done. size:"
 du -sh "$RUNTIME_DIR"
+
+# Record a local build completion time for stale checks. The extracted runtime's
+# files keep upstream mtimes, so they cannot be used as a reliable freshness marker.
+touch "$RUNTIME_STAMP"
