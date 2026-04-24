@@ -1,7 +1,7 @@
 import { app, BrowserWindow, nativeImage, shell } from 'electron'
 import { join } from 'path'
 import { registerIpcHandlers } from './ipc'
-import { initKirby, destroyKirby } from './native/kirby'
+import { initKirby, destroyKirby, showKirby } from './native/kirby'
 import { startBackend, stopBackend } from './backend'
 
 const isDev = !app.isPackaged
@@ -72,11 +72,24 @@ app.whenReady().then(() => {
   mainWindow.webContents.once('did-finish-load', () => {
     initKirby(mainWindow!)
   })
+  mainWindow.on('closed', () => {
+    mainWindow = null
+  })
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
+    if (!mainWindow || mainWindow.isDestroyed()) {
       mainWindow = createMainWindow()
+      mainWindow.webContents.once('did-finish-load', () => {
+        initKirby(mainWindow!)
+        showKirby()
+      })
+      mainWindow.on('closed', () => {
+        mainWindow = null
+      })
+      return
     }
+
+    showKirby()
   })
 })
 

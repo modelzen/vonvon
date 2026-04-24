@@ -9,8 +9,8 @@
 
 /**
  * Fires when the user right-clicks anywhere within the Kirby ball's circular
- * hit area (only while floating — suppressed in any docked state). The JS
- * side wires this up to open the standalone settings window.
+ * hit area (only while visible and floating). The JS side wires this up to
+ * open the floating-state context menu.
  */
 @property (nonatomic, copy) void (^onRightClick)(void);
 

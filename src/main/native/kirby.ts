@@ -175,6 +175,19 @@ function collapseDockedSidebar(addon?: KirbyNative | null): void {
   releaseSidebar(true)
 }
 
+function closeKirbyFloatingWindow(): void {
+  const addon = loadAddon()
+  if (!addon) return
+  releaseSidebar(false)
+  addon.setVisible(false)
+}
+
+export function showKirby(): void {
+  const addon = loadAddon()
+  if (!addon) return
+  addon.setVisible(true)
+}
+
 function loadAddon(): KirbyNative | null {
   if (native) return native
   // In packaged mode, .node files are unpacked outside app.asar via
@@ -320,8 +333,9 @@ export function initKirby(mainWindow: BrowserWindow): void {
   }
 
   // Right-clicking the Kirby ball (while floating) shows a context menu
-  // with two actions: open settings, or open a standalone (resizable)
-  // chat window. onRightClick was added in a later native addon version —
+  // with actions to open a standalone chat window, open settings, or close
+  // the visible floating panel without quitting the app. onRightClick was
+  // added in a later native addon version —
   // if the user is running an older build we log it so they can run
   // `npm run rebuild`.
   console.log('[kirby.ts] addon.onRightClick typeof =', typeof addon.onRightClick)
@@ -338,6 +352,11 @@ export function initKirby(mainWindow: BrowserWindow): void {
         {
           label: '设置',
           click: () => openSettingsWindow(),
+        },
+        { type: 'separator' },
+        {
+          label: '关闭悬浮窗',
+          click: () => closeKirbyFloatingWindow(),
         },
       ])
       // Let macOS' popUpContextMenu handle positioning natively. Calling

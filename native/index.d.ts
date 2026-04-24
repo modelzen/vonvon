@@ -86,6 +86,6 @@ declare module 'vonvon-native' {
   export function collapseSidebar(): void
 
   /** Register a callback fired when the user right-clicks the Kirby ball
-   *  (only while floating — suppressed in any docked state). */
+   *  (only while visible and floating). */
   export function onRightClick(callback: () => void): void
 }

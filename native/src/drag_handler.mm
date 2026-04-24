@@ -16,7 +16,7 @@ static const NSTimeInterval kDockedToggleGraceCap = 0.16;
 // Docked states convert the mouse point through the shifted art canvas so the
 // fixed panel's transparent slack never counts as a hit.
 static BOOL PointInBallHitArea(NSPoint mouse, KirbyWindow *k) {
-    if (!k.panel) return NO;
+    if (!k.panel || !k.panel.isVisible) return NO;
     NSPoint panelPoint = NSMakePoint(mouse.x - k.panel.frame.origin.x,
                                      mouse.y - k.panel.frame.origin.y);
     NSPoint canvasPoint = NSZeroPoint;
@@ -188,7 +188,9 @@ static BOOL PointInBallHitArea(NSPoint mouse, KirbyWindow *k) {
     //      "Reload" menu. kirby.html cancels that via a `contextmenu`
     //      listener that calls e.preventDefault().
     //
-    // Both paths are suppressed when docked because the panel is hidden.
+    // Both paths are suppressed outside the plain floating state. Docked has
+    // its own click gestures, and a user-hidden panel must not keep a ghost
+    // hit target at its last screen position.
     BOOL (^rightClickHandler)(NSString *) = ^BOOL(NSString *source) {
         DragHandler *s = ws;
         if (!s) {
@@ -200,8 +202,8 @@ static BOOL PointInBallHitArea(NSPoint mouse, KirbyWindow *k) {
             NSLog(@"[kirby] right-click [%@]: panel is nil", source);
             return NO;
         }
-        if (KirbyStateIsDocked(k.state)) {
-            NSLog(@"[kirby] right-click [%@]: state=docked, ignoring", source);
+        if (k.state != KirbyStateFloating) {
+            NSLog(@"[kirby] right-click [%@]: state=%ld, ignoring", source, (long)k.state);
             return NO;
         }
 
