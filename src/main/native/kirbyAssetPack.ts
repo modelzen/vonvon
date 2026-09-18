@@ -1,5 +1,5 @@
-import { readFileSync } from 'fs'
-import { join } from 'path'
+import { readFileSync, readdirSync, statSync } from 'fs'
+import { dirname, extname, join, relative, resolve } from 'path'
 import { app } from 'electron'
 
 export type KirbyVisualForm =
@@ -87,8 +87,16 @@ export type KirbyAssetPackRuntimeConfig = {
   manifest: KirbyAssetPackManifest
 }
 
-const DEFAULT_KIRBY_PACK_ID = 'cat'
-const FALLBACK_KIRBY_PACK_ID = 'default'
+export type KirbyAssetPackSummary = {
+  id: string
+  name: string
+  version?: number
+  author?: string
+  previewDataUrl?: string
+}
+
+export const DEFAULT_KIRBY_PACK_ID = 'cat'
+const FALLBACK_KIRBY_PACK_ID = DEFAULT_KIRBY_PACK_ID
 
 const REQUIRED_FORMS: KirbyVisualForm[] = [
   'floating',
@@ -101,17 +109,22 @@ function unpackedAppPath(): string {
   return app.getAppPath().replace(/app\.asar$/, 'app.asar.unpacked')
 }
 
-function resolveManifestPath(packId: string): string {
+function resolvePacksRoot(): string {
   if (app.isPackaged) {
-    return join(
-      unpackedAppPath(),
-      'out/renderer/kirby-packs',
-      packId,
-      'manifest.json'
-    )
+    return join(unpackedAppPath(), 'out/renderer/kirby-packs')
   }
 
-  return join(app.getAppPath(), 'public/kirby-packs', packId, 'manifest.json')
+  return join(app.getAppPath(), 'public/kirby-packs')
+}
+
+export function normalizeKirbyPackId(packId: string | null | undefined): string {
+  const normalized = typeof packId === 'string' ? packId.trim() : ''
+  if (!/^[a-zA-Z0-9_-]+$/.test(normalized)) return DEFAULT_KIRBY_PACK_ID
+  return normalized
+}
+
+function resolveManifestPath(packId: string): string {
+  return join(resolvePacksRoot(), normalizeKirbyPackId(packId), 'manifest.json')
 }
 
 function resolveAssetBase(packId: string, kirbyHtmlUrl: string): string {
@@ -143,7 +156,7 @@ function validateManifest(packId: string, manifest: KirbyAssetPackManifest): voi
   }
 }
 
-function loadPackManifest(packId: string): KirbyAssetPackManifest {
+export function loadPackManifest(packId: string): KirbyAssetPackManifest {
   const manifestPath = resolveManifestPath(packId)
   const raw = readFileSync(manifestPath, 'utf8')
   const manifest = JSON.parse(raw) as KirbyAssetPackManifest
@@ -151,13 +164,82 @@ function loadPackManifest(packId: string): KirbyAssetPackManifest {
   return manifest
 }
 
+function resolvePackAssetPath(packId: string, assetPath: string): string | null {
+  const packDir = dirname(resolveManifestPath(packId))
+  const resolved = resolve(packDir, assetPath)
+  const rel = relative(packDir, resolved)
+  if (rel.startsWith('..') || rel === '') return null
+  return resolved
+}
+
+function mimeForAsset(assetPath: string): string | null {
+  const extension = extname(assetPath).toLowerCase()
+  if (extension === '.png') return 'image/png'
+  if (extension === '.svg') return 'image/svg+xml'
+  return null
+}
+
+function buildPreviewDataUrl(packId: string, manifest: KirbyAssetPackManifest): string | undefined {
+  const previewSrc = manifest.states.floating?.src
+  if (!previewSrc) return undefined
+
+  const mime = mimeForAsset(previewSrc)
+  const previewPath = resolvePackAssetPath(packId, previewSrc)
+  if (!mime || !previewPath) return undefined
+
+  try {
+    return `data:${mime};base64,${readFileSync(previewPath).toString('base64')}`
+  } catch (err) {
+    console.warn(`[kirby] failed to read preview for asset pack "${packId}":`, err)
+    return undefined
+  }
+}
+
+export function listKirbyAssetPacks(): KirbyAssetPackSummary[] {
+  const root = resolvePacksRoot()
+  let entries: string[] = []
+
+  try {
+    entries = readdirSync(root)
+  } catch (err) {
+    console.warn('[kirby] failed to list asset packs:', err)
+    return []
+  }
+
+  const packs: KirbyAssetPackSummary[] = []
+  for (const entry of entries) {
+    const packId = normalizeKirbyPackId(entry)
+    if (packId !== entry) continue
+
+    try {
+      const manifestPath = resolveManifestPath(packId)
+      if (!statSync(dirname(manifestPath)).isDirectory()) continue
+      const manifest = loadPackManifest(packId)
+      packs.push({
+        id: packId,
+        name: manifest.meta?.name || packId,
+        version: manifest.meta?.version,
+        author: manifest.meta?.author,
+        previewDataUrl: buildPreviewDataUrl(packId, manifest),
+      })
+    } catch (err) {
+      console.warn(`[kirby] skipping invalid asset pack "${packId}":`, err)
+    }
+  }
+
+  return packs.sort((a, b) => {
+    if (a.id === DEFAULT_KIRBY_PACK_ID) return -1
+    if (b.id === DEFAULT_KIRBY_PACK_ID) return 1
+    return a.name.localeCompare(b.name)
+  })
+}
+
 export function resolveKirbyAssetPack(
   kirbyHtmlUrl: string,
   requestedPackId: string = process.env.VONVON_KIRBY_PACK ?? DEFAULT_KIRBY_PACK_ID
 ): KirbyAssetPackRuntimeConfig {
-  const candidates = requestedPackId === FALLBACK_KIRBY_PACK_ID
-    ? [FALLBACK_KIRBY_PACK_ID]
-    : [requestedPackId, FALLBACK_KIRBY_PACK_ID]
+  const normalizedPackId = normalizeKirbyPackId(requestedPackId)
+  const candidates = Array.from(new Set([normalizedPackId, FALLBACK_KIRBY_PACK_ID]))
 
   let lastError: unknown = null
 

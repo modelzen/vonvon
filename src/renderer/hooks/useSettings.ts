@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 interface Settings {
   defaultProvider: string
   defaultModel: string
+  kirbyPackId: string
   apiKeys: Record<string, boolean>
 }
 

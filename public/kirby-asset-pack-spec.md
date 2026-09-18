@@ -4,7 +4,7 @@
 
 以当前 `public/`、加载器和校验器为准。如果本文和实现不一致，优先相信下面这些文件：
 
-- `public/kirby-packs/default/manifest.json`
+- `public/kirby-packs/cat/manifest.json`
 - `src/main/native/kirbyAssetPack.ts`
 - `src/renderer/components/Kirby/kirby.html`
 - `scripts/validate-kirby-pack.mjs`
@@ -17,28 +17,39 @@ public/
   kirby-asset-pack-spec.md
   kirby-pack-preview.html
   kirby-packs/
-    default/
+    cat/
       manifest.json
-      floating.svg
-      snapping.svg
-      docked-expanded.svg
-      docked-collapsed.svg
+      floating.png
+      snapping.png
+      docked-expanded.png
+      docked-collapsed.png
       transitions/
-        detach-01.svg
-        detach-02.svg
-        detach-03.svg
-        detach-04.svg
+        detach-01.png
+        detach-02.png
+        detach-03.png
+        detach-04.png
+    shiba/
+      manifest.json
+      floating.png
+      snapping.png
+      docked-expanded.png
+      docked-collapsed.png
+      transitions/
+        detach-01.png
+        detach-02.png
+        detach-03.png
+        detach-04.png
 ```
 
-当前真实存在并可直接运行的素材包只有 `default`。
+当前真实存在并可直接运行的素材包是 `cat` 和 `shiba`。
 
 `kirby-pack-preview.html` 会直接读取 `kirby-packs/<pack-id>/manifest.json` 做预览。
 
 ## 运行时如何选包
 
-- 默认包 id 是 `cat`
-- 可以用环境变量 `VONVON_KIRBY_PACK` 指定其他包
-- 如果指定包加载失败，主进程会回退到 `default`
+- 默认包 id 是 `cat`，加载失败时也会回退到 `cat`
+- 可以在设置页的“形象”里切换素材包，并会保存到本机设置
+- 开发调试时仍可以用环境变量 `VONVON_KIRBY_PACK` 临时指定其他包
 - 开发环境从 `public/kirby-packs/<pack-id>/manifest.json` 读取
 - 打包后从 `out/renderer/kirby-packs/<pack-id>/manifest.json` 读取
 
@@ -46,24 +57,24 @@ public/
 
 原生状态机目前只认 4 个抽象状态，素材包必须全部提供：
 
-| 状态名 | 必需 | 当前默认素材 | 说明 |
+| 状态名 | 必需 | 示例素材 | 说明 |
 | --- | --- | --- | --- |
-| `floating` | 是 | `floating.svg` | 自由漂浮时的默认姿态 |
-| `snapping` | 是 | `snapping.svg` | 进入吸附区时的预览姿态 |
-| `dockedExpanded` | 是 | `docked-expanded.svg` | 吸附到飞书右上角且侧边栏展开 |
-| `dockedCollapsed` | 是 | `docked-collapsed.svg` | 吸附到飞书右上角且侧边栏收起 |
+| `floating` | 是 | `floating.png` | 自由漂浮时的默认姿态 |
+| `snapping` | 是 | `snapping.png` | 进入吸附区时的预览姿态 |
+| `dockedExpanded` | 是 | `docked-expanded.png` | 吸附到飞书右上角且侧边栏展开 |
+| `dockedCollapsed` | 是 | `docked-collapsed.png` | 吸附到飞书右上角且侧边栏收起 |
 
 `src/main/native/kirbyAssetPack.ts` 会校验这 4 个状态都存在，并且每个状态至少有 `src` 或非空 `frames`。
 
 ## 当前默认包的完整结构
 
-`public/kirby-packs/default/manifest.json` 现在长这样：
+`public/kirby-packs/cat/manifest.json` 现在长这样：
 
 ```json
 {
   "meta": {
-    "id": "default",
-    "name": "Default Pink Ball",
+    "id": "cat",
+    "name": "Cat",
     "version": 1,
     "specVersion": 1,
     "author": "Vonvon"
@@ -95,10 +106,10 @@ public/
     "detach": {
       "description": "Peel-off stretch played when the docked ball is dragged away from Feishu.",
       "frames": [
-        { "src": "transitions/detach-01.svg", "durationMs": 70 },
-        { "src": "transitions/detach-02.svg", "durationMs": 70 },
-        { "src": "transitions/detach-03.svg", "durationMs": 70 },
-        { "src": "transitions/detach-04.svg", "durationMs": 80 }
+        { "src": "transitions/detach-01.png", "durationMs": 70 },
+        { "src": "transitions/detach-02.png", "durationMs": 70 },
+        { "src": "transitions/detach-03.png", "durationMs": 70 },
+        { "src": "transitions/detach-04.png", "durationMs": 80 }
       ]
     },
     "panelMove": {
@@ -120,25 +131,25 @@ public/
     "floating": {
       "displayName": "Floating",
       "kind": "single",
-      "src": "floating.svg",
+      "src": "floating.png",
       "description": "Default idle pose while the ball is free-floating."
     },
     "snapping": {
       "displayName": "Snapping",
       "kind": "single",
-      "src": "snapping.svg",
+      "src": "snapping.png",
       "description": "Preview pose shown while the ball enters the snap zone."
     },
     "dockedExpanded": {
       "displayName": "Docked Expanded",
       "kind": "single",
-      "src": "docked-expanded.svg",
+      "src": "docked-expanded.png",
       "description": "Pose used while docked at Feishu's top-right corner with the sidebar open."
     },
     "dockedCollapsed": {
       "displayName": "Docked Collapsed",
       "kind": "single",
-      "src": "docked-collapsed.svg",
+      "src": "docked-collapsed.png",
       "description": "Pose used while docked with the sidebar collapsed."
     }
   }
@@ -241,10 +252,10 @@ public/
 
 当前默认包有 4 帧：
 
-- `transitions/detach-01.svg`
-- `transitions/detach-02.svg`
-- `transitions/detach-03.svg`
-- `transitions/detach-04.svg`
+- `transitions/detach-01.png`
+- `transitions/detach-02.png`
+- `transitions/detach-03.png`
+- `transitions/detach-04.png`
 
 和状态一样，`detach.frames` 也支持字符串帧或 `{ src, durationMs }`。
 
@@ -276,8 +287,8 @@ public/
 - `hitArea.r` 必须大于 0
 - `hitArea` 如果超出 panel，会报 warning
 
-当前默认包所有素材都是 `SVG`，并且都是 `120 x 120` 逻辑画布。
-如果使用 `PNG`，逻辑画布仍然是 `120 x 120`，但文件本身可以做成 `240 x 240` 这类整数倍分辨率，运行时会按同样的逻辑尺寸缩放显示。
+当前 `cat` 和 `shiba` 包都是 `PNG` 高 DPI 素材，文件本身是 `240 x 240`。
+逻辑画布仍然是 `120 x 120`，运行时会按同样的逻辑尺寸缩放显示。
 
 ## 当前仍然硬编码在 native 的约束
 
@@ -320,18 +331,18 @@ native 里还有两个额外命中规则：
 ```text
 public/kirby-packs/<pack-id>/
   manifest.json
-  floating.svg
-  snapping.svg
-  docked-expanded.svg
-  docked-collapsed.svg
+  floating.png
+  snapping.png
+  docked-expanded.png
+  docked-collapsed.png
 ```
 
 如果还要支持拖离转场，再加：
 
 ```text
 public/kirby-packs/<pack-id>/transitions/
-  detach-01.svg
-  detach-02.svg
+  detach-01.png
+  detach-02.png
   ...
 ```
 
@@ -354,7 +365,7 @@ npm run validate:kirby
 只校验单个包：
 
 ```bash
-node scripts/validate-kirby-pack.mjs public/kirby-packs/default
+node scripts/validate-kirby-pack.mjs public/kirby-packs/shiba
 ```
 
 ### 预览
@@ -370,6 +381,7 @@ node scripts/validate-kirby-pack.mjs public/kirby-packs/default
 - 4 个主状态
 - `detach` 转场
 - `layout` 信息
+- 当前状态的 X/Y/Scale 微调预览，以及导出/保存调整后的 PNG
 - manifest 原文
 
 ## 维护规则

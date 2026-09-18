@@ -70,7 +70,7 @@ app.whenReady().then(() => {
 
   // Wait for renderer to load before initializing Kirby
   mainWindow.webContents.once('did-finish-load', () => {
-    initKirby(mainWindow!)
+    initKirby(mainWindow!).catch((err) => console.error('[kirby] init failed:', err))
   })
   mainWindow.on('closed', () => {
     mainWindow = null
@@ -81,7 +81,8 @@ app.whenReady().then(() => {
       mainWindow = createMainWindow()
       mainWindow.webContents.once('did-finish-load', () => {
         initKirby(mainWindow!)
-        showKirby()
+          .then(() => showKirby())
+          .catch((err) => console.error('[kirby] init failed:', err))
       })
       mainWindow.on('closed', () => {
         mainWindow = null

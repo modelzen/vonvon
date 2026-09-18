@@ -1,0 +1,590 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>Vonvon | 会动、会贴边、会长大的桌面 AI 小宠物</title>
+    <meta
+      name="description"
+      content="Vonvon 是一只住在 macOS 桌面的 AI 小宠物。平时安静待命，靠近飞书会进入协作状态，还会通过 Skills 与 MCP 慢慢长出新的能力。"
+    />
+    <meta
+      property="og:title"
+      content="Vonvon | 会动、会贴边、会长大的桌面 AI 小宠物"
+    />
+    <meta
+      property="og:description"
+      content="不是把聊天框搬到桌面，而是做成一个会贴着工作流呼吸、吸附和生长的 AI 伙伴。"
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="assets/feishu-context-sidebar.png" />
+    <link rel="icon" type="image/png" href="assets/logo.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="paper-grid" aria-hidden="true"></div>
+    <div class="grain" aria-hidden="true"></div>
+    <div class="floating-sticker floating-sticker-top" aria-hidden="true">
+      <img src="assets/cat/floating.png" alt="" />
+    </div>
+
+    <header class="site-header">
+      <div class="container header-shell">
+        <a class="brand" href="#top" aria-label="Vonvon 首页">
+          <img src="assets/logo.png" alt="" />
+          <div>
+            <strong>Vonvon</strong>
+            <span>desktop motion pet</span>
+          </div>
+        </a>
+
+        <nav class="site-nav" aria-label="主导航">
+          <a href="#docking-demo">Demo</a>
+          <a href="#works">Works</a>
+          <a href="#motions">Motions</a>
+          <a href="#screens">Screens</a>
+          <a href="#install">Install</a>
+        </nav>
+
+        <a
+          class="header-link"
+          href="https://github.com/modelzen/vonvon"
+          target="_blank"
+          rel="noreferrer"
+        >
+          GitHub
+        </a>
+      </div>
+    </header>
+
+    <main id="top">
+      <section class="hero section">
+        <div class="container hero-shell">
+          <div class="hero-copy reveal">
+            <p class="micro-label">macOS 12+ / Apple Silicon / Feishu / Skills / MCP</p>
+            <h1 class="hero-title">
+              几个最能说明它
+              <span>气质</span>
+              的瞬间。
+            </h1>
+            <p class="hero-text">
+              Vonvon 不是把网页聊天窗口搬到桌面上，而是把一个更低存在感、
+              更会靠近场景、也更会跟着工作流一起变化的 AI 角色放进你的日常里。
+            </p>
+
+            <div class="hero-actions">
+              <a
+                class="pill-button pill-button-dark"
+                href="https://github.com/modelzen/vonvon/releases/latest"
+                target="_blank"
+                rel="noreferrer"
+              >
+                下载最新版本
+              </a>
+              <a class="pill-button" href="#docking-demo">看吸附 Demo</a>
+            </div>
+
+            <div class="hero-notes">
+              <article>
+                <span>Quiet</span>
+                <p>平时安静待命，不用它的时候就像桌面边上的一只小动物。</p>
+              </article>
+              <article>
+                <span>Docked</span>
+                <p>靠近飞书右侧会进入贴边协作状态，把上下文拉回眼前。</p>
+              </article>
+              <article>
+                <span>Evolving</span>
+                <p>通过 Skills 与 MCP，不只是“会回答”，还会慢慢长出新能力。</p>
+              </article>
+            </div>
+          </div>
+
+          <div class="hero-stage reveal">
+            <article class="hero-card hero-card-main float-card">
+              <div class="card-badge">Main</div>
+              <img
+                src="assets/regular-main-window.png"
+                alt="Vonvon 日常主界面"
+                width="2516"
+                height="1632"
+                loading="eager"
+              />
+              <div class="card-caption">
+                <p>日常主形态</p>
+                <strong>随手唤起，一直都在。</strong>
+              </div>
+            </article>
+
+            <article class="hero-card hero-card-side wiggle-card">
+              <div class="mini-orbit" aria-hidden="true">
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+              <p class="card-kicker">Dock to Feishu</p>
+              <strong>靠近飞书时，会自动贴边。</strong>
+              <p>
+                不是再开一个聊天浮层，而是像给当前协作现场额外长出一层 AI 侧栏。
+              </p>
+            </article>
+
+            <article class="hero-card hero-card-shot drift-card">
+              <img
+                src="assets/feishu-docked-window.png"
+                alt="Vonvon 贴在飞书窗口边缘"
+                width="2516"
+                height="1632"
+                loading="eager"
+              />
+            </article>
+
+            <article class="hero-card hero-card-logo bounce-card">
+              <img src="assets/logo.png" alt="" />
+              <div>
+                <p>AI Pet for macOS</p>
+                <strong>陪你一起工作的小搭档</strong>
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="ticker-section">
+        <div class="ticker-row">
+          <div class="ticker-track">
+            <span>Q U I E T</span>
+            <span>Q U I E T</span>
+            <span>Q U I E T</span>
+            <span>Q U I E T</span>
+          </div>
+        </div>
+        <div class="ticker-row ticker-row-reverse">
+          <div class="ticker-track">
+            <span>D O C K E D</span>
+            <span>D O C K E D</span>
+            <span>D O C K E D</span>
+            <span>D O C K E D</span>
+          </div>
+        </div>
+        <div class="ticker-row">
+          <div class="ticker-track">
+            <span>E V O L V E</span>
+            <span>E V O L V E</span>
+            <span>E V O L V E</span>
+            <span>E V O L V E</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="section docking-section" id="docking-demo">
+        <div class="container docking-shell">
+          <div class="section-head reveal">
+            <p class="micro-label">D O C K I N G &nbsp; D E M O</p>
+            <h2 class="display-title">
+              官网上也直接演示一次
+              “靠近飞书右边线 → 吸附到右上角 → 从 vonvon 里长出侧栏”。
+            </h2>
+            <p class="docking-copy">
+              这里不是摆拍图，而是参考桌面端真实状态机做的循环 demo：
+              `floating → snapping → dockedExpanded → dockedCollapsed → detaching`。
+            </p>
+          </div>
+
+          <div
+            class="docking-demo reveal"
+            data-dock-demo
+            data-state="floating"
+            aria-label="Vonvon 吸附飞书窗口演示"
+          >
+            <div class="docking-demo-toolbar">
+              <div>
+                <p class="micro-label">Live motion state</p>
+                <strong data-dock-label>Floating</strong>
+                <p class="docking-hint">拖动这颗 vonvon 靠近飞书右边线，试试看。</p>
+              </div>
+              <button class="dock-replay-button" type="button" data-dock-replay>
+                重置 Demo
+              </button>
+            </div>
+
+            <div class="dock-stage">
+              <div class="dock-stage-grid" aria-hidden="true"></div>
+              <div class="dock-snap-line" aria-hidden="true"></div>
+              <div class="dock-corner-target" aria-hidden="true"></div>
+
+              <article class="fake-feishu-window">
+                <div class="fake-window-topbar">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                  <p>飞书</p>
+                </div>
+                <div class="fake-window-body">
+                  <div class="fake-window-rail">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                  </div>
+                  <div class="fake-window-list">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                  </div>
+                  <div class="fake-window-chat">
+                    <div class="fake-chat-card">
+                      <span></span>
+                      <span></span>
+                      <span></span>
+                    </div>
+                    <div class="fake-chat-card fake-chat-card-long">
+                      <span></span>
+                      <span></span>
+                      <span></span>
+                      <span></span>
+                    </div>
+                    <div class="fake-chat-input"></div>
+                  </div>
+                </div>
+              </article>
+
+              <aside class="fake-vonvon-sidebar">
+                <div class="fake-sidebar-topbar">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
+                <div class="fake-sidebar-card">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
+                <div class="fake-sidebar-card fake-sidebar-card-accent">
+                  <span></span>
+                  <span></span>
+                </div>
+                <div class="fake-sidebar-input"></div>
+              </aside>
+
+              <div class="dock-ripple" aria-hidden="true"></div>
+              <div class="dock-vonvon-shadow" aria-hidden="true"></div>
+
+              <div class="dock-vonvon" aria-hidden="true">
+                <img
+                  class="dock-vonvon-frame"
+                  data-dock-blob-image
+                  src="assets/cat/floating.png"
+                  alt=""
+                  width="240"
+                  height="240"
+                  draggable="false"
+                />
+              </div>
+            </div>
+
+            <ol class="dock-steps" aria-label="吸附状态机步骤">
+              <li data-dock-step="floating">
+                <span>01</span>
+                <strong>Floating</strong>
+                <p>自由漂浮，先靠近场景。</p>
+              </li>
+              <li data-dock-step="snapping">
+                <span>02</span>
+                <strong>Snapping</strong>
+                <p>接近飞书右边线时，身体先被“吸”过去。</p>
+              </li>
+              <li data-dock-step="docked-expanded">
+                <span>03</span>
+                <strong>Docked Expanded</strong>
+                <p>滑到右上角后，sidebar 从 top left 向右长出。</p>
+              </li>
+              <li data-dock-step="docked-collapsed">
+                <span>04</span>
+                <strong>Docked Collapsed</strong>
+                <p>收起侧栏，但仍保持吸附在飞书上方。</p>
+              </li>
+              <li data-dock-step="detaching">
+                <span>05</span>
+                <strong>Detaching</strong>
+                <p>拖离吸附区后，重新回到漂浮状态。</p>
+              </li>
+            </ol>
+          </div>
+        </div>
+      </section>
+
+      <section class="section works-section" id="works">
+        <div class="container">
+          <div class="section-head reveal">
+            <p class="micro-label">W O R K S</p>
+            <h2 class="display-title">
+              会动、会贴边、会继续理解上下文的桌面 AI。
+            </h2>
+          </div>
+
+          <div class="works-grid">
+            <article class="work-card reveal">
+              <div class="work-topline">
+                <span>01</span>
+                <p>Desktop motion pet</p>
+              </div>
+              <h3>桌面主形态</h3>
+              <p>
+                平时像一个轻轻呼吸的小角色待在屏幕边上，需要时再进入更完整的对话状态。
+              </p>
+            </article>
+
+            <article class="work-card work-card-image reveal">
+              <img
+                src="assets/independent-chat-main-window.png"
+                alt="Vonvon 独立窗口"
+                width="2080"
+                height="1560"
+                loading="lazy"
+              />
+              <div class="work-image-caption">
+                <p>Independent</p>
+                <strong>需要长任务时，再切进沉浸窗口。</strong>
+              </div>
+            </article>
+
+            <article class="work-card reveal">
+              <div class="work-topline">
+                <span>02</span>
+                <p>Feishu side mode</p>
+              </div>
+              <h3>飞书贴边协作</h3>
+              <p>
+                它知道什么时候应该只是待命，也知道什么时候该靠近你正在处理的协作现场。
+              </p>
+            </article>
+
+            <article class="work-card reveal">
+              <div class="work-topline">
+                <span>03</span>
+                <p>Skill growth</p>
+              </div>
+              <h3>能力会继续长出来</h3>
+              <p>
+                通过 Skills 和 MCP，它不是固定功能列表，而是会随着使用逐步变得更贴手。
+              </p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section motions-section" id="motions">
+        <div class="container">
+          <div class="section-head reveal">
+            <p class="micro-label">M O T I O N S</p>
+            <h2 class="display-title">
+              参考 `yui540 / motions` 的方向，给这个站点加上一整套更轻、更有玩具感的动态语言。
+            </h2>
+          </div>
+
+          <div class="motion-grid">
+            <article class="motion-tile reveal motion-tile-orbit">
+              <p>Orbital</p>
+              <div class="orbital-scene">
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+            </article>
+
+            <article class="motion-tile reveal motion-tile-bars">
+              <p>Breathing</p>
+              <div class="bar-scene">
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+            </article>
+
+            <article class="motion-tile reveal motion-tile-bounce">
+              <p>Bouncing</p>
+              <div class="logo-scene">
+                <img src="assets/logo.png" alt="" />
+              </div>
+            </article>
+
+            <article class="motion-tile reveal motion-tile-wave">
+              <p>Ribbon</p>
+              <div class="wave-scene">
+                <span>VONVON</span>
+                <span>VONVON</span>
+              </div>
+            </article>
+
+            <article class="motion-tile reveal motion-tile-spinner">
+              <p>Rotating</p>
+              <div class="spinner-scene">
+                <span></span>
+              </div>
+            </article>
+
+            <article class="motion-tile reveal motion-tile-cards">
+              <p>Floating cards</p>
+              <div class="stack-scene">
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section screens-section" id="screens">
+        <div class="container">
+          <div class="section-head reveal">
+            <p class="micro-label">S C R E E N S</p>
+            <h2 class="display-title">几个最像作品陈列页的界面瞬间。</h2>
+          </div>
+
+          <div class="gallery-grid gallery-grid-editorial">
+            <figure class="gallery-card reveal">
+              <img
+                src="assets/regular-main-window.png"
+                alt="Vonvon 日常主界面"
+                width="2516"
+                height="1632"
+                loading="eager"
+                decoding="async"
+              />
+              <figcaption>
+                <p>日常主形态</p>
+                <strong>需要时唤起，不需要时只留下轻微呼吸感。</strong>
+              </figcaption>
+            </figure>
+
+            <figure class="gallery-card reveal gallery-card-large">
+              <img
+                src="assets/feishu-context-sidebar.png"
+                alt="Vonvon 飞书侧边协作视图"
+                width="2874"
+                height="1708"
+                loading="eager"
+                decoding="async"
+              />
+              <figcaption>
+                <p>飞书侧边协作</p>
+                <strong>不止看截图，而是继续围绕当前上下文往下做事。</strong>
+              </figcaption>
+            </figure>
+
+            <figure class="gallery-card reveal">
+              <img
+                src="assets/settings-skills-discover.png"
+                alt="Vonvon 技能中心发现页"
+                width="2080"
+                height="1560"
+                loading="eager"
+                decoding="async"
+              />
+              <figcaption>
+                <p>能力扩展</p>
+                <strong>继续把它养成更顺手的样子。</strong>
+              </figcaption>
+            </figure>
+
+            <figure class="gallery-card reveal">
+              <img
+                src="assets/settings-lark-integration.png"
+                alt="Vonvon 飞书集成设置"
+                width="2080"
+                height="1560"
+                loading="lazy"
+              />
+              <figcaption>
+                <p>深度集成</p>
+                <strong>把权限、CLI 状态和能力开关放进同一个入口里。</strong>
+              </figcaption>
+            </figure>
+          </div>
+        </div>
+      </section>
+
+      <section class="section install-section" id="install">
+        <div class="container install-shell">
+          <div class="install-copy reveal">
+            <p class="micro-label">I N S T A L L</p>
+            <h2 class="display-title">
+              安装方式很简单，真正需要慢慢养成的是协作节奏。
+            </h2>
+            <p class="install-text">
+              当前版本面向 Apple Silicon macOS。下载最新 DMG，拖入
+              Applications，完成模型配置之后就能开始用。想体验最有辨识度的那部分，再把飞书深度集成打开。
+            </p>
+          </div>
+
+          <div class="install-board reveal">
+            <article>
+              <span>01</span>
+              <h3>下载最新 DMG</h3>
+              <p>从 GitHub Releases 获取当前版本。</p>
+            </article>
+            <article>
+              <span>02</span>
+              <h3>拖进 Applications</h3>
+              <p>首次打开后先完成模型账号配置。</p>
+            </article>
+            <article>
+              <span>03</span>
+              <h3>登录飞书并扩展能力</h3>
+              <p>按需打开深度集成，再继续装 Skills 和接 MCP。</p>
+            </article>
+          </div>
+
+          <div class="cta-panel reveal">
+            <div class="cta-orbit" aria-hidden="true">
+              <span></span>
+            </div>
+            <h3>把一个更安静、也更会靠近场景的 AI 搭档放到你的桌面上。</h3>
+            <div class="hero-actions">
+              <a
+                class="pill-button pill-button-dark"
+                href="https://github.com/modelzen/vonvon/releases/latest"
+                target="_blank"
+                rel="noreferrer"
+              >
+                立即下载
+              </a>
+              <a
+                class="pill-button"
+                href="https://github.com/modelzen/vonvon"
+                target="_blank"
+                rel="noreferrer"
+              >
+                查看源码
+              </a>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container footer-shell">
+        <div>
+          <strong>Vonvon</strong>
+          <p>一只住在 macOS 桌面的 AI 小宠物。</p>
+        </div>
+        <p>Designed for Cloudflare Pages.</p>
+      </div>
+    </footer>
+
+    <script src="script.js"></script>
+  </body>
+</html>

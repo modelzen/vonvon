@@ -6,7 +6,13 @@ import {
   closeFloatingChatWindow,
   isFloatingChatWindowOpen,
 } from '../windows'
-import { resolveKirbyAssetPack } from './kirbyAssetPack'
+import { chatStore } from '../store'
+import {
+  DEFAULT_KIRBY_PACK_ID,
+  listKirbyAssetPacks,
+  normalizeKirbyPackId,
+  resolveKirbyAssetPack,
+} from './kirbyAssetPack'
 
 type FeishuBounds = {
   x: number
@@ -89,6 +95,34 @@ function clearSidebarHideTimer(): void {
     clearTimeout(_sidebarHideTimer)
     _sidebarHideTimer = null
   }
+}
+
+function loadKirbyAssetPackContent(addon: KirbyNative, requestedPackId: string): string {
+  const pack = resolveKirbyAssetPack(_kirbyUrl, requestedPackId)
+  const kirbyUrl = new URL(_kirbyUrl)
+  kirbyUrl.searchParams.set('pack', pack.packId)
+  kirbyUrl.searchParams.set('assetBase', pack.assetBase)
+  kirbyUrl.searchParams.set('packData', pack.packData)
+  console.log('[kirby] loading url:', kirbyUrl.toString(), 'pack:', pack.packId)
+  const currentForm = addon.getKirbyState()
+  addon.loadContent(kirbyUrl.toString())
+  setTimeout(() => {
+    addon.setKirbyForm?.(currentForm)
+  }, 120)
+  return pack.packId
+}
+
+export async function selectKirbyAssetPack(requestedPackId: string): Promise<string> {
+  const requested = normalizeKirbyPackId(requestedPackId)
+  const resolved = resolveKirbyAssetPack(_kirbyUrl || 'file:///kirby.html', requested)
+  await chatStore.setKirbyPackId(resolved.packId)
+
+  const addon = loadAddon()
+  if (addon && _kirbyUrl) {
+    loadKirbyAssetPackContent(addon, resolved.packId)
+  }
+
+  return resolved.packId
 }
 
 /**
@@ -211,7 +245,7 @@ function loadAddon(): KirbyNative | null {
   return null
 }
 
-export function initKirby(mainWindow: BrowserWindow): void {
+export async function initKirby(mainWindow: BrowserWindow): Promise<void> {
   const addon = loadAddon()
   if (!addon) return
 
@@ -236,13 +270,8 @@ export function initKirby(mainWindow: BrowserWindow): void {
     const unpackedPath = appPath.replace(/app\.asar$/, 'app.asar.unpacked')
     _kirbyUrl = `file://${join(unpackedPath, 'out/renderer/components/Kirby/kirby.html')}`
   }
-  const pack = resolveKirbyAssetPack(_kirbyUrl)
-  const kirbyUrl = new URL(_kirbyUrl)
-  kirbyUrl.searchParams.set('pack', pack.packId)
-  kirbyUrl.searchParams.set('assetBase', pack.assetBase)
-  kirbyUrl.searchParams.set('packData', pack.packData)
-  console.log('[kirby] loading url:', kirbyUrl.toString(), 'pack:', pack.packId)
-  addon.loadContent(kirbyUrl.toString())
+  const selectedPackId = process.env.VONVON_KIRBY_PACK ?? (await chatStore.getKirbyPackId())
+  loadKirbyAssetPackContent(addon, selectedPackId)
 
   // Bridge native callbacks → Electron main window management
   addon.onSnapProximity((distance) => {
@@ -395,6 +424,17 @@ export function registerKirbyIpcHandlers(): void {
   ipcMain.handle('kirby:getState', () =>
     loadAddon()?.getKirbyState() ?? 'floating'
   )
+
+  ipcMain.handle('kirby:listAssetPacks', () => listKirbyAssetPacks())
+
+  ipcMain.handle('kirby:getAssetPack', async () => {
+    const packId = await chatStore.getKirbyPackId()
+    return normalizeKirbyPackId(packId || DEFAULT_KIRBY_PACK_ID)
+  })
+
+  ipcMain.handle('kirby:setAssetPack', async (_event, packId: string) => {
+    return selectKirbyAssetPack(packId)
+  })
 }
 
 export function destroyKirby(): void {

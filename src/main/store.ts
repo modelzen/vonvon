@@ -16,6 +16,7 @@ export interface ChatMessage {
 export interface AppSettings {
   defaultProvider: string
   defaultModel: string
+  kirbyPackId: string
   apiKeys: Record<string, boolean>
 }
 
@@ -24,6 +25,7 @@ interface StoreSchema {
   settings: {
     defaultProvider: string
     defaultModel: string
+    kirbyPackId: string
   }
   messages: ChatMessage[]
   backendUrl: string
@@ -93,7 +95,8 @@ export class ChatStore {
             encryptedKeys: {},
             settings: {
               defaultProvider: 'openai',
-              defaultModel: 'gpt-4o'
+              defaultModel: 'gpt-4o',
+              kirbyPackId: 'cat'
             },
             messages: [],
             backendUrl: DEFAULT_BACKEND_URL,
@@ -144,6 +147,7 @@ export class ChatStore {
     return {
       defaultProvider: settings.defaultProvider,
       defaultModel: settings.defaultModel,
+      kirbyPackId: settings.kirbyPackId || 'cat',
       apiKeys: Object.fromEntries(Object.keys(encryptedKeys).map((k) => [k, true]))
     }
   }
@@ -156,6 +160,17 @@ export class ChatStore {
   async setDefaultModel(modelId: string): Promise<void> {
     const store = await this.ensureStore()
     store.set('settings.defaultModel', modelId)
+  }
+
+  async getKirbyPackId(): Promise<string> {
+    const store = await this.ensureStore()
+    const settings = store.get('settings') as StoreSchema['settings']
+    return settings.kirbyPackId || 'cat'
+  }
+
+  async setKirbyPackId(packId: string): Promise<void> {
+    const store = await this.ensureStore()
+    store.set('settings.kirbyPackId', packId)
   }
 
   async addUserMessage(content: string): Promise<string> {

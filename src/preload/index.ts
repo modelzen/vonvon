@@ -34,6 +34,14 @@ type LarkCaptureResult =
       requestedWindowTitle?: string
     }
 
+type KirbyAssetPackSummary = {
+  id: string
+  name: string
+  version?: number
+  author?: string
+  previewDataUrl?: string
+}
+
 contextBridge.exposeInMainWorld('electron', {
   // Chat — implemented by worker-3 (Stage 3)
   sendMessage: (message: string, model: string) =>
@@ -96,6 +104,12 @@ contextBridge.exposeInMainWorld('electron', {
   // top-right corner. See src/main/native/kirby.ts for the full state flow.
   closeKirbySidebar: () => ipcRenderer.send('kirby:close-sidebar'),
   getKirbyState: () => ipcRenderer.invoke('kirby:getState'),
+  listKirbyAssetPacks: (): Promise<KirbyAssetPackSummary[]> =>
+    ipcRenderer.invoke('kirby:listAssetPacks'),
+  getKirbyAssetPack: (): Promise<string> =>
+    ipcRenderer.invoke('kirby:getAssetPack'),
+  setKirbyAssetPack: (packId: string): Promise<string> =>
+    ipcRenderer.invoke('kirby:setAssetPack', packId),
 
   // Settings window — opens a separate BrowserWindow rendering SettingsPanel
   openSettings: (): void => ipcRenderer.send('settings:open'),
@@ -129,6 +143,7 @@ declare global {
       getSettings(): Promise<{
         defaultProvider: string
         defaultModel: string
+        kirbyPackId: string
         apiKeys: Record<string, boolean>
       }>
       validateApiKey(providerId: string, apiKey: string): Promise<{ valid: boolean; error?: string }>
@@ -152,6 +167,9 @@ declare global {
       getKirbyState(): Promise<
         'floating' | 'snapping' | 'dockedExpanded' | 'dockedCollapsed'
       >
+      listKirbyAssetPacks(): Promise<KirbyAssetPackSummary[]>
+      getKirbyAssetPack(): Promise<string>
+      setKirbyAssetPack(packId: string): Promise<string>
       openSettings(): void
       closeSettings(): void
       on(channel: string, callback: (...args: unknown[]) => void): void
